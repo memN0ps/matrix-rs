@@ -19,6 +19,7 @@ fn main() {
     // 2. Enable and Enter VMX Operation
     //
 
+    allocate_vmxon_region(vmx_region, 4000);
     set_cr0_bits();
     set_cr4_bits();
     
@@ -73,9 +74,14 @@ fn set_cr4_bits() {
     unsafe { x86::controlregs::cr4_write(cr4) };
 }
 
-fn allocate_vmx_memory(vmx_region: *mut u32, vmx_region_size: usize) {
+fn allocate_vmxon_region(vmx_region: *mut u32, vmx_region_size: usize) {
+    // allocate some memory below
+    //MmAllocateContiguousMemory
+    // zero out the memory
+
+    //might need to zero it out using this or another way
     unsafe { 
-        std::ptr::write_bytes(vmx_region, 0, vmx_region_size / core::mem::size_of::<u32>())
+        std::ptr::write_bytes(vmx_region, 0, vmx_region_size / core::mem::size_of::<u32>());
         std::ptr::write(vmx_region, get_vmcs_revision_id());
     }
 }
@@ -84,4 +90,13 @@ fn allocate_vmx_memory(vmx_region: *mut u32, vmx_region_size: usize) {
 fn get_vmcs_revision_id() -> u32 {
     let vmcs_id = unsafe { (rdmsr(IA32_VMX_BASIC)  as u32) & 0x7FFF_FFFF };
     return vmcs_id;
+}
+
+fn virtual_to_physical_address(va: *mut usize) -> u64 {
+    //return MmGetPhysicalAddress().QuadPart;
+}
+
+fn physical_to_virtual_address(pa: u64) -> u64 {
+    //return MmGetVirtualForPhysical();
+    //let physical_address = unsafe { std::mem::zeroed::<PHYSICAL_ADDRESS>() };
 }
