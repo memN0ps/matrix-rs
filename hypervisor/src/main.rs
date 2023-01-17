@@ -60,9 +60,27 @@ fn set_cr0_bits() {
     cr0 &= x86::controlregs::Cr0::from_bits_truncate(fixed1 as usize);
     
     unsafe { x86::controlregs::cr0_write(cr0) };
+
 }
 
+
 fn set_cr4_bits() {
+
+    /*
+    A better way to do it. 
+    ---start--
+    */
+    unsafe {
+        let cr4 = x86::controlregs::cr4();
+        let cr4 = cr4 | x86::controlregs::Cr4::CR4_ENABLE_PSE;
+        x86::controlregs::cr4_write(x86::controlregs::Cr4::CR4_ENABLE_VMX);
+    }
+    /*
+    --end--
+    */
+
+    unsafe { x86::controlregs::cr4_write(x86::controlregs::Cr4::CR4_ENABLE_VMX) };
+
     let fixed0 = unsafe { rdmsr(IA32_VMX_CR4_FIXED0) };
     let fixed1 = unsafe { rdmsr(IA32_VMX_CR4_FIXED1) };
 
@@ -70,7 +88,7 @@ fn set_cr4_bits() {
     
     cr4 |= x86::controlregs::Cr4::from_bits_truncate(fixed0 as usize);
     cr4 &= x86::controlregs::Cr4::from_bits_truncate(fixed1 as usize);
-    
+
     unsafe { x86::controlregs::cr4_write(cr4) };
 }
 
