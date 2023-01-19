@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 x86 = "0.52.0"
+log = "0.4.17"

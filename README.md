@@ -44,7 +44,6 @@
 
 * https://nixhacker.com/developing-hypervisor-from-scratch-part-4/
 
-* https://wiki.osdev.org/VMX
 
 
 
@@ -65,3 +64,9 @@
 * https://howtohypervise.blogspot.com/
 
 * https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html (Intel® 64 and IA-32 Architectures Software Developer's Manual Volume 3C: System Programming Guide, Part 3)
+
+* https://wiki.osdev.org/VMX
+
+* https://codemachine.com/
+
+* https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html

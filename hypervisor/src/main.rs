@@ -5,22 +5,22 @@ mod vmx;
 fn main() {
     
     // 
-    // 1. Discover Support for Virtual Machine Extension (VMX)
+    // 1. 24.6 Discover Support for Virtual Machine Extension (VMX)
     //
 
     let vmx = VMX::new();
 
     if !vmx.has_intel_cpu() {
-        println!("[-] Error: Intel CPU is not detected");
+        log::error!("[-] Error: Intel CPU is not detected");
     }
 
     if !vmx.has_vmx_support() {
-        println!("[-] Error: VMX is not supported");
+        log::error!("[-] Error: VMX is not supported");
     }
 
 
     //
-    // 2. Enable and Enter VMX Operation
+    // 2. 24.7 Enable and Enter VMX Operation
     //
 
     vmx.enable_vmx();
@@ -29,7 +29,7 @@ fn main() {
     vmx.set_cr0_bits();
 
     if !vmx.set_feature_control_bits() {
-        println!("[-] Error: VMX locked off in BIOS");
+        log::error!("[-] Error: VMX locked off in BIOS");
     }
 
     vmx.allocate_vmm_context();
