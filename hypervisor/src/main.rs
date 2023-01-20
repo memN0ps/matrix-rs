@@ -1,5 +1,10 @@
+#![feature(allocator_api)]
+#![feature(new_uninit)]
+
 use vmx::VMX;
 
+mod alloc;
+mod nt;
 mod vmx;
 
 fn main() {
@@ -30,5 +35,7 @@ fn main() {
         log::error!("[-] Error: VMX locked off in BIOS");
     }
 
-    vmx.allocate_vmxon_region();
+    if !vmx.allocate_vmxon_region() {
+        log::error!("[-] Error: Failed to allocate vmxon region")
+    }
 }

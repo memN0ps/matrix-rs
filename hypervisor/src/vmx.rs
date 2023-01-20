@@ -1,3 +1,4 @@
+use winapi::shared::ntdef::PHYSICAL_ADDRESS;
 use x86::{
     controlregs::{cr0, cr4, cr4_write, Cr0, Cr4},
     cpuid::CpuId,
@@ -6,6 +7,11 @@ use x86::{
         rdmsr, wrmsr, IA32_FEATURE_CONTROL, IA32_VMX_BASIC, IA32_VMX_CR0_FIXED0,
         IA32_VMX_CR0_FIXED1, IA32_VMX_CR4_FIXED0, IA32_VMX_CR4_FIXED1,
     },
+};
+
+use crate::{
+    alloc::PhysicalAllocator,
+    nt::{MmGetPhysicalAddress, MmGetVirtualForPhysical},
 };
 
 pub struct VMX {
@@ -101,28 +107,51 @@ impl VMX {
     }
 
     /// Allocate a naturally aligned 4-KByte region of memory that a logical processor may use to support VMX operation (Intel Manual: 25.11.5 VMXON Region)
-    pub fn allocate_vmxon_region(&self) {
-        // allocate some memory below
-        // MmAllocateContiguousMemory
-        // zero out the memory
+    pub fn allocate_vmxon_region(&self) -> bool {
+        // Might have to change this value to 4096 x 2 = 8196
+        let mut vmx_region_va: Box<u64, PhysicalAllocator> = unsafe {
+            match Box::try_new_zeroed_in(PhysicalAllocator) {
+                Ok(v) => v,
+                Err(err) => {
+                    log::error!(
+                        "[-] Failed allocate memory via PhysicalAllocator {}",
+                        err.to_string()
+                    );
+                    return false;
+                }
+            }
+            .assume_init()
+        };
 
-        //might need to zero it out using this or another way
-        //std::ptr::write_bytes(vmx_region, 0, vmx_region_size / core::mem::size_of::<u32>());
-        //std::ptr::write(vmx_region, get_vmcs_revision_id());
+        let vmx_region_pa = self.pa_from_va(vmx_region_va.as_mut() as *mut _ as _);
 
-        self.get_vmcs_revision_id();
-        // Enable VMX
-        unsafe { vmxon(0x00).expect("Failed to call vmxon") }; //addy
+        if vmx_region_pa == 0 {
+            return false;
+        }
+
+        unsafe { core::ptr::write(vmx_region_pa as *mut u64, self.get_vmcs_revision_id() as _) };
+
+        unsafe {
+            match vmxon(vmx_region_pa) {
+                Ok(()) => return true,
+                Err(err) => {
+                    log::error!("[-] Failed to execute vmxon {:?}", err);
+                    return false;
+                }
+            }
+        }
     }
 
-    /*
-    fn virtual_to_physical_address(va: *mut usize) -> u64 {
-        //return MmGetPhysicalAddress().QuadPart;
+    /// Converts from virtual address to physical address
+    pub fn pa_from_va(&self, va: u64) -> u64 {
+        return unsafe { *MmGetPhysicalAddress(va as _).QuadPart() as u64 };
     }
 
-    fn physical_to_virtual_address(pa: u64) -> u64 {
-        //return MmGetVirtualForPhysical();
-        //let physical_address = unsafe { std::mem::zeroed::<PHYSICAL_ADDRESS>() };
+    #[allow(dead_code)]
+    /// Converts from physical address to virtual address
+    pub fn va_from_pa(&self, pa: u64) -> u64 {
+        let mut physical_address = unsafe { std::mem::zeroed::<PHYSICAL_ADDRESS>() };
+        unsafe { *(physical_address.QuadPart_mut()) = pa as i64 };
+        return unsafe { MmGetVirtualForPhysical(physical_address) as u64 };
     }
-    */
 }

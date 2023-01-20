@@ -45,9 +45,6 @@
 * https://nixhacker.com/developing-hypervisor-from-scratch-part-4/
 
 
-
-
-
 ### Orance Slice: Hypervisor Development
 
 * https://github.com/gamozolabs/orange_slice/
