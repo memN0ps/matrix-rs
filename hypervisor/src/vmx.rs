@@ -2,7 +2,7 @@ use winapi::shared::ntdef::PHYSICAL_ADDRESS;
 use x86::{
     controlregs::{cr0, cr4, cr4_write, Cr0, Cr4},
     cpuid::CpuId,
-    current::vmx::vmxon,
+    current::vmx::{vmptrld, vmxon},
     msr::{
         rdmsr, wrmsr, IA32_FEATURE_CONTROL, IA32_VMX_BASIC, IA32_VMX_CR0_FIXED0,
         IA32_VMX_CR0_FIXED1, IA32_VMX_CR4_FIXED0, IA32_VMX_CR4_FIXED1,
@@ -27,23 +27,23 @@ impl VMX {
     }
 
     /// Check to see if CPU is Intel (“GenuineIntel”).
-    pub fn has_intel_cpu(&self) -> bool {
+    pub fn has_intel_cpu(&self) -> Result<(), String> {
         if let Some(vi) = self.cpuid.get_vendor_info() {
             if vi.as_str() == "GenuineIntel" {
-                return true;
+                return Ok(());
             }
         }
-        return false;
+        return Err(("Intel CPU is not detected").to_string());
     }
 
     /// Check processor supports for Virtual Machine Extension (VMX) technology - CPUID.1:ECX.VMX\[bit 5] = 1 (Intel Manual: 24.6 Discovering Support for VMX)
-    pub fn has_vmx_support(&self) -> bool {
+    pub fn has_vmx_support(&self) -> Result<(), String> {
         if let Some(fi) = self.cpuid.get_feature_info() {
             if fi.has_vmx() {
-                return true;
+                return Ok(());
             }
         }
-        return false;
+        return Err("VMX is not supported".to_string());
     }
 
     /// Enables Virtual Machine Extensions - CR4.VMXE\[bit 13] = 1 (Intel Manual: 24.7 Enabling and Entering VMX Operation)
@@ -54,7 +54,7 @@ impl VMX {
     }
 
     /// Check if we need to set bits in IA32_FEATURE_CONTROL (Intel Manual: 24.7 Enabling and Entering VMX Operation)
-    pub fn set_feature_control_bits(&self) -> bool {
+    pub fn set_feature_control_bits(&self) -> Result<(), String> {
         const VMX_LOCK_BIT: u64 = 1 << 0;
         const VMXON_OUTSIDE_SMX: u64 = 1 << 2;
 
@@ -68,10 +68,10 @@ impl VMX {
                 )
             };
         } else if (ia32_feature_control & VMXON_OUTSIDE_SMX) == 0 {
-            return false;
+            return Err("VMX locked off in BIOS".to_string());
         }
 
-        return true;
+        return Ok(());
     }
 
     /// Set the mandatory bits in CR0 and clear bits that are mandatory zero (Intel Manual: 24.8 Restrictions on VMX Operation)
@@ -106,40 +106,31 @@ impl VMX {
         return vmcs_id;
     }
 
-    /// Allocate a naturally aligned 4-KByte region of memory that a logical processor may use to support VMX operation (Intel Manual: 25.11.5 VMXON Region)
-    pub fn allocate_vmxon_region(&self) -> bool {
+    /// Allocate a naturally aligned 4-KByte region of memory to support enable VMX operation (Intel Manual: 25.11.5 VMXON Region)
+    pub fn allocate_vmm_context(&self) -> Result<u64, String> {
         // Might have to change this value to 4096 x 2 = 8196
-        let mut vmx_region_va: Box<u64, PhysicalAllocator> = unsafe {
+        let mut virtual_address: Box<u64, PhysicalAllocator> = unsafe {
             match Box::try_new_zeroed_in(PhysicalAllocator) {
-                Ok(v) => v,
-                Err(err) => {
-                    log::error!(
-                        "[-] Failed allocate memory via PhysicalAllocator {}",
-                        err.to_string()
-                    );
-                    return false;
-                }
+                Ok(va) => va,
+                Err(_) => return Err("Failed allocate memory via PhysicalAllocator".to_string()),
             }
             .assume_init()
         };
 
-        let vmx_region_pa = self.pa_from_va(vmx_region_va.as_mut() as *mut _ as _);
+        let physical_address = self.pa_from_va(virtual_address.as_mut() as *mut _ as _);
 
-        if vmx_region_pa == 0 {
-            return false;
+        if physical_address == 0 {
+            return Err("Failed to convert from virtual address to physical address".to_string());
         }
-
-        unsafe { core::ptr::write(vmx_region_pa as *mut u64, self.get_vmcs_revision_id() as _) };
 
         unsafe {
-            match vmxon(vmx_region_pa) {
-                Ok(()) => return true,
-                Err(err) => {
-                    log::error!("[-] Failed to execute vmxon {:?}", err);
-                    return false;
-                }
-            }
-        }
+            core::ptr::write(
+                physical_address as *mut u64,
+                self.get_vmcs_revision_id() as _,
+            )
+        };
+
+        return Ok(physical_address);
     }
 
     /// Converts from virtual address to physical address
@@ -153,5 +144,21 @@ impl VMX {
         let mut physical_address = unsafe { std::mem::zeroed::<PHYSICAL_ADDRESS>() };
         unsafe { *(physical_address.QuadPart_mut()) = pa as i64 };
         return unsafe { MmGetVirtualForPhysical(physical_address) as u64 };
+    }
+
+    /// Enable VMX operation.
+    pub fn vmxon(&self, vmxon_pa: u64) -> Result<(), String> {
+        match unsafe { vmxon(vmxon_pa) } {
+            Ok(_) => Ok(()),
+            Err(_) => return Err("Failed to execute VMXON".to_string()),
+        }
+    }
+
+    /// Load current VMCS pointer.
+    pub fn vmptrld(&self, vmptrld_pa: u64) -> Result<(), String> {
+        match unsafe { vmptrld(vmptrld_pa) } {
+            Ok(_) => Ok(()),
+            Err(_) => return Err("Failed to execute VMPTRLD".to_string()),
+        }
     }
 }

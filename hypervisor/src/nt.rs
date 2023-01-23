@@ -21,8 +21,9 @@ extern "system" {
     ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-mmgetphysicaladdress
     pub fn MmGetPhysicalAddress(BaseAddress: PVOID) -> PHYSICAL_ADDRESS;
 
-    /// undocumented
+    ///undocumented
     pub fn MmGetVirtualForPhysical(PhysicalAddress: PHYSICAL_ADDRESS) -> *mut u64;
+
 }
 
 #[allow(non_camel_case_types)]

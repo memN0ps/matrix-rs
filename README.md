@@ -67,3 +67,5 @@
 * https://codemachine.com/
 
 * https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html
+
+* https://not-matthias.github.io/posts/rust-kernel-adventures/

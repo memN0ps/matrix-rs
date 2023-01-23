@@ -8,34 +8,52 @@ mod nt;
 mod vmx;
 
 fn main() {
+    match init_vmm() {
+        Ok(_) => log::info!("[+] VMM Initialized"),
+        Err(err) => log::error!("[-] init_vmm failed: {}", err),
+    }
+}
+
+fn init_vmm() -> Result<(), String> {
     //
     // 1) 24.6 Discover Support for Virtual Machine Extension (VMX)
     //
 
     let vmx = VMX::new();
 
-    if !vmx.has_intel_cpu() {
-        log::error!("[-] Error: Intel CPU is not detected");
-    }
+    vmx.has_intel_cpu()?;
+    log::info!("[+] CPU is Intel");
 
-    if !vmx.has_vmx_support() {
-        log::error!("[-] Error: VMX is not supported");
-    }
+    vmx.has_vmx_support()?;
+    log::info!("[+] Virtual Machine Extension (VMX) technology is supported");
 
     //
     // 2) 24.7 Enable and Enter VMX Operation
     //
 
     vmx.enable_vmx();
+    log::info!("[+] Virtual Machine Extensions (VMX) enabled");
 
     vmx.set_cr0_bits();
+    log::info!("[+] Mandatory bits in CR0 set/cleared");
+
     vmx.set_cr4_bits();
+    log::info!("[+] Mandatory bits in CR4 set/cleared");
 
-    if !vmx.set_feature_control_bits() {
-        log::error!("[-] Error: VMX locked off in BIOS");
-    }
+    vmx.set_feature_control_bits()?;
+    log::info!("[+] IA32_FEATURE_CONTROL bits have been set or are already set");
 
-    if !vmx.allocate_vmxon_region() {
-        log::error!("[-] Error: Failed to allocate vmxon region")
-    }
+    let vmxon_pa = vmx.allocate_vmm_context()?;
+    vmx.vmxon(vmxon_pa)?;
+    log::info!("[+] VMXON successful!");
+
+    //
+    // 3) Load current VMCS pointer.
+    //
+
+    let vmptrld_pa = vmx.allocate_vmm_context()?;
+    vmx.vmptrld(vmptrld_pa)?;
+    log::info!("[+] VMPTRLD successful!");
+
+    return Ok(());
 }
