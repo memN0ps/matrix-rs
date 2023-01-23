@@ -31,17 +31,10 @@ fn init_vmm() -> Result<(), String> {
     // 2) 24.7 Enable and Enter VMX Operation
     //
 
-    vmx.enable_vmx();
+    vmx.enable_vmx_operation()?;
     log::info!("[+] Virtual Machine Extensions (VMX) enabled");
 
-    vmx.set_cr0_bits();
-    log::info!("[+] Mandatory bits in CR0 set/cleared");
-
-    vmx.set_cr4_bits();
-    log::info!("[+] Mandatory bits in CR4 set/cleared");
-
-    vmx.set_feature_control_bits()?;
-    log::info!("[+] IA32_FEATURE_CONTROL bits have been set or are already set");
+    vmx.adjust_control_registers();
 
     let vmxon_pa = vmx.allocate_vmm_context()?;
     vmx.vmxon(vmxon_pa)?;
@@ -57,3 +50,5 @@ fn init_vmm() -> Result<(), String> {
 
     return Ok(());
 }
+
+//pub fn init_logical_processor() {}

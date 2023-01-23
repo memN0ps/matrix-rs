@@ -47,14 +47,19 @@ impl VMX {
     }
 
     /// Enables Virtual Machine Extensions - CR4.VMXE\[bit 13] = 1 (Intel Manual: 24.7 Enabling and Entering VMX Operation)
-    pub fn enable_vmx(&self) {
+    pub fn enable_vmx_operation(&self) -> Result<(), String> {
         let mut cr4 = unsafe { cr4() };
         cr4.set(Cr4::CR4_ENABLE_VMX, true);
         unsafe { cr4_write(cr4) };
+
+        self.set_lock_bit()?;
+        log::info!("[+] Lock bit set via IA32_FEATURE_CONTROL");
+
+        return Ok(());
     }
 
     /// Check if we need to set bits in IA32_FEATURE_CONTROL (Intel Manual: 24.7 Enabling and Entering VMX Operation)
-    pub fn set_feature_control_bits(&self) -> Result<(), String> {
+    fn set_lock_bit(&self) -> Result<(), String> {
         const VMX_LOCK_BIT: u64 = 1 << 0;
         const VMXON_OUTSIDE_SMX: u64 = 1 << 2;
 
@@ -74,8 +79,17 @@ impl VMX {
         return Ok(());
     }
 
+    /// Adjust set and clear the mandatory bits in CR0 and CR4
+    pub fn adjust_control_registers(&self) {
+        self.set_cr0_bits();
+        log::info!("[+] Mandatory bits in CR0 set/cleared");
+
+        self.set_cr4_bits();
+        log::info!("[+] Mandatory bits in CR4 set/cleared");
+    }
+
     /// Set the mandatory bits in CR0 and clear bits that are mandatory zero (Intel Manual: 24.8 Restrictions on VMX Operation)
-    pub fn set_cr0_bits(&self) {
+    fn set_cr0_bits(&self) {
         let ia32_vmx_cr0_fixed0 = unsafe { rdmsr(IA32_VMX_CR0_FIXED0) };
         let ia32_vmx_cr0_fixed1 = unsafe { rdmsr(IA32_VMX_CR0_FIXED1) };
 
@@ -88,7 +102,7 @@ impl VMX {
     }
 
     /// Set the mandatory bits in CR4 and clear bits that are mandatory zero (Intel Manual: 24.8 Restrictions on VMX Operation)
-    pub fn set_cr4_bits(&self) {
+    fn set_cr4_bits(&self) {
         let ia32_vmx_cr4_fixed0 = unsafe { rdmsr(IA32_VMX_CR4_FIXED0) };
         let ia32_vmx_cr4_fixed1 = unsafe { rdmsr(IA32_VMX_CR4_FIXED1) };
 
@@ -101,7 +115,7 @@ impl VMX {
     }
 
     /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID) (Intel Manual: 25.11.5 VMXON Region)
-    pub fn get_vmcs_revision_id(&self) -> u32 {
+    fn get_vmcs_revision_id(&self) -> u32 {
         let vmcs_id = unsafe { (rdmsr(IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF };
         return vmcs_id;
     }
