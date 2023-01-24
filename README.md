@@ -1,6 +1,6 @@
 # Hypervisor Development in Rust (Intel VT-x)
 
-## Credits and References
+## Credits / References / Motivation
 
 ### Hypervisor From Scratch by [@Intel80x86](https://twitter.com/Intel80x86)
 
@@ -34,6 +34,13 @@
 
 * https://revers.engineering/day-5-vmexits-interrupts-cpuid-emulation/
 
+
+### Orance Slice: Hypervisor Development
+
+* https://github.com/gamozolabs/orange_slice/
+
+* https://www.youtube.com/watch?v=WabeOICAOq4&list=PLSkhUfcCXvqFJAuFbABktmLaQvJwKxJ3i
+
 ### Developing Hypervisor from Scratch by [@nixhacker](https://twitter.com/nixhacker)
 
 * https://nixhacker.com/developing-hypervisior-from-scratch-part-1/
@@ -44,17 +51,35 @@
 
 * https://nixhacker.com/developing-hypervisor-from-scratch-part-4/
 
+### AMD Hypervisor by [@not_matthias](https://twitter.com/not_matthias)
 
-### Orance Slice: Hypervisor Development
+* https://github.com/not-matthias/amd_hypervisor
 
-* https://github.com/gamozolabs/orange_slice/
+* https://github.com/not-matthias/rdtsc_bench
 
-* https://www.youtube.com/watch?v=WabeOICAOq4&list=PLSkhUfcCXvqFJAuFbABktmLaQvJwKxJ3i
+* https://not-matthias.github.io/posts/rust-kernel-adventures/
+
+
+## Secret Club [vm_call](https://twitter.com/vm_call) and [@daax_rynd](https://twitter.com/daax_rynd)
+
+* https://secret.club/2020/01/12/battleye-hypervisor-detection.html
+
+* https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html
+
+## UnKnoWnCheaTs
+
+* https://unknowncheats.me/
+
+## Guided Hacking: Hypervisors for Game Hacking
+
+* https://guidedhacking.com/threads/intro-to-hypervisors-for-game-hacking.20145/
+
+* https://guidedhacking.com/threads/virtualized-game-hacking-1-0-introduction.20180/
+
+* https://guidedhacking.com/threads/virtualized-game-hacking-1-1-virtual-memory-page-tables.20214/
 
 
 ### Other
-
-* https://github.com/not-matthias/amd_hypervisor
 
 * https://github.com/iankronquist/rustyvisor/
 
@@ -65,7 +90,3 @@
 * https://wiki.osdev.org/VMX
 
 * https://codemachine.com/
-
-* https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html
-
-* https://not-matthias.github.io/posts/rust-kernel-adventures/
