@@ -1,4 +1,4 @@
-use std::mem::MaybeUninit;
+use core::mem::MaybeUninit;
 
 use winapi::shared::ntdef::{ALL_PROCESSOR_GROUPS, PROCESSOR_NUMBER, NT_SUCCESS, GROUP_AFFINITY};
 
@@ -9,6 +9,7 @@ pub fn processor_count() -> u32 {
     unsafe { KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS)}
 }
 
+#[allow(dead_code)]
 /// The KeGetCurrentProcessorNumberEx routine gets the processor number of the logical processor that the caller is running on.
 pub fn current_processor_index() -> u32 {
     unsafe { KeGetCurrentProcessorNumberEx(core::ptr::null_mut()) }

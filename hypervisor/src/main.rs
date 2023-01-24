@@ -1,22 +1,26 @@
+//#![no_std]
 #![feature(allocator_api)]
 #![feature(new_uninit)]
 
 use error::HypervisorError;
 use vmx::VMX;
 
+use crate::processor::{processor_count, ProcessorExecutor};
+
+mod processor;
 mod alloc;
 mod nt;
 mod vmx;
 mod error;
 
 fn main() {
-    match init_vmm() {
+    match init_vmx() {
         Ok(_) => log::info!("[+] VMM initialized"),
         Err(err) => log::error!("[-] VMM initialization failed: {}", err),
     }
 }
 
-fn init_vmm() -> Result<(), HypervisorError> {
+fn init_vmx() -> Result<(), HypervisorError> {
     //
     // 1) Intel Manual: 24.6 Discover Support for Virtual Machine Extension (VMX)
     //
@@ -33,22 +37,25 @@ fn init_vmm() -> Result<(), HypervisorError> {
     // 2) Intel Manual: 24.7 Enable and Enter VMX Operation
     //
 
-    vmx.enable_vmx_operation()?;
-    log::info!("[+] Virtual Machine Extensions (VMX) enabled");
+    for i in 0..processor_count() {
+        
+        ProcessorExecutor::switch_to_processor(i);
 
-    vmx.adjust_control_registers();
+        vmx.enable_vmx_operation()?;
+        log::info!("[+] Virtual Machine Extensions (VMX) enabled");
+    
+        vmx.adjust_control_registers();
+        log::info!("[+] Control registers adjusted");
 
-    let vmxon_pa = vmx.allocate_vmm_context()?;
-    vmx.vmxon(vmxon_pa)?;
-    log::info!("[+] VMXON successful!");
 
-    //
-    // 3) Load current VMCS pointer.
-    //
+        let vmxon_pa = vmx.allocate_vmm_context()?;
+        vmx.vmxon(vmxon_pa)?;
+        log::info!("[+] VMXON successful!");
 
-    let vmptrld_pa = vmx.allocate_vmm_context()?;
-    vmx.vmptrld(vmptrld_pa)?;
-    log::info!("[+] VMPTRLD successful!");
+        let vmptrld_pa = vmx.allocate_vmm_context()?;
+        vmx.vmptrld(vmptrld_pa)?;
+        log::info!("[+] VMPTRLD successful!");
+    }
 
     return Ok(());
 }

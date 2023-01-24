@@ -1,3 +1,6 @@
+extern crate alloc;
+
+use alloc::boxed::Box;
 use winapi::shared::ntdef::PHYSICAL_ADDRESS;
 use x86::{
     controlregs::{cr0, cr4, cr4_write, Cr0, Cr4},
@@ -154,7 +157,7 @@ impl VMX {
     #[allow(dead_code)]
     /// Converts from physical address to virtual address
     pub fn va_from_pa(&self, pa: u64) -> u64 {
-        let mut physical_address = unsafe { std::mem::zeroed::<PHYSICAL_ADDRESS>() };
+        let mut physical_address = unsafe { core::mem::zeroed::<PHYSICAL_ADDRESS>() };
         unsafe { *(physical_address.QuadPart_mut()) = pa as i64 };
         return unsafe { MmGetVirtualForPhysical(physical_address) as u64 };
     }
