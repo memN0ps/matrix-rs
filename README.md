@@ -59,6 +59,10 @@
 
 * https://not-matthias.github.io/posts/rust-kernel-adventures/
 
+* https://not-matthias.github.io/posts/kernel-driver-with-rust-2022/
+
+* https://not-matthias.github.io/posts/kernel-driver-with-rust/
+
 
 ## Secret Club [vm_call](https://twitter.com/vm_call) and [@daax_rynd](https://twitter.com/daax_rynd)
 

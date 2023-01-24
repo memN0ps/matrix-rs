@@ -5,4 +5,20 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
 [dependencies]
+kernel-log = "0.1.2" # https://crates.io/crates/kernel-log
+kernel-build = "0.1.0" # https://crates.io/crates/kernel-build
+#kernel-alloc = "0.1.2" # https://crates.io/crates/kernel-alloc
+
+
+[dependencies.winapi]
+git = "https://github.com/Trantect/winapi-rs.git"
+branch = "feature/km"
+features = [
+    "wdm",
+    "ntstatus",
+]
