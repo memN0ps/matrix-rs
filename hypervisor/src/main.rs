@@ -1,22 +1,24 @@
 #![feature(allocator_api)]
 #![feature(new_uninit)]
 
+use error::HypervisorError;
 use vmx::VMX;
 
 mod alloc;
 mod nt;
 mod vmx;
+mod error;
 
 fn main() {
     match init_vmm() {
-        Ok(_) => log::info!("[+] VMM Initialized"),
-        Err(err) => log::error!("[-] init_vmm failed: {}", err),
+        Ok(_) => log::info!("[+] VMM initialized"),
+        Err(err) => log::error!("[-] VMM initialization failed: {}", err),
     }
 }
 
-fn init_vmm() -> Result<(), String> {
+fn init_vmm() -> Result<(), HypervisorError> {
     //
-    // 1) 24.6 Discover Support for Virtual Machine Extension (VMX)
+    // 1) Intel Manual: 24.6 Discover Support for Virtual Machine Extension (VMX)
     //
 
     let vmx = VMX::new();
@@ -28,7 +30,7 @@ fn init_vmm() -> Result<(), String> {
     log::info!("[+] Virtual Machine Extension (VMX) technology is supported");
 
     //
-    // 2) 24.7 Enable and Enter VMX Operation
+    // 2) Intel Manual: 24.7 Enable and Enter VMX Operation
     //
 
     vmx.enable_vmx_operation()?;

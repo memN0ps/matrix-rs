@@ -11,7 +11,7 @@ use x86::{
 
 use crate::{
     alloc::PhysicalAllocator,
-    nt::{MmGetPhysicalAddress, MmGetVirtualForPhysical},
+    nt::{MmGetPhysicalAddress, MmGetVirtualForPhysical}, error::HypervisorError,
 };
 
 pub struct VMX {
@@ -27,27 +27,27 @@ impl VMX {
     }
 
     /// Check to see if CPU is Intel (“GenuineIntel”).
-    pub fn has_intel_cpu(&self) -> Result<(), String> {
+    pub fn has_intel_cpu(&self) -> Result<(), HypervisorError> {
         if let Some(vi) = self.cpuid.get_vendor_info() {
             if vi.as_str() == "GenuineIntel" {
                 return Ok(());
             }
         }
-        return Err(("Intel CPU is not detected").to_string());
+        return Err(HypervisorError::InvalidCPU);
     }
 
     /// Check processor supports for Virtual Machine Extension (VMX) technology - CPUID.1:ECX.VMX\[bit 5] = 1 (Intel Manual: 24.6 Discovering Support for VMX)
-    pub fn has_vmx_support(&self) -> Result<(), String> {
+    pub fn has_vmx_support(&self) -> Result<(), HypervisorError> {
         if let Some(fi) = self.cpuid.get_feature_info() {
             if fi.has_vmx() {
                 return Ok(());
             }
         }
-        return Err("VMX is not supported".to_string());
+        return Err(HypervisorError::VMXUnsupported);
     }
 
     /// Enables Virtual Machine Extensions - CR4.VMXE\[bit 13] = 1 (Intel Manual: 24.7 Enabling and Entering VMX Operation)
-    pub fn enable_vmx_operation(&self) -> Result<(), String> {
+    pub fn enable_vmx_operation(&self) -> Result<(), HypervisorError> {
         let mut cr4 = unsafe { cr4() };
         cr4.set(Cr4::CR4_ENABLE_VMX, true);
         unsafe { cr4_write(cr4) };
@@ -59,7 +59,7 @@ impl VMX {
     }
 
     /// Check if we need to set bits in IA32_FEATURE_CONTROL (Intel Manual: 24.7 Enabling and Entering VMX Operation)
-    fn set_lock_bit(&self) -> Result<(), String> {
+    fn set_lock_bit(&self) -> Result<(), HypervisorError> {
         const VMX_LOCK_BIT: u64 = 1 << 0;
         const VMXON_OUTSIDE_SMX: u64 = 1 << 2;
 
@@ -73,7 +73,7 @@ impl VMX {
                 )
             };
         } else if (ia32_feature_control & VMXON_OUTSIDE_SMX) == 0 {
-            return Err("VMX locked off in BIOS".to_string());
+            return Err(HypervisorError::VMXBIOSLock);
         }
 
         return Ok(());
@@ -121,12 +121,11 @@ impl VMX {
     }
 
     /// Allocate a naturally aligned 4-KByte region of memory to support enable VMX operation (Intel Manual: 25.11.5 VMXON Region)
-    pub fn allocate_vmm_context(&self) -> Result<u64, String> {
-        // Might have to change this value to 4096 x 2 = 8196
+    pub fn allocate_vmm_context(&self) -> Result<u64, HypervisorError> {
         let mut virtual_address: Box<u64, PhysicalAllocator> = unsafe {
             match Box::try_new_zeroed_in(PhysicalAllocator) {
                 Ok(va) => va,
-                Err(_) => return Err("Failed allocate memory via PhysicalAllocator".to_string()),
+                Err(_) => return Err(HypervisorError::MemoryAllocationFailed),
             }
             .assume_init()
         };
@@ -134,7 +133,7 @@ impl VMX {
         let physical_address = self.pa_from_va(virtual_address.as_mut() as *mut _ as _);
 
         if physical_address == 0 {
-            return Err("Failed to convert from virtual address to physical address".to_string());
+            return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
         unsafe {
@@ -161,18 +160,18 @@ impl VMX {
     }
 
     /// Enable VMX operation.
-    pub fn vmxon(&self, vmxon_pa: u64) -> Result<(), String> {
+    pub fn vmxon(&self, vmxon_pa: u64) -> Result<(), HypervisorError> {
         match unsafe { vmxon(vmxon_pa) } {
             Ok(_) => Ok(()),
-            Err(_) => return Err("Failed to execute VMXON".to_string()),
+            Err(_) => return Err(HypervisorError::VMXONFailed),
         }
     }
 
     /// Load current VMCS pointer.
-    pub fn vmptrld(&self, vmptrld_pa: u64) -> Result<(), String> {
+    pub fn vmptrld(&self, vmptrld_pa: u64) -> Result<(), HypervisorError> {
         match unsafe { vmptrld(vmptrld_pa) } {
             Ok(_) => Ok(()),
-            Err(_) => return Err("Failed to execute VMPTRLD".to_string()),
+            Err(_) => return Err(HypervisorError::VMPTRLDFailed),
         }
     }
 }

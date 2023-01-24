@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 x86 = "0.52.0"
 log = "0.4.17"
+thiserror = "1.0.38"
 winapi = { git = "https://github.com/Trantect/winapi-rs.git", branch = "feature/km", default-features = false, features = ["wdm", "ntstatus"] }
