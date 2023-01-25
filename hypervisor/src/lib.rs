@@ -16,11 +16,6 @@ mod nt;
 mod vmx;
 mod error;
 
-use kernel_alloc::KernelAlloc;
-
-#[global_allocator]
-static GLOBAL: KernelAlloc = KernelAlloc;
-
 pub fn init_vmx() -> Result<(), HypervisorError> {
     //
     // 1) Intel Manual: 24.6 Discover Support for Virtual Machine Extension (VMX)
