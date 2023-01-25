@@ -1,6 +1,7 @@
 extern crate alloc;
 
-use alloc::boxed::Box;
+use alloc::{boxed::Box};
+use kernel_alloc::PhysicalAllocator;
 use winapi::shared::ntdef::PHYSICAL_ADDRESS;
 use x86::{
     controlregs::{cr0, cr4, cr4_write, Cr0, Cr4},
@@ -13,8 +14,7 @@ use x86::{
 };
 
 use crate::{
-    alloc::PhysicalAllocator,
-    nt::{MmGetPhysicalAddress, MmGetVirtualForPhysical}, error::HypervisorError,
+    nt::{MmGetPhysicalAddress, MmGetVirtualForPhysical}, error::HypervisorError, vcpu::Vcpu,
 };
 
 pub struct VMX {
@@ -124,7 +124,7 @@ impl VMX {
     }
 
     /// Allocate a naturally aligned 4-KByte region of memory to support enable VMX operation (Intel Manual: 25.11.5 VMXON Region)
-    pub fn allocate_vmm_context(&self) -> Result<u64, HypervisorError> {
+    pub fn allocate_vmm_context(&self, vcpus: &mut Vcpu) -> Result<(), HypervisorError> {
         let mut virtual_address: Box<u64, PhysicalAllocator> = unsafe {
             match Box::try_new_zeroed_in(PhysicalAllocator) {
                 Ok(va) => va,
@@ -133,6 +133,17 @@ impl VMX {
             .assume_init()
         };
 
+        log::info!("[+] Allocate a naturally aligned 4-KByte region of memory: {:p}", virtual_address);
+
+        unsafe {
+            core::ptr::write(
+                virtual_address.as_mut() as *mut u64,
+                self.get_vmcs_revision_id() as _,
+            )
+        };
+
+        log::info!("[+] VMCS Revision Identifier written successfully: {}", self.get_vmcs_revision_id());
+
         let physical_address = self.pa_from_va(virtual_address.as_mut() as *mut _ as _);
         log::info!("[+] Physical Addresss: 0x{:x}", physical_address);
 
@@ -140,14 +151,10 @@ impl VMX {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
-        unsafe {
-            core::ptr::write(
-                physical_address as *mut u64,
-                self.get_vmcs_revision_id() as _,
-            )
-        };
+        vcpus.vmcs_physical = physical_address;
+        vcpus.vmcs_virtual = virtual_address.as_mut() as *mut u64;
 
-        return Ok(physical_address);
+        return Ok(());
     }
 
     /// Converts from virtual address to physical address

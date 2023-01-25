@@ -17,8 +17,8 @@ mod string;
 #[no_mangle]
 pub extern "system" fn __CxxFrameHandler3(_: *mut u8, _: *mut u8, _: *mut u8, _: *mut u8) -> i32 { unimplemented!() }
 
-#[global_allocator]
-static GLOBAL: kernel_alloc::KernelAlloc = kernel_alloc::KernelAlloc;
+//#[global_allocator]
+//static GLOBAL: kernel_alloc::KernelAlloc = kernel_alloc::KernelAlloc;
 
 /// Explanation can be found here: https://github.com/Trantect/win_driver_example/issues/4
 #[export_name = "_fltused"]
