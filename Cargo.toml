@@ -1,0 +1,9 @@
+[workspace]
+
+members = [
+    "driver",
+    "hypervisor",
+]
+
+[profile.release]
+opt-level = 3

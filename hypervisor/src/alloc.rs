@@ -1,4 +1,4 @@
-use std::{
+use core::{
     alloc::{AllocError, Allocator, Layout},
     ptr::NonNull,
 };
@@ -13,7 +13,7 @@ use crate::nt::{
 pub struct PhysicalAllocator;
 
 unsafe impl Allocator for PhysicalAllocator {
-    fn allocate(&self, layout: std::alloc::Layout) -> Result<NonNull<[u8]>, AllocError> {
+    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         let mut boundary: PHYSICAL_ADDRESS = unsafe { core::mem::zeroed() };
         let mut lowest: PHYSICAL_ADDRESS = unsafe { core::mem::zeroed() };
         let mut highest: PHYSICAL_ADDRESS = unsafe { core::mem::zeroed() };

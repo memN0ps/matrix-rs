@@ -134,6 +134,7 @@ impl VMX {
         };
 
         let physical_address = self.pa_from_va(virtual_address.as_mut() as *mut _ as _);
+        log::info!("[+] Physical Addresss: 0x{:x}", physical_address);
 
         if physical_address == 0 {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);

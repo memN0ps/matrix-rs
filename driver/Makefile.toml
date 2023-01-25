@@ -22,7 +22,7 @@ script = [
 dependencies = ["build-driver", "rename"]
 script = [
     # Load the Visual Studio Developer environment
-    "call \"%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat\"",
+    "call \"%ProgramFiles%\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat\"",
 
     # Create a self signed certificate (only if not already done)
     "if not exist DriverCertificate.cer ( makecert -r -pe -ss PrivateCertStore -n CN=DriverCertificate DriverCertificate.cer ) else ( echo Certificate already exists. )",

@@ -1,4 +1,4 @@
-//#![no_std]
+#![no_std]
 #![feature(allocator_api)]
 #![feature(new_uninit)]
 
@@ -13,14 +13,7 @@ mod nt;
 mod vmx;
 mod error;
 
-fn main() {
-    match init_vmx() {
-        Ok(_) => log::info!("[+] VMM initialized"),
-        Err(err) => log::error!("[-] VMM initialization failed: {}", err),
-    }
-}
-
-fn init_vmx() -> Result<(), HypervisorError> {
+pub fn init_vmx() -> Result<(), HypervisorError> {
     //
     // 1) Intel Manual: 24.6 Discover Support for Virtual Machine Extension (VMX)
     //

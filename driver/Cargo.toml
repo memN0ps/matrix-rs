@@ -9,11 +9,21 @@ edition = "2021"
 path = "src/lib.rs"
 crate-type = ["cdylib"]
 
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
 [dependencies]
+log = "0.4.17" # https://crates.io/crates/log
 kernel-log = "0.1.2" # https://crates.io/crates/kernel-log
 kernel-build = "0.1.0" # https://crates.io/crates/kernel-build
-#kernel-alloc = "0.1.2" # https://crates.io/crates/kernel-alloc
+kernel-alloc = "0.2.1" # https://crates.io/crates/kernel-alloc
+obfstr = "0.4.1" # https://crates.io/crates/obfstr
 
+
+hypervisor = { path = "../hypervisor" }
 
 [dependencies.winapi]
 git = "https://github.com/Trantect/winapi-rs.git"
@@ -22,3 +32,7 @@ features = [
     "wdm",
     "ntstatus",
 ]
+
+[build-dependencies]
+winreg = "0.10.1"
+failure = "0.1.8"
