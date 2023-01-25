@@ -2,7 +2,7 @@ extern crate alloc;
 
 use alloc::{boxed::Box};
 use kernel_alloc::PhysicalAllocator;
-use winapi::shared::ntdef::PHYSICAL_ADDRESS;
+use winapi::{shared::ntdef::PHYSICAL_ADDRESS};
 use x86::{
     controlregs::{cr0, cr4, cr4_write, Cr0, Cr4},
     cpuid::CpuId,
@@ -14,8 +14,7 @@ use x86::{
 };
 
 use crate::{
-    nt::{MmGetPhysicalAddress, MmGetVirtualForPhysical}, error::HypervisorError, vcpu::Vcpu,
-};
+    nt::{MmGetPhysicalAddress, MmGetVirtualForPhysical}, error::HypervisorError};
 
 pub struct VMX {
     cpuid: CpuId,
@@ -124,7 +123,7 @@ impl VMX {
     }
 
     /// Allocate a naturally aligned 4-KByte region of memory to support enable VMX operation (Intel Manual: 25.11.5 VMXON Region)
-    pub fn allocate_vmm_context(&self, vcpus: &mut Vcpu) -> Result<(), HypervisorError> {
+    pub fn allocate_vmm_context(&self) -> Result<u64, HypervisorError> {
         let mut virtual_address: Box<u64, PhysicalAllocator> = unsafe {
             match Box::try_new_zeroed_in(PhysicalAllocator) {
                 Ok(va) => va,
@@ -147,14 +146,13 @@ impl VMX {
         let physical_address = self.pa_from_va(virtual_address.as_mut() as *mut _ as _);
         log::info!("[+] Physical Addresss: 0x{:x}", physical_address);
 
+        //unsafe { core::arch::asm!("int3") };
+
         if physical_address == 0 {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
-        vcpus.vmcs_physical = physical_address;
-        vcpus.vmcs_virtual = virtual_address.as_mut() as *mut u64;
-
-        return Ok(());
+        return Ok(physical_address);
     }
 
     /// Converts from virtual address to physical address

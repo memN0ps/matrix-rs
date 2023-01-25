@@ -40,6 +40,10 @@ pub fn init_vmx() -> Result<(), HypervisorError> {
     let mut vcpus_list: Vec<Vcpu> = Vec::new();
 
     for i in 0..processor_count() {
+        log::info!("[+] Processor: {}", i);
+        
+        ProcessorExecutor::switch_to_processor(i);
+
         let mut vcpus = Vcpu::new(i);
 
         vmx.enable_vmx_operation()?;
@@ -48,17 +52,16 @@ pub fn init_vmx() -> Result<(), HypervisorError> {
         vmx.adjust_control_registers();
         log::info!("[+] Control registers adjusted");
 
-        vmx.allocate_vmm_context(&mut vcpus)?;
-        vmx.vmxon(vcpus.vmcs_physical)?;
+        vcpus.vmxon_physical_address = vmx.allocate_vmm_context()?;
+        vmx.vmxon(vcpus.vmxon_physical_address)?;
         log::info!("[+] VMXON successful!");
 
-        vmx.allocate_vmm_context(&mut vcpus)?;
-        vmx.vmptrld(vcpus.vmcs_physical)?;
+        vcpus.vmcs_physical_address = vmx.allocate_vmm_context()?;
+        vmx.vmptrld(vcpus.vmcs_physical_address)?;
         log::info!("[+] VMPTRLD successful!");
 
         vcpus_list.push(vcpus);
 
-        ProcessorExecutor::switch_to_processor(i);
     }
 
     return Ok(());
