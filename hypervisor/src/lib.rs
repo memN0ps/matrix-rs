@@ -9,6 +9,7 @@ use vmx::VMX;
 
 use crate::{processor::{processor_count, ProcessorExecutor}, vcpu::Vcpu};
 
+mod vmcs;
 mod vcpu;
 mod processor;
 mod nt;
@@ -52,11 +53,11 @@ pub fn init_vmx() -> Result<(), HypervisorError> {
         vmx.adjust_control_registers();
         log::info!("[+] Control registers adjusted");
 
-        vcpus.vmxon_physical_address = vmx.allocate_vmm_context()?;
+        vmx.allocate_vmxon_memory(&mut vcpus)?;
         vmx.vmxon(vcpus.vmxon_physical_address)?;
         log::info!("[+] VMXON successful!");
 
-        vcpus.vmcs_physical_address = vmx.allocate_vmm_context()?;
+        vmx.allocate_vmcs_memory(&mut vcpus)?;
         vmx.vmptrld(vcpus.vmcs_physical_address)?;
         log::info!("[+] VMPTRLD successful!");
 
