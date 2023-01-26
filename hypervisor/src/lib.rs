@@ -40,10 +40,9 @@ pub fn init_vmx() -> Result<(), HypervisorError> {
         
         if let Some(_old_affinity) = ProcessorExecutor::switch_to_processor(i) {
 
-            log::info!("[+] Calling VCPU::new()");
-
+            log::info!("[+] Creating VCPU::new()");
             let mut vcpus = Vcpu::new(i);
-            log::info!("[+] Created a new VCPU");
+            log::info!("[+] Created a VCPU::new() sucessfully!");
 
             vmx.enable_vmx_operation()?;
             log::info!("[+] Virtual Machine Extensions (VMX) enabled");
@@ -51,11 +50,11 @@ pub fn init_vmx() -> Result<(), HypervisorError> {
             vmx.adjust_control_registers();
             log::info!("[+] Control registers adjusted");
 
-            vmx.allocate_vmxon_memory(&mut vcpus)?;
+            vmx.write_revision_id_to_vmxon(&mut vcpus)?;
             vmx.vmxon(vcpus.vmxon_physical_address)?;
             log::info!("[+] VMXON successful!");
 
-            vmx.allocate_vmcs_memory(&mut vcpus)?;
+            vmx.write_revision_id_to_vmcs(&mut vcpus)?;
             vmx.vmptrld(vcpus.vmcs_physical_address)?;
             log::info!("[+] VMPTRLD successful!");
             

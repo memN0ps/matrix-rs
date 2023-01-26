@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 x86 = "0.52.0"
 log = "0.4.17"
-kernel-alloc = "0.2.1"
+kernel-alloc = { version = "0.2.1", features = ["pool-tag"] }
 thiserror-no-std = "2.0.2"
 bitfield = "0.14.0"
 winapi = { git = "https://github.com/Trantect/winapi-rs.git", branch = "feature/km", default-features = false, features = ["wdm", "ntstatus"] }

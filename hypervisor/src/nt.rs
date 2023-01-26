@@ -1,6 +1,6 @@
-use winapi::shared::{
+use winapi::{shared::{
     ntdef::{PHYSICAL_ADDRESS, PVOID, PPROCESSOR_NUMBER, NTSTATUS, PGROUP_AFFINITY},
-};
+}};
 
 #[link(name = "ntoskrnl")]
 extern "system" {

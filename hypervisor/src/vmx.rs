@@ -1,9 +1,6 @@
 extern crate alloc;
 
-use alloc::{boxed::Box};
 use bitfield::BitMut;
-//use bitfield::BitMut;
-use kernel_alloc::PhysicalAllocator;
 use winapi::{shared::ntdef::PHYSICAL_ADDRESS};
 use x86::{
     controlregs::{cr0, cr4, cr4_write, Cr0, Cr4},
@@ -15,8 +12,7 @@ use x86::{
     },
 };
 
-use crate::{
-    nt::{MmGetPhysicalAddress, MmGetVirtualForPhysical}, error::HypervisorError, vcpu::Vcpu, vmcs::{Vmcs, Vmxon}};
+use crate::{nt::{MmGetPhysicalAddress, MmGetVirtualForPhysical}, error::HypervisorError, vcpu::Vcpu};
 
 pub struct VMX {
     cpuid: CpuId,
@@ -125,59 +121,36 @@ impl VMX {
     }
 
     /// Allocate a naturally aligned 4-KByte region of memory to enable VMX operation (Intel Manual: 25.11.5 VMXON Region)
-    pub fn allocate_vmxon_memory(&self, vcpus: &mut Vcpu) -> Result<(), HypervisorError> {
-        let mut vmxon_va: Box<Vmxon, PhysicalAllocator> = unsafe {
-            match Box::try_new_zeroed_in(PhysicalAllocator) {
-                Ok(va) => va,
-                Err(_) => return Err(HypervisorError::MemoryAllocationFailed),
-            }
-            .assume_init()
-        };
+    pub fn write_revision_id_to_vmxon(&self, vcpus: &mut Vcpu) -> Result<(), HypervisorError> {
 
-        log::info!("[+] Allocate a naturally aligned 4-KByte region of memory: {:p}", vmxon_va);
-
-        vcpus.vmxon_physical_address = self.pa_from_va(vmxon_va.as_mut() as *mut _ as _);
-        log::info!("[+] Physical Addresss: 0x{:x}", vcpus.vmxon_physical_address);
+        vcpus.vmxon_physical_address = self.pa_from_va(vcpus.vmxon.as_mut() as *mut _ as _);
 
         if vcpus.vmxon_physical_address == 0 {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
-        vmxon_va.revision_id = self.get_vmcs_revision_id();
-        vmxon_va.as_mut().revision_id.set_bit(31, false);
+        log::info!("[+] Virtual Address: {:p}", vcpus.vmxon);
+        log::info!("[+] Physical Addresss: 0x{:x}", vcpus.vmxon_physical_address);
 
-        log::info!("[+] VMCS Revision Identifier written successfully: {}", vmxon_va.revision_id);
-
-        unsafe { core::arch::asm!("int3") };
+        vcpus.vmxon.revision_id = self.get_vmcs_revision_id();
+        vcpus.vmxon.as_mut().revision_id.set_bit(31, false);
 
         return Ok(());
     }
 
     /// Allocate a naturally aligned 4-KByte region of memory for VMCS region (Intel Manual: 25.2 Format of The VMCS Region)
-    pub fn allocate_vmcs_memory(&self, vcpus: &mut Vcpu) -> Result<(), HypervisorError> {
-        let mut vmcs_va: Box<Vmcs, PhysicalAllocator> = unsafe {
-            match Box::try_new_zeroed_in(PhysicalAllocator) {
-                Ok(va) => va,
-                Err(_) => return Err(HypervisorError::MemoryAllocationFailed),
-            }
-            .assume_init()
-        };
+    pub fn write_revision_id_to_vmcs(&self, vcpus: &mut Vcpu) -> Result<(), HypervisorError> {
 
-        log::info!("[+] Allocate a naturally aligned 4-KByte region of memory: {:p}", vmcs_va);
-
-        vcpus.vmcs_physical_address = self.pa_from_va(vmcs_va.as_mut() as *mut _ as _);
+        vcpus.vmcs_physical_address = self.pa_from_va(vcpus.vmcs.as_mut() as *mut _ as _);
+        log::info!("[+] Virtual Address: {:p}", vcpus.vmcs);
         log::info!("[+] Physical Addresss: 0x{:x}", vcpus.vmcs_physical_address);
 
         if vcpus.vmcs_physical_address == 0 {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
-        vmcs_va.as_mut().revision_id = self.get_vmcs_revision_id();
-        vmcs_va.as_mut().revision_id.set_bit(31, false);
-
-        unsafe { core::arch::asm!("int3") };
-
-        log::info!("[+] VMCS Revision Identifier written successfully: {}", vmcs_va.revision_id);
+        vcpus.vmcs.as_mut().revision_id = self.get_vmcs_revision_id();
+        vcpus.vmcs.as_mut().revision_id.set_bit(31, false);
 
         return Ok(());
     }
