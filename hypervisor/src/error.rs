@@ -16,4 +16,6 @@ pub enum HypervisorError {
     VMXONFailed,
     #[error("Failed to execute VMPTRLD")]
     VMPTRLDFailed,
+    #[error("Failed to switch processor")]
+    ProcessorSwitchFailed
 }

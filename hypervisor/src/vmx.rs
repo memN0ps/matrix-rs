@@ -1,6 +1,8 @@
 extern crate alloc;
 
 use alloc::{boxed::Box};
+use bitfield::BitMut;
+//use bitfield::BitMut;
 use kernel_alloc::PhysicalAllocator;
 use winapi::{shared::ntdef::PHYSICAL_ADDRESS};
 use x86::{
@@ -134,24 +136,24 @@ impl VMX {
 
         log::info!("[+] Allocate a naturally aligned 4-KByte region of memory: {:p}", vmxon_va);
 
-        vmxon_va.revision_id = self.get_vmcs_revision_id();
-
-        log::info!("[+] VMCS Revision Identifier written successfully: {}", vmxon_va.revision_id);
-
         vcpus.vmxon_physical_address = self.pa_from_va(vmxon_va.as_mut() as *mut _ as _);
         log::info!("[+] Physical Addresss: 0x{:x}", vcpus.vmxon_physical_address);
-
-        //unsafe { core::arch::asm!("int3") };
 
         if vcpus.vmxon_physical_address == 0 {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
+        vmxon_va.revision_id = self.get_vmcs_revision_id();
+        vmxon_va.as_mut().revision_id.set_bit(31, false);
+
+        log::info!("[+] VMCS Revision Identifier written successfully: {}", vmxon_va.revision_id);
+
+        unsafe { core::arch::asm!("int3") };
+
         return Ok(());
     }
 
-    /// Allocate a naturally aligned 4-KByte region of memory to enable VMX operation (Intel Manual: 25.11.5 VMXON Region)
-    /// Allocate a naturally aligned 4-KByte region of memory for VMCS region
+    /// Allocate a naturally aligned 4-KByte region of memory for VMCS region (Intel Manual: 25.2 Format of The VMCS Region)
     pub fn allocate_vmcs_memory(&self, vcpus: &mut Vcpu) -> Result<(), HypervisorError> {
         let mut vmcs_va: Box<Vmcs, PhysicalAllocator> = unsafe {
             match Box::try_new_zeroed_in(PhysicalAllocator) {
@@ -163,18 +165,19 @@ impl VMX {
 
         log::info!("[+] Allocate a naturally aligned 4-KByte region of memory: {:p}", vmcs_va);
 
-        vmcs_va.revision_id = self.get_vmcs_revision_id();
-
-        log::info!("[+] VMCS Revision Identifier written successfully: {}", vmcs_va.revision_id);
-
         vcpus.vmcs_physical_address = self.pa_from_va(vmcs_va.as_mut() as *mut _ as _);
         log::info!("[+] Physical Addresss: 0x{:x}", vcpus.vmcs_physical_address);
-
-        //unsafe { core::arch::asm!("int3") };
 
         if vcpus.vmcs_physical_address == 0 {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
+
+        vmcs_va.as_mut().revision_id = self.get_vmcs_revision_id();
+        vmcs_va.as_mut().revision_id.set_bit(31, false);
+
+        unsafe { core::arch::asm!("int3") };
+
+        log::info!("[+] VMCS Revision Identifier written successfully: {}", vmcs_va.revision_id);
 
         return Ok(());
     }
