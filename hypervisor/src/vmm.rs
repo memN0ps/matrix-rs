@@ -3,7 +3,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use bitfield::BitMut;
 
-use x86::{msr::{rdmsr, IA32_VMX_BASIC, IA32_FEATURE_CONTROL, wrmsr, IA32_VMX_CR0_FIXED0, IA32_VMX_CR0_FIXED1, IA32_VMX_CR4_FIXED0, IA32_VMX_CR4_FIXED1}, controlregs::{cr4, cr4_write, Cr4, cr0, Cr0}, current::vmx::{vmxon, vmptrld, vmxoff}};
+use x86::{msr::{rdmsr, IA32_VMX_BASIC, IA32_FEATURE_CONTROL, wrmsr, IA32_VMX_CR0_FIXED0, IA32_VMX_CR0_FIXED1, IA32_VMX_CR4_FIXED0, IA32_VMX_CR4_FIXED1}, controlregs::{cr4, cr4_write, Cr4, cr0, Cr0}, current::vmx::{vmxon, vmptrld, vmxoff, vmlaunch}};
 
 use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, nt::{MmGetPhysicalAddress}};
 
@@ -159,6 +159,14 @@ impl Vmm {
         match unsafe { vmptrld(vmptrld_pa) } {
             Ok(_) => Ok(()),
             Err(_) => Err(HypervisorError::VMPTRLDFailed),
+        }
+    }
+
+    /// Launch virtual machine.
+    pub fn vmlaunch(&self) -> Result<(), HypervisorError> {
+        match unsafe { vmlaunch() } {
+            Ok(_) => Ok(()),
+            Err(_) => Err(HypervisorError::VMLAUNCHFailed),
         }
     }
 
