@@ -14,6 +14,8 @@ pub enum HypervisorError {
     VirtualToPhysicalAddressFailed,
     #[error("Failed to execute VMXON")]
     VMXONFailed,
+    #[error("Failed to execute VMXOFF")]
+    VMXOFFFailed,
     #[error("Failed to execute VMPTRLD")]
     VMPTRLDFailed,
     #[error("Failed to switch processor")]

@@ -3,7 +3,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use bitfield::BitMut;
 
-use x86::{msr::{rdmsr, IA32_VMX_BASIC, IA32_FEATURE_CONTROL, wrmsr, IA32_VMX_CR0_FIXED0, IA32_VMX_CR0_FIXED1, IA32_VMX_CR4_FIXED0, IA32_VMX_CR4_FIXED1}, controlregs::{cr4, cr4_write, Cr4, cr0, Cr0}, current::vmx::{vmxon, vmptrld}};
+use x86::{msr::{rdmsr, IA32_VMX_BASIC, IA32_FEATURE_CONTROL, wrmsr, IA32_VMX_CR0_FIXED0, IA32_VMX_CR0_FIXED1, IA32_VMX_CR4_FIXED0, IA32_VMX_CR4_FIXED1}, controlregs::{cr4, cr4_write, Cr4, cr0, Cr0}, current::vmx::{vmxon, vmptrld, vmxoff}};
 
 use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, nt::{MmGetPhysicalAddress}};
 
@@ -141,6 +141,11 @@ impl Vmm {
         unsafe { cr4_write(cr4) };
     }
 
+    /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID) (Intel Manual: 25.11.5 VMXON Region)
+    fn get_vmcs_revision_id(&self) -> u32 {
+        unsafe { (rdmsr(IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
+    }
+
     /// Enable VMX operation.
     pub fn vmxon(&self, vmxon_pa: u64) -> Result<(), HypervisorError> {
         match unsafe { vmxon(vmxon_pa) } {
@@ -157,8 +162,11 @@ impl Vmm {
         }
     }
 
-    /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID) (Intel Manual: 25.11.5 VMXON Region)
-    fn get_vmcs_revision_id(&self) -> u32 {
-        unsafe { (rdmsr(IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
+    /// Disable VMX operation.
+    pub fn vmxoff(&self) -> Result<(), HypervisorError> {
+        match unsafe { vmxoff() } {
+            Ok(_) => Ok(()),
+            Err(_) => Err(HypervisorError::VMXOFFFailed),
+        }
     }
 }

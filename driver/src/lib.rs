@@ -2,6 +2,7 @@
 //#![feature(alloc_c_string)]
 //#![feature(core_c_str)]
 
+use hypervisor::HypervisorBuilder;
 use kernel_log::KernelLogger;
 use log::LevelFilter;
 use core::panic::PanicInfo;
@@ -30,8 +31,11 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
 
     driver.DriverUnload = Some(driver_unload);
 
+
+    let mut hypervisor = HypervisorBuilder::new();
+
     log::info!("[*] Initializing VMM!");
-    match hypervisor::vmm_init() {
+    match hypervisor.vmm_init() {
         Ok(_) => log::info!("[+] VMM initialized"),
         Err(err) => log::error!("[-] VMM initialization failed: {}", err),
     }
@@ -41,6 +45,5 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
 
 
 pub extern "system" fn driver_unload(_driver: &mut DRIVER_OBJECT) {
-    //vmexit
     log::info!("Driver unloaded successfully!");
 }
