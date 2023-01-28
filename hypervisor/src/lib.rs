@@ -2,13 +2,12 @@
 #![feature(allocator_api)]
 #![feature(new_uninit)]
 
-//extern crate alloc;
-//use alloc::vec::Vec;
 use error::HypervisorError;
-use vmx::VMX;
+use vmx::Vmx;
 
-use crate::{processor::{processor_count, ProcessorExecutor}, vcpu::Vcpu};
+use crate::{processor::{ProcessorExecutor}, vmm::Vmm};
 
+mod vmm;
 mod vmcs;
 mod vcpu;
 mod processor;
@@ -16,12 +15,12 @@ mod nt;
 mod vmx;
 mod error;
 
-pub fn init_vmx() -> Result<(), HypervisorError> {
+pub fn vmm_init() -> Result<(), HypervisorError> {
     //
     // 1) Intel Manual: 24.6 Discover Support for Virtual Machine Extension (VMX)
     //
 
-    let vmx = VMX::new();
+    let vmx = Vmx::new();
 
     vmx.has_intel_cpu()?;
     log::info!("[+] CPU is Intel");
@@ -29,43 +28,42 @@ pub fn init_vmx() -> Result<(), HypervisorError> {
     vmx.has_vmx_support()?;
     log::info!("[+] Virtual Machine Extension (VMX) technology is supported");
 
-    //
-    // 2) Intel Manual: 24.7 Enable and Enter VMX Operation
-    //
+    log::info!("[+] Initializing VMM Context");
+    let mut vmm_context = Vmm::new();
 
-    //let mut vcpus_list: Vec<Vcpu> = Vec::new();
-
-    for i in 0..processor_count() {
-        log::info!("[+] Processor: {}", i);
+    for index in 0..vmm_context.processor_count {
+        log::info!("[+] Switching Processor");
         
-        if let Some(_old_affinity) = ProcessorExecutor::switch_to_processor(i) {
-
-            log::info!("[+] Creating VCPU::new()");
-            let mut vcpus = Vcpu::new(i);
-            log::info!("[+] Created a VCPU::new() sucessfully!");
-
-            vmx.enable_vmx_operation()?;
-            log::info!("[+] Virtual Machine Extensions (VMX) enabled");
-        
-            vmx.adjust_control_registers();
-            log::info!("[+] Control registers adjusted");
-
-            vmx.write_revision_id_to_vmxon(&mut vcpus)?;
-            vmx.vmxon(vcpus.vmxon_physical_address)?;
-            log::info!("[+] VMXON successful!");
-
-            vmx.write_revision_id_to_vmcs(&mut vcpus)?;
-            vmx.vmptrld(vcpus.vmcs_physical_address)?;
-            log::info!("[+] VMPTRLD successful!");
-            
-            //vcpus_list.push(vcpus);
-
-        } else {
+        let Some(_old_affinity) = ProcessorExecutor::switch_to_processor(index) else {
             return Err(HypervisorError::ProcessorSwitchFailed);
-        }
-    }
+        };
 
-    return Ok(());
+        log::info!("[+] Processor: {}", index);
+
+        vmm_context.init_vcpu()?;
+
+        //
+        // 2) Intel Manual: 24.7 Enable and Enter VMX Operation
+        //
+        init_logical_processor(&mut vmm_context, index as usize)?;
+    }
+    Ok(())
 }
 
-//pub fn init_logical_processor() {}
+
+/// Enable and Enter VMX Operation via VMXON and load current VMCS pointer via VMPTRLD
+pub fn init_logical_processor(vmm_context: &mut Vmm, index: usize) -> Result<(), HypervisorError> {
+    log::info!("[+] Enabling Virtual Machine Extensions (VMX)");
+    vmm_context.enable_vmx_operation()?;
+
+    log::info!("[+] Adjusting Control Registers");
+    vmm_context.adjust_control_registers();
+
+    log::info!("[+] init_vmxon");
+    vmm_context.init_vmxon(index)?;
+
+    log::info!("[+] init_vmcs");
+    vmm_context.init_vmcs(index)?;
+
+    Ok(())
+}

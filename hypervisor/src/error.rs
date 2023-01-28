@@ -9,7 +9,7 @@ pub enum HypervisorError {
     #[error("VMX locked off in BIOS")]
     VMXBIOSLock,
     #[error("Failed allocate memory via PhysicalAllocator")]
-    MemoryAllocationFailed,
+    MemoryAllocationFailed(#[from] core::alloc::AllocError),
     #[error("Failed to convert from virtual address to physical address")]
     VirtualToPhysicalAddressFailed,
     #[error("Failed to execute VMXON")]
@@ -17,5 +17,7 @@ pub enum HypervisorError {
     #[error("Failed to execute VMPTRLD")]
     VMPTRLDFailed,
     #[error("Failed to switch processor")]
-    ProcessorSwitchFailed
+    ProcessorSwitchFailed,
+    #[error("Failed to access VCPU table")]
+    VcpuIsNone
 }

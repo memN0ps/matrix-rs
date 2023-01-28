@@ -2,7 +2,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 use kernel_alloc::PhysicalAllocator;
 
-use crate::vmcs::{Vmxon, Vmcs};
+use crate::{vmcs::{Vmxon, Vmcs}, error::HypervisorError};
 
 pub struct Vcpu {
     /// The VMXON region
@@ -16,19 +16,15 @@ pub struct Vcpu {
 
     /// The physical address of the vmcs naturally aligned 4-KByte region of memory
     pub vmcs_physical_address: u64,
-
-    /// The index of the processor.
-    pub index: u32,
 }
 
 impl Vcpu {
-    pub fn new(index: u32) -> Self {
-        Self {
-            vmxon: unsafe { Box::try_new_zeroed_in(PhysicalAllocator).expect("Failed to allocate VMXON Region").assume_init() },
+    pub fn new() -> Result<Self, HypervisorError> {
+        Ok (Self {
+            vmxon: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
             vmxon_physical_address: 0,
-            vmcs: unsafe { Box::try_new_zeroed_in(PhysicalAllocator).expect("Failed to allocate VMCS Region").assume_init() },
+            vmcs: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
             vmcs_physical_address: 0,
-            index,
-        }
+        })
     }
 }

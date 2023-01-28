@@ -30,8 +30,8 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
 
     driver.DriverUnload = Some(driver_unload);
 
-    log::info!("[*] Initializing VMM!.....");
-    match hypervisor::init_vmx() {
+    log::info!("[*] Initializing VMM!");
+    match hypervisor::vmm_init() {
         Ok(_) => log::info!("[+] VMM initialized"),
         Err(err) => log::error!("[-] VMM initialization failed: {}", err),
     }
