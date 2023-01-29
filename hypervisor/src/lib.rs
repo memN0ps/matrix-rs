@@ -3,7 +3,7 @@
 #![feature(new_uninit)]
 
 use error::HypervisorError;
-use vmx::Vmx;
+use support::Support;
 
 use crate::{processor::{ProcessorExecutor}, vmm::Vmm};
 
@@ -12,13 +12,13 @@ mod vmcs;
 mod vcpu;
 mod processor;
 mod nt;
-mod vmx;
+mod support;
 mod error;
 
 
 pub struct HypervisorBuilder {
     vmm_context: Vmm,
-    vmx: Vmx,
+    support: Support,
 }
 
 impl HypervisorBuilder {
@@ -26,7 +26,7 @@ impl HypervisorBuilder {
     pub fn new() -> Self {
         Self {
             vmm_context: Vmm::new(),
-            vmx: Vmx::new(),
+            support: Support::new(),
         }
     }
 
@@ -35,10 +35,10 @@ impl HypervisorBuilder {
         // 1) Intel Manual: 24.6 Discover Support for Virtual Machine Extension (VMX)
         //
         
-        self.vmx.has_intel_cpu()?;
+        self.support.has_intel_cpu()?;
         log::info!("[+] CPU is Intel");
     
-        self.vmx.has_vmx_support()?;
+        self.support.has_vmx_support()?;
         log::info!("[+] Virtual Machine Extension (VMX) technology is supported");
     
         log::info!("[+] Initializing VMM Context");
@@ -90,7 +90,7 @@ impl HypervisorBuilder {
                 return Err(HypervisorError::ProcessorSwitchFailed);
             };
 
-            self.vmm_context.vmxoff()?;
+            support::execute_vmxoff()?;
     
             core::mem::drop(executor);
         }

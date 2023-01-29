@@ -3,9 +3,9 @@ extern crate alloc;
 use alloc::vec::Vec;
 use bitfield::BitMut;
 
-use x86::{msr::{rdmsr, IA32_VMX_BASIC, IA32_FEATURE_CONTROL, wrmsr, IA32_VMX_CR0_FIXED0, IA32_VMX_CR0_FIXED1, IA32_VMX_CR4_FIXED0, IA32_VMX_CR4_FIXED1}, controlregs::{cr4, cr4_write, Cr4, cr0, Cr0}, current::vmx::{vmxon, vmptrld, vmxoff, vmlaunch}};
+use x86::{msr::{rdmsr, IA32_FEATURE_CONTROL, wrmsr, IA32_VMX_CR0_FIXED0, IA32_VMX_CR0_FIXED1, IA32_VMX_CR4_FIXED0, IA32_VMX_CR4_FIXED1}, controlregs::{cr4, cr4_write, Cr4, cr0, Cr0}};
 
-use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, nt::{MmGetPhysicalAddress}};
+use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, nt::{MmGetPhysicalAddress}, support};
 
 pub struct Vmm {
     pub vcpu_table: Vec<Vcpu>,
@@ -41,10 +41,10 @@ impl Vmm {
         log::info!("[+] VCPU: {}, Virtual Address: {:p}", index, self.vcpu_table[index].vmxon);
         log::info!("[+] VCPU: {}, Physical Addresss: 0x{:x}", index, self.vcpu_table[index].vmxon_physical_address);
 
-        self.vcpu_table[index].vmxon.revision_id = self.get_vmcs_revision_id();
+        self.vcpu_table[index].vmxon.revision_id = support::get_vmcs_revision_id();
         self.vcpu_table[index].vmxon.as_mut().revision_id.set_bit(31, false);
 
-        self.vmxon(self.vcpu_table[index].vmxon_physical_address)?;
+        support::execute_vmxon(self.vcpu_table[index].vmxon_physical_address)?;
         log::info!("[+] VMXON successful!");
 
         Ok(())
@@ -64,10 +64,10 @@ impl Vmm {
         log::info!("[+] VCPU: {}, Virtual Address: {:p}", index, self.vcpu_table[index].vmcs);
         log::info!("[+] VCPU: {}, Physical Addresss: 0x{:x}", index, self.vcpu_table[index].vmcs_physical_address);
 
-        self.vcpu_table[index].vmcs.revision_id = self.get_vmcs_revision_id();
+        self.vcpu_table[index].vmcs.revision_id = support::get_vmcs_revision_id();
         self.vcpu_table[index].vmcs.as_mut().revision_id.set_bit(31, false);
 
-        self.vmptrld(self.vcpu_table[index].vmcs_physical_address)?;
+        support::execute_vmptrld(self.vcpu_table[index].vmcs_physical_address)?;
         log::info!("[+] VMPTRLD successful!");
 
         Ok(())
@@ -141,8 +141,9 @@ impl Vmm {
         unsafe { cr4_write(cr4) };
     }
 
+    /*
     /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID) (Intel Manual: 25.11.5 VMXON Region)
-    fn get_vmcs_revision_id(&self) -> u32 {
+    fn get_vmcs_revision_id() -> u32 {
         unsafe { (rdmsr(IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
     }
 
@@ -177,4 +178,5 @@ impl Vmm {
             Err(_) => Err(HypervisorError::VMXOFFFailed),
         }
     }
+    */
 }

@@ -3,7 +3,7 @@ use thiserror_no_std::Error;
 #[derive(Error, Debug)]
 pub enum HypervisorError {
     #[error("Intel CPU not found")]
-    InvalidCPU,
+    CPUUnsupported,
     #[error("VMX is not supported")]
     VMXUnsupported,
     #[error("VMX locked off in BIOS")]
