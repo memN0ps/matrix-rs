@@ -1,12 +1,16 @@
 #![no_std]
 #![feature(allocator_api)]
 #![feature(new_uninit)]
+#![feature(const_trait_impl)]
+#![feature(const_mut_refs)]
 
 use error::HypervisorError;
 use support::Support;
 
 use crate::{processor::{ProcessorExecutor}, vmm::Vmm};
 
+mod addresses;
+mod ept;
 mod vmm;
 mod vmcs;
 mod vcpu;

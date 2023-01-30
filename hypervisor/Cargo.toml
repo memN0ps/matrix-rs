@@ -6,9 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-x86 = "0.52.0"
-log = "0.4.17"
-kernel-alloc = { version = "0.2.1", features = ["pool-tag"] }
-thiserror-no-std = "2.0.2"
-bitfield = "0.14.0"
+x86 = "0.52.0" # https://crates.io/crates/x86
+log = "0.4.17" # https://crates.io/crates/log
+kernel-alloc = { version = "0.2.1", features = ["pool-tag"] } # https://crates.io/crates/kernel-alloc
+thiserror-no-std = "2.0.2" # https://crates.io/crates/thiserror-no-std
+bitfield = "0.14.0" # https://crates.io/crates/bitfield
+elain = "0.3.0" # https://crates.io/crates/elain
 winapi = { git = "https://github.com/Trantect/winapi-rs.git", branch = "feature/km", default-features = false, features = ["wdm", "ntstatus"] }
