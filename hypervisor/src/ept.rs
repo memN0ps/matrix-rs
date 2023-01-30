@@ -5,6 +5,7 @@ use x86::current::paging::{PML4, PDPT, PD, PT, PML4Entry, PDPTEntry, PDEntry, PT
 
 use crate::addresses::physical_address;
 
+// We will do this later
 #[repr(C, align(4096))]
 pub struct Ept {
     pub pml4: PML4,
@@ -26,6 +27,7 @@ impl Ept {
     // To create physical addresses that can be utilised to access memory, a set of EPT paging structures are traversed to transform a guest's physical addresses.
     // EPT converts the physical address of a guest to that of a host.
 
+    #[allow(dead_code)]
     fn empty() -> Self {
         Self {
             pml4: [PML4Entry(0); 512],
@@ -38,6 +40,7 @@ impl Ept {
         }
     }
 
+    #[allow(dead_code)]
     pub fn new() -> Box<Self> {
         let mut ept: Box<Ept> = Box::new(Self::empty());
 

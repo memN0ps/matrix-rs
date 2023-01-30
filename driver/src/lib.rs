@@ -2,11 +2,11 @@
 //#![feature(alloc_c_string)]
 //#![feature(core_c_str)]
 
-use hypervisor::HypervisorBuilder;
+use hypervisor::Hypervisor;
 use kernel_log::KernelLogger;
 use log::LevelFilter;
 use core::panic::PanicInfo;
-use winapi::{km::wdm::{DRIVER_OBJECT}, shared::{ntdef::{UNICODE_STRING, NTSTATUS}, ntstatus::STATUS_SUCCESS}};
+use winapi::{km::wdm::{DRIVER_OBJECT}, shared::{ntdef::{UNICODE_STRING, NTSTATUS}, ntstatus::{STATUS_SUCCESS, STATUS_UNSUCCESSFUL}}};
 
 /// When using the alloc crate it seems like it does some unwinding. Adding this
 /// export satisfies the compiler but may introduce undefined behaviour when a
@@ -24,6 +24,9 @@ static _FLTUSED: i32 = 0;
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! { loop {} }
 
+
+static mut HYPERVISOR: Option<Hypervisor> = None;
+
 #[no_mangle]
 pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRING) -> NTSTATUS {
     KernelLogger::init(LevelFilter::Info).expect("Failed to initialize logger");
@@ -32,12 +35,9 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
     driver.DriverUnload = Some(driver_unload);
 
 
-    let mut hypervisor = HypervisorBuilder::new();
-
-    log::info!("[*] Initializing VMM!");
-    match hypervisor.vmm_init() {
-        Ok(_) => log::info!("[+] VMM initialized"),
-        Err(err) => log::error!("[-] VMM initialization failed: {}", err),
+    if virtualize().is_none() {
+        log::error!("Failed to virtualize processors");
+        return STATUS_UNSUCCESSFUL;
     }
 
     return STATUS_SUCCESS;
@@ -46,4 +46,26 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
 
 pub extern "system" fn driver_unload(_driver: &mut DRIVER_OBJECT) {
     log::info!("Driver unloaded successfully!");
+    
+    if let Some(mut hypervisor) = unsafe { HYPERVISOR.take() } {
+        core::mem::drop(hypervisor);
+    }
+}
+
+fn virtualize() -> Option<()> {
+    let mut hypervisor = Hypervisor::new();
+
+    log::info!("[*] Initializing VMM!");
+    
+    match hypervisor.vmm_init() {
+        Ok(_) => log::info!("[+] VMM initialized"),
+        Err(err) =>  {
+            log::error!("[-] VMM initialization failed: {}", err);
+            return None;
+        }
+    }
+
+    unsafe { HYPERVISOR = Some(hypervisor) }
+
+    Some(())
 }

@@ -20,12 +20,12 @@ mod support;
 mod error;
 
 
-pub struct HypervisorBuilder {
+pub struct Hypervisor {
     vmm_context: Vmm,
     support: Support,
 }
 
-impl HypervisorBuilder {
+impl Hypervisor {
     
     pub fn new() -> Self {
         Self {
@@ -83,8 +83,8 @@ impl HypervisorBuilder {
         Ok(())
     }
 
-    /// Disable VMX operation using VMXOFF
-    pub fn dervirtualize(&self) -> Result<(), HypervisorError> {
+    /// Disable VMX operation using VMXOFF on each logical processor
+    pub fn devirtualize(&self) -> Result<(), HypervisorError> {
         log::info!("[+] Devirtualizing");
         
         for index in 0..self.vmm_context.processor_count {
@@ -105,11 +105,11 @@ impl HypervisorBuilder {
 
 }
 
-
-impl Drop for HypervisorBuilder {
+/// Call Drop and devirtualize
+impl Drop for Hypervisor {
     fn drop(&mut self) {
-        match self.dervirtualize() {
-            Ok(_) => log::info!("[+] Dervirtualized successfully!"),
+        match self.devirtualize() {
+            Ok(_) => log::info!("[+] Devirtualized successfully!"),
             Err(err) => log::error!("[-] Failed to dervirtualize {}", err),
         }
     }
