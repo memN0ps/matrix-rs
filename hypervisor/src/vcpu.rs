@@ -22,6 +22,19 @@ pub struct Vcpu {
 
     /// The physical address of the MsrBitmap naturally aligned 4-KByte region of memory
     pub msr_bitmap_physical_address: u64,
+
+    /// The guest RSP
+    pub guest_rsp: u64,
+
+    /// The guest RSP
+    pub guest_rip: u64,
+
+    // The VM stack
+    //pub vmm_stack: VmmStack,
+
+    // The VM exit status
+    //pub vmexit_status: VmexitStatus
+
 }
 
 impl Vcpu {
@@ -33,6 +46,8 @@ impl Vcpu {
             vmcs_physical_address: 0,
             msr_bitmap: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
             msr_bitmap_physical_address: 0,
+            guest_rsp: 0,
+            guest_rip: 0,
         })
     }
     

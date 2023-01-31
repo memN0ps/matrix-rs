@@ -23,6 +23,9 @@ pub enum HypervisorError {
     #[error("Failed to execute VMXOFF")]
     VMXOFFFailed,
     
+    #[error("Failed to execute VMCLEAR")]
+    VMCLEARFailed,
+
     #[error("Failed to execute VMPTRLD")]
     VMPTRLDFailed,
     

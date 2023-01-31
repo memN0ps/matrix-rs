@@ -59,6 +59,14 @@ impl Support {
         }
     }
 
+    /// Clear VMCS.
+    pub fn vmclear(addr: u64) -> Result<(), HypervisorError> {
+        match unsafe { x86::bits64::vmx::vmclear(addr) } {
+            Ok(_) => Ok(()),
+            Err(_) => Err(HypervisorError::VMCLEARFailed),
+        }
+    }
+
     /// Load current VMCS pointer.
     pub fn vmptrld(vmptrld_pa: u64) -> Result<(), HypervisorError> {
         match unsafe { x86::bits64::vmx::vmptrld(vmptrld_pa) } {

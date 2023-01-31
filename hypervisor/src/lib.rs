@@ -78,6 +78,9 @@ impl Hypervisor {
         log::info!("[+] init_vmxon");
         self.vmm_context.init_vmxon(index)?;
 
+        log::info!("[+] init_vmclear");
+        self.vmm_context.init_vmclear(index)?;
+
         log::info!("[+] init_vmcs");
         self.vmm_context.init_vmcs(index)?;
 

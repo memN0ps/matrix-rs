@@ -3,7 +3,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use bitfield::BitMut;
 
-use x86::{msr::{rdmsr, IA32_FEATURE_CONTROL, wrmsr, IA32_VMX_CR0_FIXED0, IA32_VMX_CR0_FIXED1, IA32_VMX_CR4_FIXED0, IA32_VMX_CR4_FIXED1}, controlregs::{cr4, cr4_write, Cr4, cr0, Cr0}};
+use x86::{msr::{rdmsr, IA32_FEATURE_CONTROL, wrmsr, IA32_VMX_CR0_FIXED0, IA32_VMX_CR0_FIXED1, IA32_VMX_CR4_FIXED0, IA32_VMX_CR4_FIXED1, self}, controlregs::{cr4, cr4_write, Cr4, cr0, Cr0, self}, vmx::vmcs::guest, debugregs, bits64};
 
 use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, support::{Support}, addresses::{PhysicalAddress}};
 
@@ -24,6 +24,78 @@ impl Vmm {
         log::info!("[+] Vcpu::new()");
         self.vcpu_table.push(Vcpu::new()?);
 
+        Ok(())
+    }
+
+    /* 
+    CR0, CR3, CR4
+    DR7
+    RSP, RIP, RFLAGS
+    Segment Base Addresses/Selectors/Limits/Access Rights for the items below
+        ES, CS, SS, DS, FS, GS, LDTR, GDTR, IDTR, and TR
+    And the following MSR’s
+        IA32_DEBUGCTL
+        IA32_SYSENTER_CS
+        IA32_SYSENTER_ESP
+        IA32_SYSENTER_EIP
+        IA32_PERF_CONTROL_GLOBAL
+        IA32_PAT
+        IA32_EFER
+        IA32_BNDCFS
+    */
+    pub fn init_guest_register_state(&self, index: usize) -> Result<(), HypervisorError> {
+        log::info!("[+] Guest Register State");
+
+        // Control Registers
+        unsafe { 
+            Support::vmwrite(guest::CR0, controlregs::cr0().bits() as u64)?;
+            Support::vmwrite(guest::CR3, controlregs::cr3())?;
+            Support::vmwrite(guest::CR4, controlregs::cr4().bits() as u64)?;
+            
+            // Control Register Shadows
+            //Support::vmwrite(x86::vmx::vmcs::control::CR0_READ_SHADOW, controlregs::cr0().bits() as u64)?;
+            //Support::vmwrite(x86::vmx::vmcs::control::CR4_READ_SHADOW, controlregs::cr4().bits() as u64)?;
+        }
+        log::info!("[+] Guest Control Registers initialized!");
+    
+        // Debug Register
+        unsafe { Support::vmwrite(guest::DR7, debugregs::dr7().0 as u64)? };
+        log::info!("[+] Guest Debug Registers initialized!");
+    
+        // Stack Pointer (NEED TO FIX OR WON'T WORK)
+        Support::vmwrite(guest::RSP, self.vcpu_table[index].guest_rsp)?;
+        Support::vmwrite(guest::RIP, self.vcpu_table[index].guest_rip)?;
+        log::info!("[+] Guest STACK and Instruction Registers initialized!");
+    
+        // RFLAGS
+        // In 64-bit mode, EFLAGS is extended to 64 bits and called RFLAGS. 
+        // The upper 32 bits of RFLAGS register is reserved. The lower 32 bits of RFLAGS is the same as EFLAGS.
+        Support::vmwrite(guest::RFLAGS, bits64::rflags::read().bits())?;
+        log::info!("[+] Guest RFLAGS Registers initialized!");
+
+        // MSR's
+        unsafe {
+            Support::vmwrite(guest::IA32_DEBUGCTL_FULL, msr::rdmsr(msr::IA32_DEBUGCTL))?;
+            Support::vmwrite(guest::IA32_DEBUGCTL_HIGH, msr::rdmsr(msr::IA32_DEBUGCTL))?;
+            Support::vmwrite(guest::IA32_SYSENTER_ESP, msr::rdmsr(msr::IA32_SYSENTER_ESP))?;
+            Support::vmwrite(guest::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP))?;
+            Support::vmwrite(guest::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS))?;
+            Support::vmwrite(guest::LINK_PTR_FULL, !0)?; //0xffffffffffffffff
+            Support::vmwrite(guest::LINK_PTR_HIGH, !0)?; //0xffffffffffffffff
+            Support::vmwrite(guest::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE))?;
+            Support::vmwrite(guest::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE))?;
+        }
+
+        log::info!("[+] Guest MSRs initialized!");
+    
+        Ok(())
+    }
+    
+
+
+    /// Ensures that VMCS data maintained on the processor is copied to the VMCS region located at 4KB-aligned physical address addr and initializes some parts of it. (Intel Manual: 25.11.3 Initializing a VMCS)
+    pub fn init_vmclear(&mut self, index: usize) -> Result<(), HypervisorError> {
+        Support::vmclear(self.vcpu_table[index].vmcs_physical_address)?;
         Ok(())
     }
 
@@ -125,26 +197,26 @@ impl Vmm {
 
     /// Set the mandatory bits in CR0 and clear bits that are mandatory zero (Intel Manual: 24.8 Restrictions on VMX Operation)
     fn set_cr0_bits(&self) {
-        let ia32_vmx_cr0_fixed0 = unsafe { rdmsr(IA32_VMX_CR0_FIXED0) };
-        let ia32_vmx_cr0_fixed1 = unsafe { rdmsr(IA32_VMX_CR0_FIXED1) };
+        let ia32_vmx_cr0_fixed0 = unsafe { msr::rdmsr(msr::IA32_VMX_CR0_FIXED0) };
+        let ia32_vmx_cr0_fixed1 = unsafe { msr::rdmsr(msr::IA32_VMX_CR0_FIXED1) };
 
-        let mut cr0 = unsafe { cr0() };
+        let mut cr0 = unsafe { controlregs::cr0() };
 
-        cr0 |= Cr0::from_bits_truncate(ia32_vmx_cr0_fixed0 as usize);
-        cr0 &= Cr0::from_bits_truncate(ia32_vmx_cr0_fixed1 as usize);
+        cr0 |= controlregs::Cr0::from_bits_truncate(ia32_vmx_cr0_fixed0 as usize);
+        cr0 &= controlregs::Cr0::from_bits_truncate(ia32_vmx_cr0_fixed1 as usize);
 
-        unsafe { x86::controlregs::cr0_write(cr0) };
+        unsafe { controlregs::cr0_write(cr0) };
     }
 
     /// Set the mandatory bits in CR4 and clear bits that are mandatory zero (Intel Manual: 24.8 Restrictions on VMX Operation)
     fn set_cr4_bits(&self) {
-        let ia32_vmx_cr4_fixed0 = unsafe { rdmsr(IA32_VMX_CR4_FIXED0) };
-        let ia32_vmx_cr4_fixed1 = unsafe { rdmsr(IA32_VMX_CR4_FIXED1) };
+        let ia32_vmx_cr4_fixed0 = unsafe { msr::rdmsr(msr::IA32_VMX_CR4_FIXED0) };
+        let ia32_vmx_cr4_fixed1 = unsafe { msr::rdmsr(msr::IA32_VMX_CR4_FIXED1) };
 
-        let mut cr4 = unsafe { cr4() };
+        let mut cr4 = unsafe { controlregs::cr4() };
 
-        cr4 |= Cr4::from_bits_truncate(ia32_vmx_cr4_fixed0 as usize);
-        cr4 &= Cr4::from_bits_truncate(ia32_vmx_cr4_fixed1 as usize);
+        cr4 |= controlregs::Cr4::from_bits_truncate(ia32_vmx_cr4_fixed0 as usize);
+        cr4 &= controlregs::Cr4::from_bits_truncate(ia32_vmx_cr4_fixed1 as usize);
 
         unsafe { cr4_write(cr4) };
     }
