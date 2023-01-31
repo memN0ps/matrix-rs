@@ -38,11 +38,24 @@ impl Support {
         Err(HypervisorError::VMXUnsupported)
     }
 
+    /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID) (Intel Manual: 25.11.5 VMXON Region)
+    pub fn get_vmcs_revision_id() -> u32 {
+        unsafe { (rdmsr(IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
+    }
+
     /// Enable VMX operation.
     pub fn vmxon(vmxon_pa: u64) -> Result<(), HypervisorError> {
         match unsafe { x86::bits64::vmx::vmxon(vmxon_pa) } {
             Ok(_) => Ok(()),
             Err(_) => Err(HypervisorError::VMXONFailed),
+        }
+    }
+
+    /// Disable VMX operation.
+    pub fn vmxoff() -> Result<(), HypervisorError> {
+        match unsafe { x86::bits64::vmx::vmxoff() } {
+            Ok(_) => Ok(()),
+            Err(_) => Err(HypervisorError::VMXOFFFailed),
         }
     }
 
@@ -55,24 +68,29 @@ impl Support {
     }
 
     #[allow(dead_code)]
+    /// Read a specified field from a VMCS.
+    pub fn vmread(field: u32) -> Result<(), HypervisorError> {
+        match unsafe { x86::bits64::vmx::vmread(field) } {
+            Ok(_) => Ok(()),
+            Err(_) => Err(HypervisorError::VMREADFailed),
+        }
+    }
+
+    #[allow(dead_code)]
+    /// Write to a specified field in a VMCS.
+    pub fn vmwrite(field: u32, value: u64) -> Result<(), HypervisorError> {
+        match unsafe { x86::bits64::vmx::vmwrite(field, value) } {
+            Ok(_) => Ok(()),
+            Err(_) => Err(HypervisorError::VMWRITEFailed),
+        }
+    }
+
+    #[allow(dead_code)]
     /// Launch virtual machine.
     pub fn vmlaunch() -> Result<(), HypervisorError> {
         match unsafe { x86::bits64::vmx::vmlaunch() } {
             Ok(_) => Ok(()),
             Err(_) => Err(HypervisorError::VMLAUNCHFailed),
         }
-    }
-
-    /// Disable VMX operation.
-    pub fn vmxoff() -> Result<(), HypervisorError> {
-        match unsafe { x86::bits64::vmx::vmxoff() } {
-            Ok(_) => Ok(()),
-            Err(_) => Err(HypervisorError::VMXOFFFailed),
-        }
-    }
-
-    /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID) (Intel Manual: 25.11.5 VMXON Region)
-    pub fn get_vmcs_revision_id() -> u32 {
-        unsafe { (rdmsr(IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
     }
 }
