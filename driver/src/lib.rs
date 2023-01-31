@@ -40,14 +40,14 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
         return STATUS_UNSUCCESSFUL;
     }
 
-    return STATUS_SUCCESS;
+    STATUS_SUCCESS
 }
 
 
 pub extern "system" fn driver_unload(_driver: &mut DRIVER_OBJECT) {
     log::info!("Driver unloaded successfully!");
     
-    if let Some(mut hypervisor) = unsafe { HYPERVISOR.take() } {
+    if let Some(hypervisor) = unsafe { HYPERVISOR.take() } {
         core::mem::drop(hypervisor);
     }
 }

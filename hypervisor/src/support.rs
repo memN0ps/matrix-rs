@@ -1,7 +1,7 @@
 extern crate alloc;
 
 use x86::{
-    cpuid::CpuId, current::vmx::{vmxon, vmptrld, vmlaunch, vmxoff}, msr::{rdmsr, IA32_VMX_BASIC},
+    cpuid::CpuId, msr::{rdmsr, IA32_VMX_BASIC},
 };
 
 use crate::{error::HypervisorError};
@@ -37,43 +37,42 @@ impl Support {
         }
         Err(HypervisorError::VMXUnsupported)
     }
-}
 
-
-/// Enable VMX operation.
-pub fn execute_vmxon(vmxon_pa: u64) -> Result<(), HypervisorError> {
-    match unsafe { vmxon(vmxon_pa) } {
-        Ok(_) => Ok(()),
-        Err(_) => Err(HypervisorError::VMXONFailed),
+    /// Enable VMX operation.
+    pub fn vmxon(vmxon_pa: u64) -> Result<(), HypervisorError> {
+        match unsafe { x86::bits64::vmx::vmxon(vmxon_pa) } {
+            Ok(_) => Ok(()),
+            Err(_) => Err(HypervisorError::VMXONFailed),
+        }
     }
-}
 
-/// Load current VMCS pointer.
-pub fn execute_vmptrld(vmptrld_pa: u64) -> Result<(), HypervisorError> {
-    match unsafe { vmptrld(vmptrld_pa) } {
-        Ok(_) => Ok(()),
-        Err(_) => Err(HypervisorError::VMPTRLDFailed),
+    /// Load current VMCS pointer.
+    pub fn vmptrld(vmptrld_pa: u64) -> Result<(), HypervisorError> {
+        match unsafe { x86::bits64::vmx::vmptrld(vmptrld_pa) } {
+            Ok(_) => Ok(()),
+            Err(_) => Err(HypervisorError::VMPTRLDFailed),
+        }
     }
-}
 
-#[allow(dead_code)]
-/// Launch virtual machine.
-pub fn execute_vmlaunch() -> Result<(), HypervisorError> {
-    match unsafe { vmlaunch() } {
-        Ok(_) => Ok(()),
-        Err(_) => Err(HypervisorError::VMLAUNCHFailed),
+    #[allow(dead_code)]
+    /// Launch virtual machine.
+    pub fn vmlaunch() -> Result<(), HypervisorError> {
+        match unsafe { x86::bits64::vmx::vmlaunch() } {
+            Ok(_) => Ok(()),
+            Err(_) => Err(HypervisorError::VMLAUNCHFailed),
+        }
     }
-}
 
-/// Disable VMX operation.
-pub fn execute_vmxoff() -> Result<(), HypervisorError> {
-    match unsafe { vmxoff() } {
-        Ok(_) => Ok(()),
-        Err(_) => Err(HypervisorError::VMXOFFFailed),
+    /// Disable VMX operation.
+    pub fn vmxoff() -> Result<(), HypervisorError> {
+        match unsafe { x86::bits64::vmx::vmxoff() } {
+            Ok(_) => Ok(()),
+            Err(_) => Err(HypervisorError::VMXOFFFailed),
+        }
     }
-}
 
-/// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID) (Intel Manual: 25.11.5 VMXON Region)
-pub fn get_vmcs_revision_id() -> u32 {
-    unsafe { (rdmsr(IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
+    /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID) (Intel Manual: 25.11.5 VMXON Region)
+    pub fn get_vmcs_revision_id() -> u32 {
+        unsafe { (rdmsr(IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
+    }
 }

@@ -27,4 +27,21 @@ extern "system" {
 
     ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-kereverttousergroupaffinitythread
     pub fn KeRevertToUserGroupAffinityThread(PreviousAffinity: PGROUP_AFFINITY);
+
+    ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-rtlinitializebitmap
+    pub fn RtlInitializeBitMap(
+        BitMapHeader: PRTL_BITMAP, BitMapBuffer: *mut u32, SizeOfBitMap: u32,
+    );
+
+    ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-rtlclearallbits
+    pub fn RtlClearAllBits(BitMapHeader: PRTL_BITMAP);
 }
+
+#[allow(non_snake_case)]
+#[repr(C)]
+pub struct RTL_BITMAP {
+    pub(crate) SizeOfBitMap: u32,
+    pub(crate) Buffer: *mut u32,
+}
+#[allow(non_camel_case_types)]
+pub type PRTL_BITMAP = *mut RTL_BITMAP;

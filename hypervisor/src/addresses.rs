@@ -31,11 +31,11 @@ impl PhysicalAddress {
         self.0.as_u64()
     }
 
-    fn pa_from_va(va: u64) -> u64 {
+    pub fn pa_from_va(va: u64) -> u64 {
         unsafe { *MmGetPhysicalAddress(va as _).QuadPart() as u64 }
     }
 
-    fn va_from_pa(pa: u64) -> u64 {
+    pub fn va_from_pa(pa: u64) -> u64 {
         let mut physical_address: PHYSICAL_ADDRESS = unsafe { core::mem::zeroed() };
         unsafe { *(physical_address.QuadPart_mut()) = pa as i64 };
 

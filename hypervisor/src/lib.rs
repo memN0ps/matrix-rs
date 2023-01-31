@@ -9,6 +9,7 @@ use support::Support;
 
 use crate::{processor::{ProcessorExecutor}, vmm::Vmm};
 
+mod msr_bitmap;
 mod addresses;
 mod ept;
 mod vmm;
@@ -80,6 +81,9 @@ impl Hypervisor {
         log::info!("[+] init_vmcs");
         self.vmm_context.init_vmcs(index)?;
 
+        log::info!("[+] init_msr_bitmap");
+        self.vmm_context.init_msr_bitmap(index)?;
+
         Ok(())
     }
 
@@ -94,7 +98,7 @@ impl Hypervisor {
                 return Err(HypervisorError::ProcessorSwitchFailed);
             };
 
-            support::execute_vmxoff()?;
+            Support::vmxoff()?;
     
             core::mem::drop(executor);
         }

@@ -5,7 +5,7 @@ use bitfield::BitMut;
 
 use x86::{msr::{rdmsr, IA32_FEATURE_CONTROL, wrmsr, IA32_VMX_CR0_FIXED0, IA32_VMX_CR0_FIXED1, IA32_VMX_CR4_FIXED0, IA32_VMX_CR4_FIXED1}, controlregs::{cr4, cr4_write, Cr4, cr0, Cr0}};
 
-use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, nt::{MmGetPhysicalAddress}, support};
+use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, support::{Support}, addresses::{PhysicalAddress}};
 
 pub struct Vmm {
     pub vcpu_table: Vec<Vcpu>,
@@ -26,25 +26,36 @@ impl Vmm {
 
         Ok(())
     }
+
+    /// Allocate a naturally aligned 4-KByte region of memory to avoid VM exits on MSR accesses when using rdmsr or wrmsr (Intel Manual: 25.6.2 Processor-Based VM-Execution Controls)
+    pub fn init_msr_bitmap(&mut self, index: usize) -> Result<(), HypervisorError> {
+        self.vcpu_table[index].msr_bitmap_physical_address = PhysicalAddress::pa_from_va(self.vcpu_table[index].msr_bitmap.as_mut() as *mut _ as _);
+
+        if self.vcpu_table[index].msr_bitmap_physical_address == 0 {
+            return Err(HypervisorError::VirtualToPhysicalAddressFailed);
+        }
+
+        log::info!("[+] VCPU: {}, MSRBitmap Virtual Address: {:p}", index, self.vcpu_table[index].msr_bitmap);
+        log::info!("[+] VCPU: {}, MSRBitmap Physical Addresss: 0x{:x}", index, self.vcpu_table[index].msr_bitmap_physical_address);
+
+        Ok(())
+    }
     
     /// Allocate a naturally aligned 4-KByte region of memory to enable VMX operation (Intel Manual: 25.11.5 VMXON Region)
     pub fn init_vmxon(&mut self, index: usize) -> Result<(), HypervisorError> {
-
-        self.vcpu_table[index].vmxon_physical_address = unsafe { 
-            *MmGetPhysicalAddress(self.vcpu_table[index].vmxon.as_mut() as *mut _ as _).QuadPart() as u64 
-        };
+        self.vcpu_table[index].vmxon_physical_address = PhysicalAddress::pa_from_va(self.vcpu_table[index].vmxon.as_mut() as *mut _ as _);
 
         if self.vcpu_table[index].vmxon_physical_address == 0 {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
-        log::info!("[+] VCPU: {}, Virtual Address: {:p}", index, self.vcpu_table[index].vmxon);
-        log::info!("[+] VCPU: {}, Physical Addresss: 0x{:x}", index, self.vcpu_table[index].vmxon_physical_address);
+        log::info!("[+] VCPU: {}, VMXON Virtual Address: {:p}", index, self.vcpu_table[index].vmxon);
+        log::info!("[+] VCPU: {}, VMXON Physical Addresss: 0x{:x}", index, self.vcpu_table[index].vmxon_physical_address);
 
-        self.vcpu_table[index].vmxon.revision_id = support::get_vmcs_revision_id();
+        self.vcpu_table[index].vmxon.revision_id = Support::get_vmcs_revision_id();
         self.vcpu_table[index].vmxon.as_mut().revision_id.set_bit(31, false);
 
-        support::execute_vmxon(self.vcpu_table[index].vmxon_physical_address)?;
+        Support::vmxon(self.vcpu_table[index].vmxon_physical_address)?;
         log::info!("[+] VMXON successful!");
 
         Ok(())
@@ -52,22 +63,19 @@ impl Vmm {
 
     /// Allocate a naturally aligned 4-KByte region of memory for VMCS region (Intel Manual: 25.2 Format of The VMCS Region)
     pub fn init_vmcs(&mut self, index: usize) -> Result<(), HypervisorError> {
-
-        self.vcpu_table[index].vmcs_physical_address = unsafe { 
-            *MmGetPhysicalAddress(self.vcpu_table[index].vmcs.as_mut() as *mut _ as _).QuadPart() as u64
-        };
+        self.vcpu_table[index].vmcs_physical_address = PhysicalAddress::pa_from_va(self.vcpu_table[index].vmcs.as_mut() as *mut _ as _);
 
         if self.vcpu_table[index].vmcs_physical_address == 0 {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
-        log::info!("[+] VCPU: {}, Virtual Address: {:p}", index, self.vcpu_table[index].vmcs);
-        log::info!("[+] VCPU: {}, Physical Addresss: 0x{:x}", index, self.vcpu_table[index].vmcs_physical_address);
+        log::info!("[+] VCPU: {}, VMCS Virtual Address: {:p}", index, self.vcpu_table[index].vmcs);
+        log::info!("[+] VCPU: {}, VMCS Physical Addresss: 0x{:x}", index, self.vcpu_table[index].vmcs_physical_address);
 
-        self.vcpu_table[index].vmcs.revision_id = support::get_vmcs_revision_id();
+        self.vcpu_table[index].vmcs.revision_id = Support::get_vmcs_revision_id();
         self.vcpu_table[index].vmcs.as_mut().revision_id.set_bit(31, false);
 
-        support::execute_vmptrld(self.vcpu_table[index].vmcs_physical_address)?;
+        Support::vmptrld(self.vcpu_table[index].vmcs_physical_address)?;
         log::info!("[+] VMPTRLD successful!");
 
         Ok(())
@@ -140,43 +148,4 @@ impl Vmm {
 
         unsafe { cr4_write(cr4) };
     }
-
-    /*
-    /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID) (Intel Manual: 25.11.5 VMXON Region)
-    fn get_vmcs_revision_id() -> u32 {
-        unsafe { (rdmsr(IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
-    }
-
-    /// Enable VMX operation.
-    pub fn vmxon(&self, vmxon_pa: u64) -> Result<(), HypervisorError> {
-        match unsafe { vmxon(vmxon_pa) } {
-            Ok(_) => Ok(()),
-            Err(_) => Err(HypervisorError::VMXONFailed),
-        }
-    }
-
-    /// Load current VMCS pointer.
-    pub fn vmptrld(&self, vmptrld_pa: u64) -> Result<(), HypervisorError> {
-        match unsafe { vmptrld(vmptrld_pa) } {
-            Ok(_) => Ok(()),
-            Err(_) => Err(HypervisorError::VMPTRLDFailed),
-        }
-    }
-
-    /// Launch virtual machine.
-    pub fn vmlaunch(&self) -> Result<(), HypervisorError> {
-        match unsafe { vmlaunch() } {
-            Ok(_) => Ok(()),
-            Err(_) => Err(HypervisorError::VMLAUNCHFailed),
-        }
-    }
-
-    /// Disable VMX operation.
-    pub fn vmxoff(&self) -> Result<(), HypervisorError> {
-        match unsafe { vmxoff() } {
-            Ok(_) => Ok(()),
-            Err(_) => Err(HypervisorError::VMXOFFFailed),
-        }
-    }
-    */
 }
