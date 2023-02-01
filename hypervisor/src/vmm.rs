@@ -1,12 +1,8 @@
 extern crate alloc;
-
-use alloc::{vec::Vec, boxed::Box};
+use alloc::{vec::Vec};
 use bitfield::BitMut;
-
-use kernel_alloc::PhysicalAllocator;
 use x86::{msr::{self}, controlregs::{self}, vmx::{vmcs::{guest, host}, self}, debugregs, bits64, segmentation, task, dtables};
-
-use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, support::{Support}, addresses::{PhysicalAddress}, msr_bitmap::MsrBitmap};
+use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, support::{Support}, addresses::{PhysicalAddress}};
 
 pub struct Vmm {
     /// The number of logical/virtual processors
@@ -14,12 +10,6 @@ pub struct Vmm {
 
     /// A vector of Vcpus
     pub vcpu_table: Vec<Vcpu>,
-
-    /// The virtual address of the MsrBitmap naturally aligned 4-KByte region of memory
-    pub msr_bitmap: Box<MsrBitmap, PhysicalAllocator>,
-
-    /// The physical address of the MsrBitmap naturally aligned 4-KByte region of memory
-    pub msr_bitmap_physical_address: u64,
 }
 
 impl Vmm { 
@@ -27,8 +17,6 @@ impl Vmm {
         Ok(Self {
             processor_count: processor_count(),
             vcpu_table: Vec::new(),
-            msr_bitmap: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() }, //maybe move later to the bitmap itself and return here
-            msr_bitmap_physical_address: 0,
         })
     }
 
@@ -58,6 +46,7 @@ impl Vmm {
     }
 
     /* 
+    *Sigh* It's so annoying setting the following values in your Intel hypervisor. Isn't there an easier way?
     CR0, CR3, CR4
     DR7
     RSP, RIP, RFLAGS
@@ -128,7 +117,7 @@ impl Vmm {
         Support::vmwrite(guest::ES_SELECTOR, segmentation::es().bits() as u64)?;
         Support::vmwrite(guest::FS_SELECTOR, segmentation::fs().bits() as u64)?;
         Support::vmwrite(guest::GS_SELECTOR, segmentation::gs().bits() as u64)?;
-        unsafe { Support::vmwrite(guest::LDTR_SELECTOR, dtables::ldtr().bits() as u64)? }; // this doesnot exist in host, only in guest
+        unsafe { Support::vmwrite(guest::LDTR_SELECTOR, dtables::ldtr().bits() as u64)? }; // this does not exist in host, only in guest
         unsafe { Support::vmwrite(guest::TR_SELECTOR, task::tr().bits() as u64)? };
         log::info!("[+] Guest Segmentation Registers initialized!");
 

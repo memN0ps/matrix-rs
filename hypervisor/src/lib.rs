@@ -85,8 +85,11 @@ impl Hypervisor {
         log::info!("[+] init_vmcs");
         self.vmm_context.init_vmcs(index)?;
 
+        // SetupVmcs(vcpu_table[index], EPTP); //todo
+        // AsmSaveStateForVmxoff() //todo
+
         //log::info!("[+] init_msr_bitmap");
-        //self.vmm_context.init_msr_bitmap(index)?;
+        //self.vmm_context.init_msr_bitmap(index)?; //todo
 
         Ok(())
     }
