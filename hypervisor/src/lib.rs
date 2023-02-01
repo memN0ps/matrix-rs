@@ -9,6 +9,7 @@ use support::Support;
 
 use crate::{processor::{ProcessorExecutor}, vmm::Vmm};
 
+mod vmm_stack;
 mod msr_bitmap;
 mod addresses;
 mod ept;
@@ -28,11 +29,11 @@ pub struct Hypervisor {
 
 impl Hypervisor {
     
-    pub fn new() -> Self {
-        Self {
-            vmm_context: Vmm::new(),
+    pub fn new() -> Result<Self, HypervisorError> {
+        Ok(Self {
+            vmm_context: Vmm::new()?,
             support: Support::new(),
-        }
+        })
     }
 
     pub fn vmm_init(&mut self) -> Result<(), HypervisorError> {
@@ -70,10 +71,10 @@ impl Hypervisor {
     /// Enable and Enter VMX Operation via VMXON and load current VMCS pointer via VMPTRLD
     pub fn init_logical_processor(&mut self, index: usize) -> Result<(), HypervisorError> {
         log::info!("[+] Enabling Virtual Machine Extensions (VMX)");
-        self.vmm_context.enable_vmx_operation()?;
+        Support::enable_vmx_operation()?;
 
         log::info!("[+] Adjusting Control Registers");
-        self.vmm_context.adjust_control_registers();
+        Support::adjust_control_registers();
 
         log::info!("[+] init_vmxon");
         self.vmm_context.init_vmxon(index)?;
@@ -84,8 +85,8 @@ impl Hypervisor {
         log::info!("[+] init_vmcs");
         self.vmm_context.init_vmcs(index)?;
 
-        log::info!("[+] init_msr_bitmap");
-        self.vmm_context.init_msr_bitmap(index)?;
+        //log::info!("[+] init_msr_bitmap");
+        //self.vmm_context.init_msr_bitmap(index)?;
 
         Ok(())
     }

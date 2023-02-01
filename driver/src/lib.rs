@@ -53,7 +53,11 @@ pub extern "system" fn driver_unload(_driver: &mut DRIVER_OBJECT) {
 }
 
 fn virtualize() -> Option<()> {
-    let mut hypervisor = Hypervisor::new();
+
+    let Ok(mut hypervisor) = Hypervisor::new() else {
+        log::error!("[-] Failed to create Hypervisor::new()");
+        return None;
+    };
 
     log::info!("[*] Initializing VMM!");
     

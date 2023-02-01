@@ -7,10 +7,12 @@ use crate::nt::{MmGetPhysicalAddress, MmGetVirtualForPhysical};
 pub struct PhysicalAddress(PAddr);
 
 impl PhysicalAddress {
+    #[allow(dead_code)]
     pub fn from_pa(pa: u64) -> Self {
         Self(PAddr::from(pa))
     }
 
+    #[allow(dead_code)]
     pub fn from_pfn(pfn: u64) -> Self {
         Self(PAddr::from(pfn << BASE_PAGE_SHIFT))
     }
@@ -19,14 +21,17 @@ impl PhysicalAddress {
         Self(PAddr::from(Self::pa_from_va(va)))
     }
 
+    #[allow(dead_code)]
     pub fn va(&self) -> *mut u64 {
         Self::va_from_pa(self.0.as_u64()) as *mut u64
     }
 
+    #[allow(dead_code)]
     pub fn pfn(&self) -> u64 {
         self.0.as_u64() >> BASE_PAGE_SHIFT
     }
 
+    #[allow(dead_code)]
     pub fn pa(&self) -> u64 {
         self.0.as_u64()
     }
