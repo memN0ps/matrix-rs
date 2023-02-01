@@ -4,7 +4,7 @@ use alloc::{vec::Vec, boxed::Box};
 use bitfield::BitMut;
 
 use kernel_alloc::PhysicalAllocator;
-use x86::{msr::{self}, controlregs::{self}, vmx::vmcs::guest, debugregs, bits64};
+use x86::{msr::{self}, controlregs::{self}, vmx::{vmcs::{guest, host}, self}, debugregs, bits64, segmentation, task, dtables};
 
 use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, support::{Support}, addresses::{PhysicalAddress}, msr_bitmap::MsrBitmap};
 
@@ -39,6 +39,24 @@ impl Vmm {
         Ok(())
     }
 
+    #[allow(dead_code)]
+    pub fn init_vmcs_controls() -> Result<(), HypervisorError> {
+        /* Time-stamp counter offset */
+        Support::vmwrite(vmx::vmcs::control::TSC_OFFSET_FULL, 0)?;
+        Support::vmwrite(vmx::vmcs::control::TSC_OFFSET_HIGH, 0)?;
+        
+        Support::vmwrite(vmx::vmcs::control::PAGE_FAULT_ERR_CODE_MASK, 0)?;
+        Support::vmwrite(vmx::vmcs::control::PAGE_FAULT_ERR_CODE_MATCH, 0)?;
+        
+        Support::vmwrite(vmx::vmcs::control::VMEXIT_MSR_STORE_COUNT, 0)?;
+        Support::vmwrite(vmx::vmcs::control::VMEXIT_MSR_LOAD_COUNT, 0)?;
+        
+        Support::vmwrite(vmx::vmcs::control::VMENTRY_MSR_LOAD_COUNT, 0)?;
+        Support::vmwrite(vmx::vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD, 0)?;
+
+        Ok(())
+    }
+
     /* 
     CR0, CR3, CR4
     DR7
@@ -55,6 +73,8 @@ impl Vmm {
         IA32_EFER
         IA32_BNDCFS
     */
+    #[allow(dead_code)]
+    /// Initialize the guest state for the currently loaded vmcs.
     pub fn init_guest_register_state(&self, index: usize) -> Result<(), HypervisorError> {
         log::info!("[+] Guest Register State");
 
@@ -65,8 +85,8 @@ impl Vmm {
             Support::vmwrite(guest::CR4, controlregs::cr4().bits() as u64)?;
             
             // Control Register Shadows
-            //Support::vmwrite(x86::vmx::vmcs::control::CR0_READ_SHADOW, controlregs::cr0().bits() as u64)?;
-            //Support::vmwrite(x86::vmx::vmcs::control::CR4_READ_SHADOW, controlregs::cr4().bits() as u64)?;
+            Support::vmwrite(x86::vmx::vmcs::control::CR0_READ_SHADOW, controlregs::cr0().bits() as u64)?;
+            Support::vmwrite(x86::vmx::vmcs::control::CR4_READ_SHADOW, controlregs::cr4().bits() as u64)?;
         }
         log::info!("[+] Guest Control Registers initialized!");
     
@@ -92,18 +112,71 @@ impl Vmm {
             Support::vmwrite(guest::IA32_SYSENTER_ESP, msr::rdmsr(msr::IA32_SYSENTER_ESP))?;
             Support::vmwrite(guest::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP))?;
             Support::vmwrite(guest::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS))?;
-            Support::vmwrite(guest::LINK_PTR_FULL, !0)?; //0xffffffffffffffff
-            Support::vmwrite(guest::LINK_PTR_HIGH, !0)?; //0xffffffffffffffff
+            Support::vmwrite(guest::LINK_PTR_FULL, u64::MAX)?;
+            Support::vmwrite(guest::LINK_PTR_HIGH, u64::MAX)?;
             Support::vmwrite(guest::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE))?;
             Support::vmwrite(guest::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE))?;
         }
 
         log::info!("[+] Guest MSRs initialized!");
+
+
+        // 0xF8 might not be required for guest and only required for host (FIX LATER OR WON'T WORK: __segmentlimit)
+        Support::vmwrite(guest::CS_SELECTOR, segmentation::cs().bits() as u64)?;
+        Support::vmwrite(guest::SS_SELECTOR, segmentation::ss().bits() as u64)?;
+        Support::vmwrite(guest::DS_SELECTOR, segmentation::ds().bits() as u64)?;
+        Support::vmwrite(guest::ES_SELECTOR, segmentation::es().bits() as u64)?;
+        Support::vmwrite(guest::FS_SELECTOR, segmentation::fs().bits() as u64)?;
+        Support::vmwrite(guest::GS_SELECTOR, segmentation::gs().bits() as u64)?;
+        unsafe { Support::vmwrite(guest::LDTR_SELECTOR, dtables::ldtr().bits() as u64)? }; // this doesnot exist in host, only in guest
+        unsafe { Support::vmwrite(guest::TR_SELECTOR, task::tr().bits() as u64)? };
+        log::info!("[+] Guest Segmentation Registers initialized!");
+
+
+        // GDTR and LDTR
+        let mut guest_gdtr: dtables::DescriptorTablePointer<u64> = Default::default();
+        let mut guest_idtr: dtables::DescriptorTablePointer<u64> = Default::default();
+        unsafe { dtables::sgdt(&mut guest_gdtr) };
+        unsafe { dtables::sidt(&mut guest_idtr) };
+        Support::vmwrite(guest::GDTR_LIMIT, guest_gdtr.limit as u64)?;
+        Support::vmwrite(guest::IDTR_LIMIT, guest_idtr.limit as u64)?;
+        Support::vmwrite(guest::GDTR_BASE, guest_gdtr.base as u64)?;
+        Support::vmwrite(guest::IDTR_BASE, guest_idtr.base as u64)?;
+        log::info!("[+] Guest GDTR and LDTR initialized!");
+
     
         Ok(())
     }
     
 
+    #[allow(dead_code)]
+    /// Initialize the host state for the currently loaded vmcs.
+    pub fn init_host_register_state(&mut self, index: usize) -> Result<(), HypervisorError> {        
+        // Host Register Segmentation
+        //Intel manual states that the purpose of & 0xF8 is that the three less significant bits must be cleared; 
+        //otherwise, it leads to an error as the VMLAUNCH is executed with an Invalid Host State error.
+        Support::vmwrite(host::CS_SELECTOR, (segmentation::cs().bits() & 0xF8) as u64)?;
+        Support::vmwrite(host::SS_SELECTOR, (segmentation::ss().bits() & 0xF8) as u64)?;
+        Support::vmwrite(host::DS_SELECTOR, (segmentation::ds().bits() & 0xF8) as u64)?;
+        Support::vmwrite(host::ES_SELECTOR, (segmentation::es().bits() & 0xF8) as u64)?;
+        Support::vmwrite(host::FS_SELECTOR, (segmentation::fs().bits() & 0xF8) as u64)?;
+        Support::vmwrite(host::GS_SELECTOR, (segmentation::gs().bits() & 0xF8) as u64)?;
+        unsafe { Support::vmwrite(host::TR_SELECTOR, (task::tr().bits() & 0xF8) as u64)? };
+        log::info!("[+] Host Segmentation Registers initialized!");
+
+        // Host GDT/IDT
+        //Support::vmwrite(host::GDTR_BASE, )?;
+        //Support::vmwrite(host::IDTR_BASE, )?;
+        //Support::vmwrite(host::FS_BASE, )?;
+        //Support::vmwrite(host::GS_BASE, )?;
+        //Support::vmwrite(host::TR_BASE, )?;
+
+        // Host RSP/RIP
+        Support::vmwrite(host::RSP, &mut self.vcpu_table[index].vmm_stack.vmm_context as *mut _ as _)?;
+        //Support::vmwrite(host::RIP, vmm_entrypoint)?;
+
+        Ok(())
+    }
 
     /// Ensures that VMCS data maintained on the processor is copied to the VMCS region located at 4KB-aligned physical address addr and initializes some parts of it. (Intel Manual: 25.11.3 Initializing a VMCS)
     pub fn init_vmclear(&mut self, index: usize) -> Result<(), HypervisorError> {

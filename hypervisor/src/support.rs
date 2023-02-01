@@ -1,7 +1,7 @@
 extern crate alloc;
 
 use x86::{
-    cpuid::CpuId, msr::{rdmsr, self}, controlregs,
+    cpuid::CpuId, msr::{rdmsr, self}, controlregs, bits64,
 };
 
 use crate::{error::HypervisorError};
@@ -110,6 +110,21 @@ impl Support {
     pub fn get_vmcs_revision_id() -> u32 {
         unsafe { (msr::rdmsr(msr::IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
     }
+
+    /// Save the current state of the stack (RSP & RBP registers) because after executing the VMLAUNCH instruction,
+    /// the RIP register is changed to the GUEST_RIP; thus, we need to save the previous system state
+    /// so we can return to the normal system routines after returning from VM functions
+    /// There is no need to save the RIP register as the stack’s return address is always available
+    #[allow(dead_code)]
+    pub fn save_state_for_vmxoff() -> (u64, u64) {
+        let rsp = bits64::registers::rsp();
+        let rbp = bits64::registers::rbp();
+
+        (rsp, rbp)
+    }
+
+    /// Adjust Entry and Exit Controls
+    //pub fn 
 
     /// Enable VMX operation.
     pub fn vmxon(vmxon_pa: u64) -> Result<(), HypervisorError> {
