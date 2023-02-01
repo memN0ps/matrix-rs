@@ -108,6 +108,7 @@ impl Vmm {
     /// Ensures that VMCS data maintained on the processor is copied to the VMCS region located at 4KB-aligned physical address addr and initializes some parts of it. (Intel Manual: 25.11.3 Initializing a VMCS)
     pub fn init_vmclear(&mut self, index: usize) -> Result<(), HypervisorError> {
         Support::vmclear(self.vcpu_table[index].vmcs_physical_address)?;
+        log::info!("[+] VMCLEAR successful!");
         Ok(())
     }
 
