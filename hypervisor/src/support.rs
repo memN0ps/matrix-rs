@@ -1,5 +1,6 @@
 extern crate alloc;
 
+use bitfield::{BitMut, BitRangeMut};
 use x86::{
     cpuid::CpuId, msr::{rdmsr, self}, controlregs, bits64,
 };
@@ -123,8 +124,40 @@ impl Support {
         (rsp, rbp)
     }
 
-    /// Adjust Entry and Exit Controls
-    //pub fn 
+    pub fn load_segment_limit(selector: u16) -> u32 {
+        let limit: u32;
+        unsafe {
+            core::arch::asm!("lsl {0:e}, {1:x}", out(reg) limit, in(reg) selector, options(nostack, nomem));
+        }
+        limit
+    }
+
+    pub fn load_segment_access_rights(selector: u16) -> u32 {
+        let limit: u32;
+        unsafe {
+            core::arch::asm!("lar {0:e}, {1:x}", out(reg) limit, in(reg) selector, options(nostack, nomem));
+        }
+        limit
+    }
+
+    pub fn read_access_rights(selector: u16) -> u64 {
+        let mut access_rights = 0;
+    
+        if selector == 0 {
+            access_rights.set_bit(16, true);
+            return access_rights;
+        }
+    
+        access_rights = (Support::load_segment_access_rights(selector) >> 8) as u64;
+        // unusable
+        access_rights.set_bit(16, false);
+        // reserved0
+        access_rights.set_bit_range(8, 11, 0);
+        // reserved1
+        access_rights.set_bit_range(17, 31, 0);
+    
+        access_rights
+    }
 
     /// Enable VMX operation.
     pub fn vmxon(vmxon_pa: u64) -> Result<(), HypervisorError> {

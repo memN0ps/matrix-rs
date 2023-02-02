@@ -1,6 +1,6 @@
 extern crate alloc;
 use alloc::{vec::Vec};
-use bitfield::BitMut;
+use bitfield::{BitMut};
 use x86::{msr::{self}, controlregs::{self}, vmx::{vmcs::{guest, host}, self}, debugregs, bits64, segmentation, task, dtables};
 use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, support::{Support}, addresses::{PhysicalAddress}};
 
@@ -29,6 +29,11 @@ impl Vmm {
 
     #[allow(dead_code)]
     pub fn init_vmcs_controls() -> Result<(), HypervisorError> {
+        // Control Register Shadows
+        unsafe { Support::vmwrite(x86::vmx::vmcs::control::CR0_READ_SHADOW, controlregs::cr0().bits() as u64)? };
+        unsafe { Support::vmwrite(x86::vmx::vmcs::control::CR4_READ_SHADOW, controlregs::cr4().bits() as u64)? };
+        log::info!("VMCS Shadow Registers initialized!");
+
         /* Time-stamp counter offset */
         Support::vmwrite(vmx::vmcs::control::TSC_OFFSET_FULL, 0)?;
         Support::vmwrite(vmx::vmcs::control::TSC_OFFSET_HIGH, 0)?;
@@ -41,6 +46,7 @@ impl Vmm {
         
         Support::vmwrite(vmx::vmcs::control::VMENTRY_MSR_LOAD_COUNT, 0)?;
         Support::vmwrite(vmx::vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD, 0)?;
+        log::info!("VMCS Time-stamp counter offset initialized!");
 
         Ok(())
     }
@@ -67,62 +73,61 @@ impl Vmm {
     pub fn init_guest_register_state(&self, index: usize) -> Result<(), HypervisorError> {
         log::info!("[+] Guest Register State");
 
-        // Control Registers
+        // Guest Control Registers
         unsafe { 
             Support::vmwrite(guest::CR0, controlregs::cr0().bits() as u64)?;
             Support::vmwrite(guest::CR3, controlregs::cr3())?;
             Support::vmwrite(guest::CR4, controlregs::cr4().bits() as u64)?;
-            
-            // Control Register Shadows
-            Support::vmwrite(x86::vmx::vmcs::control::CR0_READ_SHADOW, controlregs::cr0().bits() as u64)?;
-            Support::vmwrite(x86::vmx::vmcs::control::CR4_READ_SHADOW, controlregs::cr4().bits() as u64)?;
         }
         log::info!("[+] Guest Control Registers initialized!");
     
-        // Debug Register
+        // Guest Debug Register
         unsafe { Support::vmwrite(guest::DR7, debugregs::dr7().0 as u64)? };
         log::info!("[+] Guest Debug Registers initialized!");
     
-        // Stack Pointer (NEED TO FIX OR WON'T WORK)
+        // Guest RSP and RIP (NEED TO FIX OR WON'T WORK ????????????????????????????????????????????????????)
         Support::vmwrite(guest::RSP, self.vcpu_table[index].guest_rsp)?;
         Support::vmwrite(guest::RIP, self.vcpu_table[index].guest_rip)?;
-        log::info!("[+] Guest STACK and Instruction Registers initialized!");
+        log::info!("[+] Guest RSP and RIP initialized!");
     
-        // RFLAGS
-        // In 64-bit mode, EFLAGS is extended to 64 bits and called RFLAGS. 
-        // The upper 32 bits of RFLAGS register is reserved. The lower 32 bits of RFLAGS is the same as EFLAGS.
+        // Guest RFLAGS
         Support::vmwrite(guest::RFLAGS, bits64::rflags::read().bits())?;
         log::info!("[+] Guest RFLAGS Registers initialized!");
 
-        // MSR's
-        unsafe {
-            Support::vmwrite(guest::IA32_DEBUGCTL_FULL, msr::rdmsr(msr::IA32_DEBUGCTL))?;
-            Support::vmwrite(guest::IA32_DEBUGCTL_HIGH, msr::rdmsr(msr::IA32_DEBUGCTL))?;
-            Support::vmwrite(guest::IA32_SYSENTER_ESP, msr::rdmsr(msr::IA32_SYSENTER_ESP))?;
-            Support::vmwrite(guest::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP))?;
-            Support::vmwrite(guest::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS))?;
-            Support::vmwrite(guest::LINK_PTR_FULL, u64::MAX)?;
-            Support::vmwrite(guest::LINK_PTR_HIGH, u64::MAX)?;
-            Support::vmwrite(guest::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE))?;
-            Support::vmwrite(guest::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE))?;
-        }
-
-        log::info!("[+] Guest MSRs initialized!");
-
-
-        // 0xF8 might not be required for guest and only required for host (FIX LATER OR WON'T WORK: __segmentlimit)
+        // Guest Segment Selector
         Support::vmwrite(guest::CS_SELECTOR, segmentation::cs().bits() as u64)?;
         Support::vmwrite(guest::SS_SELECTOR, segmentation::ss().bits() as u64)?;
         Support::vmwrite(guest::DS_SELECTOR, segmentation::ds().bits() as u64)?;
         Support::vmwrite(guest::ES_SELECTOR, segmentation::es().bits() as u64)?;
         Support::vmwrite(guest::FS_SELECTOR, segmentation::fs().bits() as u64)?;
         Support::vmwrite(guest::GS_SELECTOR, segmentation::gs().bits() as u64)?;
-        unsafe { Support::vmwrite(guest::LDTR_SELECTOR, dtables::ldtr().bits() as u64)? }; // this does not exist in host, only in guest
+        unsafe { Support::vmwrite(guest::LDTR_SELECTOR, dtables::ldtr().bits() as u64)? };
         unsafe { Support::vmwrite(guest::TR_SELECTOR, task::tr().bits() as u64)? };
-        log::info!("[+] Guest Segmentation Registers initialized!");
+        log::info!("[+] Guest Segmentation Selector initialized!");
 
+        // Guest Segment Limit
+        Support::vmwrite(guest::CS_LIMIT, Support::load_segment_limit(segmentation::cs().bits()) as u64)?;
+        Support::vmwrite(guest::SS_LIMIT, Support::load_segment_limit(segmentation::ss().bits()) as u64)?;
+        Support::vmwrite(guest::DS_LIMIT, Support::load_segment_limit(segmentation::ds().bits()) as u64)?;
+        Support::vmwrite(guest::ES_LIMIT, Support::load_segment_limit(segmentation::es().bits()) as u64)?;
+        Support::vmwrite(guest::FS_LIMIT, Support::load_segment_limit(segmentation::fs().bits()) as u64)?;
+        Support::vmwrite(guest::GS_LIMIT, Support::load_segment_limit(segmentation::fs().bits()) as u64)?;
+        unsafe { Support::vmwrite(guest::LDTR_LIMIT, Support::load_segment_limit(dtables::ldtr().bits()) as u64)? };
+        unsafe { Support::vmwrite(guest::TR_LIMIT, Support::load_segment_limit(task::tr().bits()) as u64)? };
+        log::info!("[+] Guest Segment Limit initialized!");
 
-        // GDTR and LDTR
+        // Guest Segment Access Writes
+        Support::vmwrite(guest::CS_ACCESS_RIGHTS, Support::read_access_rights(segmentation::cs().bits()))?;
+        Support::vmwrite(guest::SS_ACCESS_RIGHTS, Support::read_access_rights(segmentation::ss().bits()))?;
+        Support::vmwrite(guest::DS_ACCESS_RIGHTS, Support::read_access_rights(segmentation::ds().bits()))?;
+        Support::vmwrite(guest::ES_ACCESS_RIGHTS, Support::read_access_rights(segmentation::es().bits()))?;
+        Support::vmwrite(guest::FS_ACCESS_RIGHTS, Support::read_access_rights(segmentation::fs().bits()))?;
+        Support::vmwrite(guest::GS_ACCESS_RIGHTS, Support::read_access_rights(segmentation::gs().bits()))?;
+        unsafe { Support::vmwrite(guest::LDTR_ACCESS_RIGHTS, Support::read_access_rights(dtables::ldtr().bits()))? };
+        unsafe { Support::vmwrite(guest::TR_ACCESS_RIGHTS, Support::read_access_rights(task::tr().bits()))? };
+        log::info!("[+] Guest Segment Access Writes initialized!");
+        
+        // Guest GDTR and LDTR
         let mut guest_gdtr: dtables::DescriptorTablePointer<u64> = Default::default();
         let mut guest_idtr: dtables::DescriptorTablePointer<u64> = Default::default();
         unsafe { dtables::sgdt(&mut guest_gdtr) };
@@ -131,41 +136,91 @@ impl Vmm {
         Support::vmwrite(guest::IDTR_LIMIT, guest_idtr.limit as u64)?;
         Support::vmwrite(guest::GDTR_BASE, guest_gdtr.base as u64)?;
         Support::vmwrite(guest::IDTR_BASE, guest_idtr.base as u64)?;
+        
+        //Support::vmwrite(guest::TR_BASE, guest_gdtr.base)?; //wrong ???
+        //Support::vmwrite(guest::LDTR_BASE, guest_gdtr.base)?; //wrong ???
         log::info!("[+] Guest GDTR and LDTR initialized!");
 
+        // Guest MSR's
+        unsafe {
+            Support::vmwrite(guest::IA32_DEBUGCTL_FULL, msr::rdmsr(msr::IA32_DEBUGCTL))?;
+            Support::vmwrite(guest::IA32_DEBUGCTL_HIGH, msr::rdmsr(msr::IA32_DEBUGCTL))?;
+            Support::vmwrite(guest::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS))?;
+            Support::vmwrite(guest::IA32_SYSENTER_ESP, msr::rdmsr(msr::IA32_SYSENTER_ESP))?;
+            Support::vmwrite(guest::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP))?;
+            Support::vmwrite(guest::LINK_PTR_FULL, u64::MAX)?;
+            Support::vmwrite(guest::LINK_PTR_HIGH, u64::MAX)?;
+            
+            Support::vmwrite(guest::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE))?;
+            Support::vmwrite(guest::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE))?;
+                        
+            log::info!("[+] Guest MSRs initialized!");
+        }
+        
+        log::info!("[+] Guest initialized!");
     
         Ok(())
     }
-    
 
     #[allow(dead_code)]
     /// Initialize the host state for the currently loaded vmcs.
-    pub fn init_host_register_state(&mut self, index: usize) -> Result<(), HypervisorError> {        
-        // Host Register Segmentation
-        //Intel manual states that the purpose of & 0xF8 is that the three less significant bits must be cleared; 
-        //otherwise, it leads to an error as the VMLAUNCH is executed with an Invalid Host State error.
-        Support::vmwrite(host::CS_SELECTOR, (segmentation::cs().bits() & 0xF8) as u64)?;
-        Support::vmwrite(host::SS_SELECTOR, (segmentation::ss().bits() & 0xF8) as u64)?;
-        Support::vmwrite(host::DS_SELECTOR, (segmentation::ds().bits() & 0xF8) as u64)?;
-        Support::vmwrite(host::ES_SELECTOR, (segmentation::es().bits() & 0xF8) as u64)?;
-        Support::vmwrite(host::FS_SELECTOR, (segmentation::fs().bits() & 0xF8) as u64)?;
-        Support::vmwrite(host::GS_SELECTOR, (segmentation::gs().bits() & 0xF8) as u64)?;
-        unsafe { Support::vmwrite(host::TR_SELECTOR, (task::tr().bits() & 0xF8) as u64)? };
-        log::info!("[+] Host Segmentation Registers initialized!");
+    pub fn init_host_register_state(&mut self, index: usize) -> Result<(), HypervisorError> {
+        log::info!("[+] Host Register State");
+        // Host Control Registers
+        unsafe { 
+            Support::vmwrite(host::CR0, controlregs::cr0().bits() as u64)?;
+            Support::vmwrite(host::CR3, controlregs::cr3())?;
+            Support::vmwrite(host::CR4, controlregs::cr4().bits() as u64)?;            
+        }
+        log::info!("[+] Host Control Registers initialized!");
 
-        // Host GDT/IDT
-        //Support::vmwrite(host::GDTR_BASE, )?;
-        //Support::vmwrite(host::IDTR_BASE, )?;
-        //Support::vmwrite(host::FS_BASE, )?;
-        //Support::vmwrite(host::GS_BASE, )?;
-        //Support::vmwrite(host::TR_BASE, )?;
-
-        // Host RSP/RIP
+        // Host RSP/RIP (FIX OR WON'T WORK ????????????????????????????????????????????????????????????)
         Support::vmwrite(host::RSP, &mut self.vcpu_table[index].vmm_stack.vmm_context as *mut _ as _)?;
         //Support::vmwrite(host::RIP, vmm_entrypoint)?;
 
+        // Host Segment Selector
+        const SELECTOR_MASK: u16 = 0xF8;
+        Support::vmwrite(host::CS_SELECTOR, (segmentation::cs().bits() & SELECTOR_MASK) as u64)?;
+        Support::vmwrite(host::SS_SELECTOR, (segmentation::ss().bits() & SELECTOR_MASK) as u64)?;
+        Support::vmwrite(host::DS_SELECTOR, (segmentation::ds().bits() & SELECTOR_MASK) as u64)?;
+        Support::vmwrite(host::ES_SELECTOR, (segmentation::es().bits() & SELECTOR_MASK) as u64)?;
+        Support::vmwrite(host::FS_SELECTOR, (segmentation::fs().bits() & SELECTOR_MASK) as u64)?;
+        Support::vmwrite(host::GS_SELECTOR, (segmentation::gs().bits() & SELECTOR_MASK) as u64)?;
+        unsafe { Support::vmwrite(host::TR_SELECTOR, (task::tr().bits() & SELECTOR_MASK) as u64)? };
+        log::info!("[+] Host Segmentation Registers initialized!");
+
+        // Host GDTR and LDTR
+        let mut host_gdtr: dtables::DescriptorTablePointer<u64> = Default::default();
+        let mut host_idtr: dtables::DescriptorTablePointer<u64> = Default::default();
+        unsafe { dtables::sgdt(&mut host_gdtr) };
+        unsafe { dtables::sidt(&mut host_idtr) };
+        Support::vmwrite(host::FS_BASE, host_gdtr.base as u64)?;
+        Support::vmwrite(host::GS_BASE, host_gdtr.base as u64)?;
+        //Support::vmwrite(host::TR_BASE, host_gdtr.base as u64)?; // wrong??????????????????????????????
+        Support::vmwrite(host::GDTR_BASE, host_gdtr.base as u64)?;
+        Support::vmwrite(host::IDTR_BASE, host_idtr.base as u64)?;
+        log::info!("[+] Host TR, GDTR and LDTR initialized!");
+
+        // Host MSR's
+        unsafe {
+            Support::vmwrite(host::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS))?;
+            Support::vmwrite(host::IA32_SYSENTER_ESP, msr::rdmsr(msr::IA32_SYSENTER_ESP))?;
+            Support::vmwrite(host::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP))?;
+            
+            Support::vmwrite(host::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE))?;
+            Support::vmwrite(host::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE))?;
+            Support::vmwrite(host::TR_BASE, msr::rdmsr(vmx::vmcs::host::TR_BASE))?;
+            
+            //Maybe more??????????????????????????????????????????????????????????????????????????
+            log::info!("[+] Host MSRs initialized!");
+        }
+        
+        log::info!("[+] Host initialized!");
+
         Ok(())
     }
+
+    
 
     /// Ensures that VMCS data maintained on the processor is copied to the VMCS region located at 4KB-aligned physical address addr and initializes some parts of it. (Intel Manual: 25.11.3 Initializing a VMCS)
     pub fn init_vmclear(&mut self, index: usize) -> Result<(), HypervisorError> {
@@ -174,7 +229,6 @@ impl Vmm {
         Ok(())
     }
 
-    /* 
     /// Allocate a naturally aligned 4-KByte region of memory to avoid VM exits on MSR accesses when using rdmsr or wrmsr (Intel Manual: 25.6.2 Processor-Based VM-Execution Controls)
     pub fn init_msr_bitmap(&mut self, index: usize) -> Result<(), HypervisorError> {
         self.vcpu_table[index].msr_bitmap_physical_address = PhysicalAddress::pa_from_va(self.vcpu_table[index].msr_bitmap.as_mut() as *mut _ as _);
@@ -188,8 +242,7 @@ impl Vmm {
 
         Ok(())
     }
-    */
-    
+
     /// Allocate a naturally aligned 4-KByte region of memory to enable VMX operation (Intel Manual: 25.11.5 VMXON Region)
     pub fn init_vmxon(&mut self, index: usize) -> Result<(), HypervisorError> {
         self.vcpu_table[index].vmxon_physical_address = PhysicalAddress::pa_from_va(self.vcpu_table[index].vmxon.as_mut() as *mut _ as _);
