@@ -144,7 +144,6 @@ impl Vmm {
         unsafe { Support::vmwrite(guest::SS_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), segmentation::ss().bits()) as u64)? };
         unsafe { Support::vmwrite(guest::DS_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), segmentation::ds().bits()) as u64)? };
         unsafe { Support::vmwrite(guest::ES_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), segmentation::es().bits()) as u64)? };
-        
         unsafe { Support::vmwrite(guest::LDTR_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), task::tr().bits()) as u64)? };
         unsafe { Support::vmwrite(guest::TR_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), dtables::ldtr().bits()) as u64)? };
 
@@ -198,17 +197,15 @@ impl Vmm {
         unsafe { Support::vmwrite(host::TR_SELECTOR, (task::tr().bits() & SELECTOR_MASK) as u64)? };
         log::info!("[+] Host Segmentation Registers initialized!");
 
-        // Host Segment FS, GS, TR, GDTR and LDTR
+        // Host Segment TR, GDTR and LDTR
         let mut host_gdtr: dtables::DescriptorTablePointer<u64> = Default::default();
         let mut host_idtr: dtables::DescriptorTablePointer<u64> = Default::default();
         unsafe { dtables::sgdt(&mut host_gdtr) };
         unsafe { dtables::sidt(&mut host_idtr) };
-        unsafe { Support::vmwrite(host::FS_BASE, get_segment_base(host_gdtr.base as u32, dtables::ldtr().bits(), segmentation::fs().bits()) as u64)? };
-        unsafe { Support::vmwrite(host::GS_BASE, get_segment_base(host_gdtr.base as u32, dtables::ldtr().bits(), segmentation::cs().bits()) as u64)? };
         unsafe { Support::vmwrite(host::TR_BASE, get_segment_base(host_gdtr.base as u32, dtables::ldtr().bits(), dtables::ldtr().bits()) as u64)? };
         Support::vmwrite(host::GDTR_BASE, host_gdtr.base as u64)?;
         Support::vmwrite(host::IDTR_BASE, host_idtr.base as u64)?;
-        log::info!("[+] Host FS, GS, TR, GDTR and LDTR initialized!");
+        log::info!("[+] Host TR, GDTR and LDTR initialized!");
 
         // Host MSR's
         unsafe {
@@ -218,9 +215,7 @@ impl Vmm {
             
             Support::vmwrite(host::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE))?;
             Support::vmwrite(host::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE))?;
-            Support::vmwrite(host::TR_BASE, msr::rdmsr(vmx::vmcs::host::TR_BASE))?;
             
-            //Maybe more??????????????????????????????????????????????????????????????????????????
             log::info!("[+] Host MSRs initialized!");
         }
         
