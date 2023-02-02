@@ -2,7 +2,7 @@ extern crate alloc;
 use alloc::{vec::Vec};
 use bitfield::{BitMut};
 use x86::{msr::{self}, controlregs::{self}, vmx::{vmcs::{guest, host}, self}, debugregs, bits64, segmentation, task, dtables};
-use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, support::{Support}, addresses::{PhysicalAddress}};
+use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, support::{Support}, addresses::{PhysicalAddress}, segment::{load_segment_limit, read_access_rights, get_segment_base}};
 
 pub struct Vmm {
     /// The number of logical/virtual processors
@@ -106,40 +106,49 @@ impl Vmm {
         log::info!("[+] Guest Segmentation Selector initialized!");
 
         // Guest Segment Limit
-        Support::vmwrite(guest::CS_LIMIT, Support::load_segment_limit(segmentation::cs().bits()) as u64)?;
-        Support::vmwrite(guest::SS_LIMIT, Support::load_segment_limit(segmentation::ss().bits()) as u64)?;
-        Support::vmwrite(guest::DS_LIMIT, Support::load_segment_limit(segmentation::ds().bits()) as u64)?;
-        Support::vmwrite(guest::ES_LIMIT, Support::load_segment_limit(segmentation::es().bits()) as u64)?;
-        Support::vmwrite(guest::FS_LIMIT, Support::load_segment_limit(segmentation::fs().bits()) as u64)?;
-        Support::vmwrite(guest::GS_LIMIT, Support::load_segment_limit(segmentation::fs().bits()) as u64)?;
-        unsafe { Support::vmwrite(guest::LDTR_LIMIT, Support::load_segment_limit(dtables::ldtr().bits()) as u64)? };
-        unsafe { Support::vmwrite(guest::TR_LIMIT, Support::load_segment_limit(task::tr().bits()) as u64)? };
+        Support::vmwrite(guest::CS_LIMIT, load_segment_limit(segmentation::cs().bits()) as u64)?;
+        Support::vmwrite(guest::SS_LIMIT, load_segment_limit(segmentation::ss().bits()) as u64)?;
+        Support::vmwrite(guest::DS_LIMIT, load_segment_limit(segmentation::ds().bits()) as u64)?;
+        Support::vmwrite(guest::ES_LIMIT, load_segment_limit(segmentation::es().bits()) as u64)?;
+        Support::vmwrite(guest::FS_LIMIT, load_segment_limit(segmentation::fs().bits()) as u64)?;
+        Support::vmwrite(guest::GS_LIMIT, load_segment_limit(segmentation::fs().bits()) as u64)?;
+        unsafe { Support::vmwrite(guest::LDTR_LIMIT, load_segment_limit(dtables::ldtr().bits()) as u64)? };
+        unsafe { Support::vmwrite(guest::TR_LIMIT, load_segment_limit(task::tr().bits()) as u64)? };
         log::info!("[+] Guest Segment Limit initialized!");
 
         // Guest Segment Access Writes
-        Support::vmwrite(guest::CS_ACCESS_RIGHTS, Support::read_access_rights(segmentation::cs().bits()))?;
-        Support::vmwrite(guest::SS_ACCESS_RIGHTS, Support::read_access_rights(segmentation::ss().bits()))?;
-        Support::vmwrite(guest::DS_ACCESS_RIGHTS, Support::read_access_rights(segmentation::ds().bits()))?;
-        Support::vmwrite(guest::ES_ACCESS_RIGHTS, Support::read_access_rights(segmentation::es().bits()))?;
-        Support::vmwrite(guest::FS_ACCESS_RIGHTS, Support::read_access_rights(segmentation::fs().bits()))?;
-        Support::vmwrite(guest::GS_ACCESS_RIGHTS, Support::read_access_rights(segmentation::gs().bits()))?;
-        unsafe { Support::vmwrite(guest::LDTR_ACCESS_RIGHTS, Support::read_access_rights(dtables::ldtr().bits()))? };
-        unsafe { Support::vmwrite(guest::TR_ACCESS_RIGHTS, Support::read_access_rights(task::tr().bits()))? };
+        Support::vmwrite(guest::CS_ACCESS_RIGHTS, read_access_rights(segmentation::cs().bits()))?;
+        Support::vmwrite(guest::SS_ACCESS_RIGHTS, read_access_rights(segmentation::ss().bits()))?;
+        Support::vmwrite(guest::DS_ACCESS_RIGHTS, read_access_rights(segmentation::ds().bits()))?;
+        Support::vmwrite(guest::ES_ACCESS_RIGHTS, read_access_rights(segmentation::es().bits()))?;
+        Support::vmwrite(guest::FS_ACCESS_RIGHTS, read_access_rights(segmentation::fs().bits()))?;
+        Support::vmwrite(guest::GS_ACCESS_RIGHTS, read_access_rights(segmentation::gs().bits()))?;
+        unsafe { Support::vmwrite(guest::LDTR_ACCESS_RIGHTS, read_access_rights(dtables::ldtr().bits()))? };
+        unsafe { Support::vmwrite(guest::TR_ACCESS_RIGHTS, read_access_rights(task::tr().bits()))? };
         log::info!("[+] Guest Segment Access Writes initialized!");
         
-        // Guest GDTR and LDTR
+        // Guest Segment GDTR and LDTR
         let mut guest_gdtr: dtables::DescriptorTablePointer<u64> = Default::default();
         let mut guest_idtr: dtables::DescriptorTablePointer<u64> = Default::default();
         unsafe { dtables::sgdt(&mut guest_gdtr) };
         unsafe { dtables::sidt(&mut guest_idtr) };
+        
         Support::vmwrite(guest::GDTR_LIMIT, guest_gdtr.limit as u64)?;
         Support::vmwrite(guest::IDTR_LIMIT, guest_idtr.limit as u64)?;
         Support::vmwrite(guest::GDTR_BASE, guest_gdtr.base as u64)?;
         Support::vmwrite(guest::IDTR_BASE, guest_idtr.base as u64)?;
+        log::info!("[+] Guest GDTR and LDTR Limit and Base initialized!");
+
+        // Guest Segment, CS, SS, DS, ES
+        unsafe { Support::vmwrite(guest::CS_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), segmentation::cs().bits()) as u64)? };
+        unsafe { Support::vmwrite(guest::SS_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), segmentation::ss().bits()) as u64)? };
+        unsafe { Support::vmwrite(guest::DS_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), segmentation::ds().bits()) as u64)? };
+        unsafe { Support::vmwrite(guest::ES_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), segmentation::es().bits()) as u64)? };
         
-        //Support::vmwrite(guest::TR_BASE, guest_gdtr.base)?; //wrong ???
-        //Support::vmwrite(guest::LDTR_BASE, guest_gdtr.base)?; //wrong ???
-        log::info!("[+] Guest GDTR and LDTR initialized!");
+        unsafe { Support::vmwrite(guest::LDTR_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), task::tr().bits()) as u64)? };
+        unsafe { Support::vmwrite(guest::TR_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), dtables::ldtr().bits()) as u64)? };
+
+        log::info!("[+] Guest Segment, CS, SS, DS, ES, LDTR and TR initialized!");
 
         // Guest MSR's
         unsafe {
@@ -189,17 +198,17 @@ impl Vmm {
         unsafe { Support::vmwrite(host::TR_SELECTOR, (task::tr().bits() & SELECTOR_MASK) as u64)? };
         log::info!("[+] Host Segmentation Registers initialized!");
 
-        // Host GDTR and LDTR
+        // Host Segment FS, GS, TR, GDTR and LDTR
         let mut host_gdtr: dtables::DescriptorTablePointer<u64> = Default::default();
         let mut host_idtr: dtables::DescriptorTablePointer<u64> = Default::default();
         unsafe { dtables::sgdt(&mut host_gdtr) };
         unsafe { dtables::sidt(&mut host_idtr) };
-        Support::vmwrite(host::FS_BASE, host_gdtr.base as u64)?;
-        Support::vmwrite(host::GS_BASE, host_gdtr.base as u64)?;
-        //Support::vmwrite(host::TR_BASE, host_gdtr.base as u64)?; // wrong??????????????????????????????
+        unsafe { Support::vmwrite(host::FS_BASE, get_segment_base(host_gdtr.base as u32, dtables::ldtr().bits(), segmentation::fs().bits()) as u64)? };
+        unsafe { Support::vmwrite(host::GS_BASE, get_segment_base(host_gdtr.base as u32, dtables::ldtr().bits(), segmentation::cs().bits()) as u64)? };
+        unsafe { Support::vmwrite(host::TR_BASE, get_segment_base(host_gdtr.base as u32, dtables::ldtr().bits(), dtables::ldtr().bits()) as u64)? };
         Support::vmwrite(host::GDTR_BASE, host_gdtr.base as u64)?;
         Support::vmwrite(host::IDTR_BASE, host_idtr.base as u64)?;
-        log::info!("[+] Host TR, GDTR and LDTR initialized!");
+        log::info!("[+] Host FS, GS, TR, GDTR and LDTR initialized!");
 
         // Host MSR's
         unsafe {

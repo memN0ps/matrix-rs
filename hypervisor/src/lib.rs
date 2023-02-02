@@ -9,6 +9,7 @@ use support::Support;
 
 use crate::{processor::{ProcessorExecutor}, vmm::Vmm};
 
+mod segment;
 mod vmm_stack;
 mod msr_bitmap;
 mod addresses;
