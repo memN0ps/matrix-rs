@@ -1,8 +1,9 @@
-use bitflags::bitflags;
-use x86::{vmx::{vmcs::control::{EntryControls, PrimaryControls, SecondaryControls, ExitControls}, self}, msr::{IA32_VMX_BASIC}};
+//use bitflags::bitflags;
+use x86::{vmx::{vmcs::control::{EntryControls, PrimaryControls, SecondaryControls, ExitControls}, self}, msr::{self}};
 
 use crate::{support::Support, error::HypervisorError};
 
+/* 
 bitflags! {
     pub struct VmxBasicMsr: u64 {
         const VMCS_REVISION_IDENTIFIER = 1 << 0;
@@ -14,21 +15,6 @@ bitflags! {
         const MEMORY_TYPE = 1 << 50;
         const IO_INSTRUCTION_REPORTING = 1 << 54;
         const TRUE_CONTROLS = 1 << 55;
-    }
-}
-
-
-#[repr(C, packed)]
-#[derive(Copy, Clone)]
-struct VmxTrueControlSettings {
-    pub control: u64,
-    pub allowed_0_settings: u32,
-    pub allowed_1_settings: u32,
-}
-
-impl Default for VmxTrueControlSettings {
-    fn default() -> Self {
-        Self { control: Default::default(), allowed_0_settings: Default::default(), allowed_1_settings: Default::default() }
     }
 }
 
@@ -56,30 +42,51 @@ fn vmx_adjust_entry_controls(entry_control: u32) -> u16 {
 
     vmx_adjust_cv(capability_msr, entry_control) as u16
 }
+*/
+
+
+#[repr(C, packed)]
+#[derive(Default, Copy, Clone)]
+struct VmxTrueControlSettings {
+    pub control: u64,
+    pub allowed_0_settings: u32,
+    pub allowed_1_settings: u32,
+}
+
+fn vmx_adjust_entry_controls(msr: u32, value: u32) -> u16 {
+    let mut cap = VmxTrueControlSettings::default();
+    
+    cap.control = unsafe { x86::msr::rdmsr(msr) };
+    let mut actual = value;
+
+    actual |= cap.allowed_0_settings;
+    actual &= cap.allowed_1_settings;
+
+    actual as u16
+}
 
 #[allow(dead_code)]
-
 pub fn setup_vmcs_controls() -> Result<(), HypervisorError> {
 
     // PrimaryControls (x86::msr::IA32_VMX_PROCBASED_CTLS)
     Support::vmwrite(vmx::vmcs::control::PRIMARY_PROCBASED_EXEC_CONTROLS, 
-        vmx_adjust_entry_controls(PrimaryControls::HLT_EXITING.bits() | PrimaryControls::SECONDARY_CONTROLS.bits()) as u64)?;
+        vmx_adjust_entry_controls(msr::IA32_VMX_PROCBASED_CTLS, PrimaryControls::HLT_EXITING.bits() | PrimaryControls::SECONDARY_CONTROLS.bits()) as u64)?;
     
     // SecondaryControls (x86::msr::IA32_VMX_PROCBASED_CTLS2)
     Support::vmwrite(vmx::vmcs::control::SECONDARY_PROCBASED_EXEC_CONTROLS, 
-        vmx_adjust_entry_controls(SecondaryControls::ENABLE_RDTSCP.bits() /* | SecondaryControls::ENABLE_EPT.bits() */) as u64)?;
+        vmx_adjust_entry_controls(msr::IA32_VMX_PROCBASED_CTLS2, SecondaryControls::ENABLE_RDTSCP.bits() /* | SecondaryControls::ENABLE_EPT.bits() */) as u64)?;
     
     // EntryControls (x86::msr::IA32_VMX_ENTRY_CTLS)
     Support::vmwrite(vmx::vmcs::control::VMENTRY_CONTROLS, 
-        vmx_adjust_entry_controls(EntryControls::IA32E_MODE_GUEST.bits()) as u64)?;
+        vmx_adjust_entry_controls(msr::IA32_VMX_ENTRY_CTLS, EntryControls::IA32E_MODE_GUEST.bits()) as u64)?;
 
     // ExitControls (x86::msr::IA32_VMX_EXIT_CTLS)
     Support::vmwrite(vmx::vmcs::control::VMEXIT_CONTROLS, 
-        vmx_adjust_entry_controls(ExitControls::HOST_ADDRESS_SPACE_SIZE.bits() | ExitControls::ACK_INTERRUPT_ON_EXIT.bits()) as u64)?;
+        vmx_adjust_entry_controls(msr::IA32_VMX_EXIT_CTLS, ExitControls::HOST_ADDRESS_SPACE_SIZE.bits() | ExitControls::ACK_INTERRUPT_ON_EXIT.bits()) as u64)?;
 
     // PinbasedControls (x86::msr::IA32_VMX_PINBASED_CTLS)
     Support::vmwrite(vmx::vmcs::control::PINBASED_EXEC_CONTROLS, 
-        vmx_adjust_entry_controls(0) as u64)?;
+        vmx_adjust_entry_controls(msr::IA32_VMX_PINBASED_CTLS, 0) as u64)?;
 
     Ok(())
 }
