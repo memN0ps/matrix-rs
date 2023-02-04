@@ -27,9 +27,6 @@ pub struct Vcpu {
     /// The physical address of the Vmxon naturally aligned 4-KByte region of memory
     pub vmxon_physical_address: u64,
 
-    /// The VM stack
-    pub vmm_stack: Box<VmmStack, PhysicalAllocator>,
-
     /// The virtual address of the MsrBitmap naturally aligned 4-KByte region of memory
     pub msr_bitmap: Box<MsrBitmap, PhysicalAllocator>,
 
@@ -46,7 +43,6 @@ impl Vcpu {
             vmcs_physical_address: 0,
             vmxon: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
             vmxon_physical_address: 0,
-            vmm_stack: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
             msr_bitmap: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
             msr_bitmap_physical_address: 0,
         })
