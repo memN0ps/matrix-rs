@@ -1,5 +1,3 @@
-use core::{self, fmt::{self, Formatter}};
-
 pub enum VmxExitReason {
     ExceptionNmi = 0,
     ExternalInterrupt = 1,
