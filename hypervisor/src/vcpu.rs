@@ -2,7 +2,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 use kernel_alloc::PhysicalAllocator;
 
-use crate::{vmcs::{Vmxon, Vmcs}, error::HypervisorError, vmm_stack::VmmStack, msr_bitmap::MsrBitmap};
+use crate::{vmcs::{Vmxon, Vmcs}, error::HypervisorError, msr_bitmap::MsrBitmap};
 
 pub struct Vcpu {
     
