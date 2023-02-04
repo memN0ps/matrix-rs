@@ -9,6 +9,7 @@ use support::Support;
 
 use crate::{processor::{ProcessorExecutor}, vmm::Vmm};
 
+mod vmexit_reason;
 mod controls;
 mod segment;
 mod vmm_stack;
