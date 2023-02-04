@@ -10,7 +10,6 @@ use support::Support;
 use crate::{processor::{ProcessorExecutor}, vmm::Vmm};
 
 mod vmexit_reason;
-mod controls;
 mod segment;
 mod vmm_stack;
 mod msr_bitmap;
@@ -85,14 +84,17 @@ impl Hypervisor {
         log::info!("[+] init_vmclear");
         self.vmm_context.init_vmclear(index)?;
 
-        log::info!("[+] init_vmcs");
-        self.vmm_context.init_vmcs(index)?;
+        log::info!("[+] init_vmptrld");
+        self.vmm_context.init_vmptrld(index)?;
 
-        // SetupVmcs(vcpu_table[index], EPTP); //todo
-        // AsmSaveStateForVmxoff() //todo
+        log::info!("[+] init_vmcs_control_values");
+        self.vmm_context.init_vmcs_control_values(index)?;
 
-        log::info!("[+] init_msr_bitmap");
-        self.vmm_context.init_msr_bitmap(index)?;
+        log::info!("[+] init_host_register_state");
+        self.vmm_context.init_host_register_state(index)?;
+
+        log::info!("[+] init_guest_register_state");
+        self.vmm_context.init_guest_register_state(index)?;
 
         Ok(())
     }
@@ -115,8 +117,6 @@ impl Hypervisor {
 
         Ok(())
     }
-
-
 }
 
 /// Call Drop and devirtualize

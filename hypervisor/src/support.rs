@@ -184,3 +184,22 @@ impl Support {
     }
 }
 
+#[repr(C, packed)]
+#[derive(Default, Copy, Clone)]
+struct VmxTrueControlSettings {
+    pub control: u64,
+    pub allowed_0_settings: u32,
+    pub allowed_1_settings: u32,
+}
+
+pub fn vmx_adjust_entry_controls(msr: u32, value: u32) -> u16 {
+    let mut cap = VmxTrueControlSettings::default();
+    
+    cap.control = unsafe { x86::msr::rdmsr(msr) };
+    let mut actual = value;
+
+    actual |= cap.allowed_0_settings;
+    actual &= cap.allowed_1_settings;
+
+    actual as u16
+}

@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub enum VmxExitReason {
     ExceptionNmi = 0,
     ExternalInterrupt = 1,
@@ -66,8 +67,10 @@ pub enum VmxExitReason {
     Tpause = 68,
 }
 
+#[allow(dead_code)]
 pub struct VmxInstructionError(u32);
 
+#[allow(dead_code)]
 impl VmxInstructionError {
     pub fn as_str(&self) -> &str {
         match self.0 {
