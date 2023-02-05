@@ -158,8 +158,8 @@ impl Vmm {
         //Context::restore(&mut self.vcpu_table[index].context)?;
         
         let vmm_entrypoint_address = vmm_entrypoint as u64;
-        Support::vmwrite(host::RSP, &mut self.vcpu_table[index].vmm_stack.vmm_context as *mut _ as _)?;
-        Support::vmwrite(host::RIP, vmm_entrypoint_address)?;
+        //Support::vmwrite(host::RSP, &mut self.vcpu_table[index].vmm_stack.vmm_context as *mut _ as _)?;
+        //Support::vmwrite(host::RIP, vmm_entrypoint_address)?;
 
         // Host Segment Selector
         const SELECTOR_MASK: u16 = 0xF8;

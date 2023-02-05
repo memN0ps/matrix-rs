@@ -12,7 +12,6 @@ use support::Support;
 use crate::{processor::{ProcessorExecutor}, vmm::Vmm};
 
 mod context;
-mod vmm_stack;
 mod vmexit_reason;
 mod segment;
 mod msr_bitmap;

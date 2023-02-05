@@ -2,7 +2,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 use kernel_alloc::PhysicalAllocator;
 
-use crate::{vmcs::{Vmxon, Vmcs}, error::HypervisorError, msr_bitmap::MsrBitmap, vmm_stack::VmmStack};
+use crate::{vmcs::{Vmxon, Vmcs}, error::HypervisorError, msr_bitmap::MsrBitmap};
 
 pub struct Vcpu {
     
@@ -32,9 +32,6 @@ pub struct Vcpu {
 
     /// The physical address of the MsrBitmap naturally aligned 4-KByte region of memory
     pub msr_bitmap_physical_address: u64,
-
-    /// The VM stack
-    pub vmm_stack: Box<VmmStack, PhysicalAllocator>,
 }
 
 impl Vcpu {
@@ -48,7 +45,6 @@ impl Vcpu {
             vmxon_physical_address: 0,
             msr_bitmap: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
             msr_bitmap_physical_address: 0,
-            vmm_stack: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
         })
     }
 }

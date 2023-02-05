@@ -1,5 +1,6 @@
-use crate::utils::nt::RtlCaptureContext;
 use core::mem::MaybeUninit;
+
+use winapi::um::winnt::RtlCaptureContext;
 
 #[repr(C, align(16))]
 pub struct M128A {
