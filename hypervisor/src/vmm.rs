@@ -2,7 +2,7 @@ extern crate alloc;
 use alloc::{vec::Vec};
 use bitfield::{BitMut};
 use x86::{msr::{self}, controlregs::{self}, vmx::{vmcs::{guest, host, control::{PrimaryControls, SecondaryControls, EntryControls, ExitControls}}, self}, debugregs, bits64, segmentation, task, dtables};
-use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, support::{Support, vmx_adjust_entry_controls}, addresses::{PhysicalAddress}, segment::{load_segment_limit, read_access_rights, get_segment_base}};
+use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, support::{Support, vmx_adjust_entry_controls}, addresses::{PhysicalAddress}, segment::{load_segment_limit, read_access_rights, get_segment_base}, vmexit_reason::vmm_entrypoint};
 
 pub struct Vmm {
     /// The number of logical/virtual processors
@@ -144,7 +144,7 @@ impl Vmm {
     }
 
     /// Initialize the host state for the currently loaded vmcs.
-    pub fn init_host_register_state(&self, index: usize) -> Result<(), HypervisorError> {
+    pub fn init_host_register_state(&mut self, index: usize) -> Result<(), HypervisorError> {
         log::info!("[+] Host Register State");
         // Host Control Registers
         unsafe { 
@@ -155,8 +155,11 @@ impl Vmm {
         log::info!("[+] Host Control Registers initialized!");
 
         // Host RSP/RIP (FIX OR WON'T WORK ????????????????????????????????????????????????????????????)
-        Support::vmwrite(host::RSP, self.vcpu_table[index].context.rsp)?;
-        Support::vmwrite(host::RIP, self.vcpu_table[index].context.rip)?;
+        //Context::restore(&mut self.vcpu_table[index].context)?;
+        
+        let vmm_entrypoint_address = vmm_entrypoint as u64;
+        Support::vmwrite(host::RSP, &mut self.vcpu_table[index].vmm_stack.vmm_context as *mut _ as _)?;
+        Support::vmwrite(host::RIP, vmm_entrypoint_address)?;
 
         // Host Segment Selector
         const SELECTOR_MASK: u16 = 0xF8;
@@ -213,8 +216,8 @@ impl Vmm {
         log::info!("[+] Guest Debug Registers initialized!");
     
         // Guest RSP and RIP (NEED TO FIX OR WON'T WORK ????????????????????????????????????????????????????)
-        Support::vmwrite(guest::RSP, self.vcpu_table[index].context.rsp)?;
-        Support::vmwrite(guest::RIP, self.vcpu_table[index].context.rip)?;
+        Support::vmwrite(guest::RSP, self.vcpu_table[index].guest_rsp)?;
+        Support::vmwrite(guest::RIP, self.vcpu_table[index].guest_rip)?;
         log::info!("[+] Guest RSP and RIP initialized!");
     
         // Guest RFLAGS

@@ -3,13 +3,15 @@
 #![feature(new_uninit)]
 #![feature(const_trait_impl)]
 #![feature(const_mut_refs)]
+#![feature(naked_functions)]
+#![feature(asm_const)]
 
 use error::HypervisorError;
 use support::Support;
 
 use crate::{processor::{ProcessorExecutor}, vmm::Vmm};
 
-mod context;
+mod vmm_stack;
 mod vmexit_reason;
 mod segment;
 mod msr_bitmap;

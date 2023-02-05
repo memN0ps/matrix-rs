@@ -1,3 +1,7 @@
+
+use x86::vmx;
+use crate::{support::Support, error::HypervisorError};
+
 #[allow(dead_code)]
 pub enum VmxExitReason {
     ExceptionNmi = 0,
@@ -68,39 +72,137 @@ pub enum VmxExitReason {
 }
 
 #[allow(dead_code)]
-pub struct VmxInstructionError(u32);
+pub struct VmExitHandler(u32);
 
 #[allow(dead_code)]
-impl VmxInstructionError {
-    pub fn as_str(&self) -> &str {
-        match self.0 {
-            0 => "OK",
-            1 => "VMCALL executed in VMX root operation",
-            2 => "VMCLEAR with invalid physical address",
-            3 => "VMCLEAR with VMXON pointer",
-            4 => "VMLAUNCH with non-clear VMCS",
-            5 => "VMRESUME with non-launched VMCS",
-            6 => "VMRESUME after VMXOFF (VMXOFF and VMXON between VMLAUNCH and VMRESUME)",
-            7 => "VM entry with invalid control field(s)",
-            8 => "VM entry with invalid host-state field(s)",
-            9 => "VMPTRLD with invalid physical address",
-            10 => "VMPTRLD with VMXON pointer",
-            11 => "VMPTRLD with incorrect VMCS revision identifier",
-            12 => "VMREAD/VMWRITE from/to unsupported VMCS component",
-            13 => "VMWRITE to read-only VMCS component",
-            15 => "VMXON executed in VMX root operation",
-            16 => "VM entry with invalid executive-VMCS pointer",
-            17 => "VM entry with non-launched executive VMCS",
-            18 => "VM entry with executive-VMCS pointer not VMXON pointer (when attempting to deactivate the dual-monitor treatment of SMIs and SMM)",
-            19 => "VMCALL with non-clear VMCS (when attempting to activate the dual-monitor treatment of SMIs and SMM)",
-            20 => "VMCALL with invalid VM-exit control fields",
-            22 => "VMCALL with incorrect MSEG revision identifier (when attempting to activate the dual-monitor treatment of SMIs and SMM)",
-            23 => "VMXOFF under dual-monitor treatment of SMIs and SMM",
-            24 => "VMCALL with invalid SMM-monitor features (when attempting to activate the dual-monitor treatment of SMIs and SMM)",
-            25 => "VM entry with invalid VM-execution control fields in executive VMCS (when attempting to return from SMM)",
-            26 => "VM entry with events blocked by MOV SS",
-            28 => "Invalid operand to INVEPT/INVVPID",
-            _ => "[INVALID]",
-        }
+impl VmExitHandler {
+    pub fn vmexit_handler() -> Result<(), HypervisorError> {
+        let exit_reason = Support::vmread(vmx::vmcs::ro::VM_INSTRUCTION_ERROR)?;
+    
+        match exit_reason {
+            0 => log::info!("OK"),
+            1 => log::info!("VMCALL executed in VMX root operation"),
+            2 => log::info!("VMCLEAR with invalid physical address"),
+            3 => log::info!("VMCLEAR with VMXON pointer"),
+            4 => log::info!("VMLAUNCH with non-clear VMCS"),
+            5 => log::info!("VMRESUME with non-launched VMCS"),
+            6 => log::info!("VMRESUME after VMXOFF (VMXOFF and VMXON between VMLAUNCH and VMRESUME)"),
+            7 => log::info!("VM entry with invalid control field(s)"),
+            8 => log::info!("VM entry with invalid host-state field(s)"),
+            9 => log::info!("VMPTRLD with invalid physical address"),
+            10 => log::info!("VMPTRLD with VMXON pointer"),
+            11 => log::info!("VMPTRLD with incorrect VMCS revision identifier"),
+            12 => log::info!("VMREAD/VMWRITE from/to unsupported VMCS component"),
+            13 => log::info!("VMWRITE to read-only VMCS component"),
+            15 => log::info!("VMXON executed in VMX root operation"),
+            16 => log::info!("VM entry with invalid executive-VMCS pointer"),
+            17 => log::info!("VM entry with non-launched executive VMCS"),
+            18 => log::info!("VM entry with executive-VMCS pointer not VMXON pointer (when attempting to deactivate the dual-monitor treatment of SMIs and SMM)"),
+            19 => log::info!("VMCALL with non-clear VMCS (when attempting to activate the dual-monitor treatment of SMIs and SMM)"),
+            20 => log::info!("VMCALL with invalid VM-exit control fields"),
+            22 => log::info!("VMCALL with incorrect MSEG revision identifier (when attempting to activate the dual-monitor treatment of SMIs and SMM)"),
+            23 => log::info!("VMXOFF under dual-monitor treatment of SMIs and SMM"),
+            24 => log::info!("VMCALL with invalid SMM-monitor features (when attempting to activate the dual-monitor treatment of SMIs and SMM)"),
+            25 => log::info!("VM entry with invalid VM-execution control fields in executive VMCS (when attempting to return from SMM)"),
+            26 => log::info!("VM entry with events blocked by MOV SS"),
+            28 => log::info!("Invalid operand to INVEPT/INVVPID"),
+            _ => log::info!("[INVALID]"),
+        };
+
+        Ok(())
     }
+}
+
+#[repr(C)]
+#[derive(Debug, Default)]
+pub struct GeneralRegisters {
+    pub rax: u64,
+    pub rcx: u64,
+    pub rdx: u64,
+    pub rbx: u64,
+    _unused_rsp: u64,
+    pub rbp: u64,
+    pub rsi: u64,
+    pub rdi: u64,
+    pub r8: u64,
+    pub r9: u64,
+    pub r10: u64,
+    pub r11: u64,
+    pub r12: u64,
+    pub r13: u64,
+    pub r14: u64,
+    pub r15: u64,
+}
+
+macro_rules! save_regs_to_stack {
+    () => {
+        "
+        push r15
+        push r14
+        push r13
+        push r12
+        push r11
+        push r10
+        push r9
+        push r8
+        push rdi
+        push rsi
+        push rbp
+        sub rsp, 8
+        push rbx
+        push rdx
+        push rcx
+        push rax"
+    };
+}
+
+macro_rules! restore_regs_from_stack {
+    () => {
+        "
+        pop rax
+        pop rcx
+        pop rdx
+        pop rbx
+        add rsp, 8
+        pop rbp
+        pop rsi
+        pop rdi
+        pop r8
+        pop r9
+        pop r10
+        pop r11
+        pop r12
+        pop r13
+        pop r14
+        pop r15"
+    };
+}
+
+// Fix the syntax errors in the following
+#[naked]
+pub unsafe extern "sysv64" fn vmm_entrypoint() -> ! {
+    core::arch::asm!(
+        save_regs_to_stack!(),
+        "mov r15, rsp",         // save temporary RSP to r15
+        "mov rsp, [rsp + {0}]", // set RSP to Vcpu::host_stack_top
+        "call {1}",             // call vmexit_handler
+        "mov rsp, r15",         // load temporary RSP from r15
+        restore_regs_from_stack!(),
+        "vmresume",
+        "jmp {2}",
+        const core::mem::size_of::<GeneralRegisters>(),
+        sym VmExitHandler::vmexit_handler,
+        sym vmresume_failed,
+        options(noreturn),
+    );
+}
+
+
+fn instruction_error() -> Result<u64, HypervisorError> {
+    let error = Support::vmread(vmx::vmcs::ro::VM_INSTRUCTION_ERROR)?;
+    Ok(error)
+}
+
+fn vmresume_failed() -> ! {
+    panic!("VM resume failed: {:?}", instruction_error().expect("VMREAD FAILED FROM instruction_error"));
 }

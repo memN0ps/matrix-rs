@@ -156,16 +156,14 @@ impl Support {
         }
     }
 
-    #[allow(dead_code)]
     /// Read a specified field from a VMCS.
-    pub fn vmread(field: u32) -> Result<(), HypervisorError> {
+    pub fn vmread(field: u32) -> Result<u64, HypervisorError> {
         match unsafe { x86::bits64::vmx::vmread(field) } {
-            Ok(_) => Ok(()),
+            Ok(value) => Ok(value),
             Err(_) => Err(HypervisorError::VMREADFailed),
         }
     }
 
-    #[allow(dead_code)]
     /// Write to a specified field in a VMCS.
     pub fn vmwrite(field: u32, value: u64) -> Result<(), HypervisorError> {
         match unsafe { x86::bits64::vmx::vmwrite(field, value) } {
@@ -174,12 +172,20 @@ impl Support {
         }
     }
 
-    #[allow(dead_code)]
     /// Launch virtual machine.
     pub fn vmlaunch() -> Result<(), HypervisorError> {
         match unsafe { x86::bits64::vmx::vmlaunch() } {
             Ok(_) => Ok(()),
             Err(_) => Err(HypervisorError::VMLAUNCHFailed),
+        }
+    }
+
+    #[allow(dead_code)]
+    /// Resume virtual machine.
+    pub fn vmresume() -> Result<(), HypervisorError> {
+        match unsafe { x86::bits64::vmx::vmresume() } {
+            Ok(_) => Ok(()),
+            Err(_) => Err(HypervisorError::VMRESUMEFailed),
         }
     }
 }

@@ -2,19 +2,17 @@ extern crate alloc;
 use alloc::boxed::Box;
 use kernel_alloc::PhysicalAllocator;
 
-use crate::{vmcs::{Vmxon, Vmcs}, error::HypervisorError, msr_bitmap::MsrBitmap, context::Context};
+use crate::{vmcs::{Vmxon, Vmcs}, error::HypervisorError, msr_bitmap::MsrBitmap, vmm_stack::VmmStack};
 
 pub struct Vcpu {
     
     // The VM exit status
     //pub vmexit_status: VmexitStatus
-    // Capture
-    pub context: Box<Context, PhysicalAllocator>,
-
-    /// The guest RSP
+    
+    /// RSP will be loaded from here when handle VM exits.
     pub guest_rsp: u64,
 
-    /// The guest RSP
+    /// RIP will be loaded from here when handle VM exits.
     pub guest_rip: u64,
 
     /// The virtual address of the Vmcs naturally aligned 4-KByte region of memory
@@ -34,6 +32,9 @@ pub struct Vcpu {
 
     /// The physical address of the MsrBitmap naturally aligned 4-KByte region of memory
     pub msr_bitmap_physical_address: u64,
+
+    /// The VM stack
+    pub vmm_stack: Box<VmmStack, PhysicalAllocator>,
 }
 
 impl Vcpu {
@@ -47,7 +48,7 @@ impl Vcpu {
             vmxon_physical_address: 0,
             msr_bitmap: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
             msr_bitmap_physical_address: 0,
-            context: Context::new()?,
+            vmm_stack: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
         })
     }
 }

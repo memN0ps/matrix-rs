@@ -37,6 +37,9 @@ pub enum HypervisorError {
     
     #[error("Failed to execute VMLAUNCH")]
     VMLAUNCHFailed,
+
+    #[error("Failed to execute VMRESUME")]
+    VMRESUMEFailed,
     
     #[error("Failed to switch processor")]
     ProcessorSwitchFailed,
