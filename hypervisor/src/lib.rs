@@ -9,6 +9,7 @@ use support::Support;
 
 use crate::{processor::{ProcessorExecutor}, vmm::Vmm};
 
+mod context;
 mod vmexit_reason;
 mod segment;
 mod msr_bitmap;
@@ -94,6 +95,9 @@ impl Hypervisor {
 
         log::info!("[+] init_guest_register_state");
         self.vmm_context.init_guest_register_state(index)?;
+
+        Support::vmlaunch()?;
+        log::info!("[+] VMLAUNCH successful!");
 
         Ok(())
     }

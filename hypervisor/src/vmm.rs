@@ -144,7 +144,7 @@ impl Vmm {
     }
 
     /// Initialize the host state for the currently loaded vmcs.
-    pub fn init_host_register_state(&mut self, index: usize) -> Result<(), HypervisorError> {
+    pub fn init_host_register_state(&self, index: usize) -> Result<(), HypervisorError> {
         log::info!("[+] Host Register State");
         // Host Control Registers
         unsafe { 
@@ -155,8 +155,8 @@ impl Vmm {
         log::info!("[+] Host Control Registers initialized!");
 
         // Host RSP/RIP (FIX OR WON'T WORK ????????????????????????????????????????????????????????????)
-        //Support::vmwrite(host::RSP, &mut self.vcpu_table[index].vmm_stack.vmm_context as *mut _ as _)?;
-        //Support::vmwrite(host::RIP, vmm_entrypoint)?;
+        Support::vmwrite(host::RSP, self.vcpu_table[index].context.rsp)?;
+        Support::vmwrite(host::RIP, self.vcpu_table[index].context.rip)?;
 
         // Host Segment Selector
         const SELECTOR_MASK: u16 = 0xF8;
@@ -174,7 +174,7 @@ impl Vmm {
         let mut host_idtr: dtables::DescriptorTablePointer<u64> = Default::default();
         unsafe { dtables::sgdt(&mut host_gdtr) };
         unsafe { dtables::sidt(&mut host_idtr) };
-        unsafe { Support::vmwrite(host::TR_BASE, get_segment_base(host_gdtr.base as u32, dtables::ldtr().bits(), dtables::ldtr().bits()) as u64)? };
+        unsafe { Support::vmwrite(host::TR_BASE, get_segment_base(host_gdtr.base as _, x86::task::tr().bits()))? };
         Support::vmwrite(host::GDTR_BASE, host_gdtr.base as u64)?;
         Support::vmwrite(host::IDTR_BASE, host_idtr.base as u64)?;
         log::info!("[+] Host TR, GDTR and LDTR initialized!");
@@ -213,8 +213,8 @@ impl Vmm {
         log::info!("[+] Guest Debug Registers initialized!");
     
         // Guest RSP and RIP (NEED TO FIX OR WON'T WORK ????????????????????????????????????????????????????)
-        Support::vmwrite(guest::RSP, self.vcpu_table[index].guest_rsp)?;
-        Support::vmwrite(guest::RIP, self.vcpu_table[index].guest_rip)?;
+        Support::vmwrite(guest::RSP, self.vcpu_table[index].context.rsp)?;
+        Support::vmwrite(guest::RIP, self.vcpu_table[index].context.rip)?;
         log::info!("[+] Guest RSP and RIP initialized!");
     
         // Guest RFLAGS
@@ -267,12 +267,12 @@ impl Vmm {
         log::info!("[+] Guest GDTR and LDTR Limit and Base initialized!");
 
         // Guest Segment, CS, SS, DS, ES
-        unsafe { Support::vmwrite(guest::CS_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), segmentation::cs().bits()) as u64)? };
-        unsafe { Support::vmwrite(guest::SS_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), segmentation::ss().bits()) as u64)? };
-        unsafe { Support::vmwrite(guest::DS_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), segmentation::ds().bits()) as u64)? };
-        unsafe { Support::vmwrite(guest::ES_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), segmentation::es().bits()) as u64)? };
-        unsafe { Support::vmwrite(guest::LDTR_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), task::tr().bits()) as u64)? };
-        unsafe { Support::vmwrite(guest::TR_BASE, get_segment_base(guest_gdtr.base as u32, dtables::ldtr().bits(), dtables::ldtr().bits()) as u64)? };
+        Support::vmwrite(guest::CS_BASE, get_segment_base(guest_gdtr.base as _, segmentation::cs().bits()) as u64)?;
+        Support::vmwrite(guest::SS_BASE, get_segment_base(guest_gdtr.base as _, segmentation::ss().bits()) as u64)?;
+        Support::vmwrite(guest::DS_BASE, get_segment_base(guest_gdtr.base as _, segmentation::ds().bits()) as u64)?;
+        Support::vmwrite(guest::ES_BASE, get_segment_base(guest_gdtr.base as _, segmentation::es().bits()) as u64)?;
+        unsafe { Support::vmwrite(guest::LDTR_BASE, get_segment_base(guest_gdtr.base as _, dtables::ldtr().bits()) as u64)? };
+        unsafe { Support::vmwrite(guest::TR_BASE, get_segment_base(guest_gdtr.base as _, task::tr().bits()) as u64)? };
 
         log::info!("[+] Guest Segment, CS, SS, DS, ES, LDTR and TR initialized!");
 
