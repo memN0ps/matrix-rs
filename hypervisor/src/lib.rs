@@ -121,13 +121,3 @@ impl Hypervisor {
         Ok(())
     }
 }
-
-/// Call Drop and devirtualize
-impl Drop for Hypervisor {
-    fn drop(&mut self) {
-        match self.devirtualize() {
-            Ok(_) => log::info!("[+] Devirtualized successfully!"),
-            Err(err) => log::error!("[-] Failed to dervirtualize {}", err),
-        }
-    }
-}

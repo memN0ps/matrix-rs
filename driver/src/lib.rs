@@ -48,7 +48,10 @@ pub extern "system" fn driver_unload(_driver: &mut DRIVER_OBJECT) {
     log::info!("Driver unloaded successfully!");
     
     if let Some(hypervisor) = unsafe { HYPERVISOR.take() } {
-        core::mem::drop(hypervisor);
+        match hypervisor.devirtualize() {
+            Ok(_) => log::info!("[+] Devirtualized successfully!"),
+            Err(err) => log::error!("[-] Failed to dervirtualize {}", err),
+        }
     }
 }
 
