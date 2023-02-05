@@ -98,7 +98,7 @@ impl Hypervisor {
         log::info!("[+] init_guest_register_state");
         self.vmm_context.init_guest_register_state(index)?;
 
-        Support::vmlaunch()?;
+        debug_vmlaunch()?;
         log::info!("[+] VMLAUNCH successful!");
 
         Ok(())
@@ -121,5 +121,20 @@ impl Hypervisor {
         }
 
         Ok(())
+    }
+}
+
+pub fn debug_vmlaunch() -> Result<(), HypervisorError> {
+
+    match Support::vmlaunch() {
+        Ok(_) => {
+            log::info!("[+] VMLAUNCH successful!");
+            Ok(())
+        }
+        Err(e) => {        
+            log::info!("VM exit: {:#x}", Support::vmread(x86::vmx::vmcs::ro::EXIT_REASON)?);
+            log::info!("VM instruction error: {:#x}", Support::vmread(x86::vmx::vmcs::ro::VM_INSTRUCTION_ERROR)?);
+            Err(e)
+        }
     }
 }
