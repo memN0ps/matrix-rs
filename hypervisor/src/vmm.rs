@@ -29,19 +29,19 @@ impl Vmm {
 
     /// Allocate a naturally aligned 4-KByte region of memory to enable VMX operation (Intel Manual: 25.11.5 VMXON Region)
     pub fn init_vmxon(&mut self, index: usize) -> Result<(), HypervisorError> {
-        self.vcpu_table[index].vmxon_physical_address = PhysicalAddress::pa_from_va(self.vcpu_table[index].vmxon.as_mut() as *mut _ as _);
+        self.vcpu_table[index].vmxon_region_physical_address = PhysicalAddress::pa_from_va(self.vcpu_table[index].vmxon_region.as_mut() as *mut _ as _);
 
-        if self.vcpu_table[index].vmxon_physical_address == 0 {
+        if self.vcpu_table[index].vmxon_region_physical_address == 0 {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
-        log::info!("[+] VCPU: {}, VMXON Virtual Address: {:p}", index, self.vcpu_table[index].vmxon);
-        log::info!("[+] VCPU: {}, VMXON Physical Addresss: 0x{:x}", index, self.vcpu_table[index].vmxon_physical_address);
+        log::info!("[+] VCPU: {}, VMXON Virtual Address: {:p}", index, self.vcpu_table[index].vmxon_region);
+        log::info!("[+] VCPU: {}, VMXON Physical Addresss: 0x{:x}", index, self.vcpu_table[index].vmxon_region_physical_address);
 
-        self.vcpu_table[index].vmxon.revision_id = Support::get_vmcs_revision_id();
-        self.vcpu_table[index].vmxon.as_mut().revision_id.set_bit(31, false);
+        self.vcpu_table[index].vmxon_region.revision_id = Support::get_vmcs_revision_id();
+        self.vcpu_table[index].vmxon_region.as_mut().revision_id.set_bit(31, false);
 
-        Support::vmxon(self.vcpu_table[index].vmxon_physical_address)?;
+        Support::vmxon(self.vcpu_table[index].vmxon_region_physical_address)?;
         log::info!("[+] VMXON successful!");
 
         Ok(())
@@ -49,26 +49,26 @@ impl Vmm {
 
     /// Ensures that VMCS data maintained on the processor is copied to the VMCS region located at 4KB-aligned physical address addr and initializes some parts of it. (Intel Manual: 25.11.3 Initializing a VMCS)
     pub fn init_vmclear(&mut self, index: usize) -> Result<(), HypervisorError> {
-        Support::vmclear(self.vcpu_table[index].vmcs_physical_address)?;
+        Support::vmclear(self.vcpu_table[index].vmcs_region_physical_address)?;
         log::info!("[+] VMCLEAR successful!");
         Ok(())
     }
 
     /// Allocate a naturally aligned 4-KByte region of memory for VMCS region (Intel Manual: 25.2 Format of The VMCS Region)
     pub fn init_vmptrld(&mut self, index: usize) -> Result<(), HypervisorError> {
-        self.vcpu_table[index].vmcs_physical_address = PhysicalAddress::pa_from_va(self.vcpu_table[index].vmcs.as_mut() as *mut _ as _);
+        self.vcpu_table[index].vmcs_region_physical_address = PhysicalAddress::pa_from_va(self.vcpu_table[index].vmcs_region.as_mut() as *mut _ as _);
 
-        if self.vcpu_table[index].vmcs_physical_address == 0 {
+        if self.vcpu_table[index].vmcs_region_physical_address == 0 {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
-        log::info!("[+] VCPU: {}, VMCS Virtual Address: {:p}", index, self.vcpu_table[index].vmcs);
-        log::info!("[+] VCPU: {}, VMCS Physical Addresss: 0x{:x}", index, self.vcpu_table[index].vmcs_physical_address);
+        log::info!("[+] VCPU: {}, VMCS Virtual Address: {:p}", index, self.vcpu_table[index].vmcs_region);
+        log::info!("[+] VCPU: {}, VMCS Physical Addresss: 0x{:x}", index, self.vcpu_table[index].vmcs_region_physical_address);
 
-        self.vcpu_table[index].vmcs.revision_id = Support::get_vmcs_revision_id();
-        self.vcpu_table[index].vmcs.as_mut().revision_id.set_bit(31, false);
+        self.vcpu_table[index].vmcs_region.revision_id = Support::get_vmcs_revision_id();
+        self.vcpu_table[index].vmcs_region.as_mut().revision_id.set_bit(31, false);
 
-        Support::vmptrld(self.vcpu_table[index].vmcs_physical_address)?;
+        Support::vmptrld(self.vcpu_table[index].vmcs_region_physical_address)?;
         log::info!("[+] VMPTRLD successful!");
 
         Ok(())
@@ -154,12 +154,10 @@ impl Vmm {
         }
         log::info!("[+] Host Control Registers initialized!");
 
-        // Host RSP/RIP (FIX OR WON'T WORK ????????????????????????????????????????????????????????????)
-        //Context::restore(&mut self.vcpu_table[index].context)?;
-        
+        // Host RSP/RIP        
         let vmm_entrypoint_address = vmm_entrypoint as u64;
-        //Support::vmwrite(host::RSP, &mut self.vcpu_table[index].vmm_stack.vmm_context as *mut _ as _)?;
-        //Support::vmwrite(host::RIP, vmm_entrypoint_address)?;
+        Support::vmwrite(host::RSP, &mut self.vcpu_table[index].vmm_stack.vmm_context as *mut _ as _)?;
+        Support::vmwrite(host::RIP, vmm_entrypoint_address)?;
 
         // Host Segment Selector
         const SELECTOR_MASK: u16 = 0xF8;
@@ -215,9 +213,9 @@ impl Vmm {
         unsafe { Support::vmwrite(guest::DR7, debugregs::dr7().0 as u64)? };
         log::info!("[+] Guest Debug Registers initialized!");
     
-        // Guest RSP and RIP (NEED TO FIX OR WON'T WORK ????????????????????????????????????????????????????)
-        Support::vmwrite(guest::RSP, self.vcpu_table[index].guest_rsp)?;
-        Support::vmwrite(guest::RIP, self.vcpu_table[index].guest_rip)?;
+        // Guest RSP and RIP
+        Support::vmwrite(guest::RSP, self.vcpu_table[index].context.rsp)?;
+        Support::vmwrite(guest::RIP, self.vcpu_table[index].context.rip)?;
         log::info!("[+] Guest RSP and RIP initialized!");
     
         // Guest RFLAGS

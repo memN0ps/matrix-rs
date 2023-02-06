@@ -76,7 +76,7 @@ pub struct VmExitHandler(u32);
 
 #[allow(dead_code)]
 impl VmExitHandler {
-    pub fn vmexit_handler() -> Result<(), HypervisorError> {
+    pub fn vmexit_handler(stack: usize) -> Result<(), HypervisorError> {
         let exit_reason = Support::vmread(vmx::vmcs::ro::VM_INSTRUCTION_ERROR)?;
     
         match exit_reason {
@@ -178,31 +178,65 @@ macro_rules! restore_regs_from_stack {
     };
 }
 
-// Fix the syntax errors in the following
 #[naked]
-pub unsafe extern "sysv64" fn vmm_entrypoint() -> ! {
+pub unsafe extern "C" fn vmm_entrypoint() -> ! {
     core::arch::asm!(
         save_regs_to_stack!(),
-        "mov r15, rsp",         // save temporary RSP to r15
-        "mov rsp, [rsp + {0}]", // set RSP to Vcpu::host_stack_top
-        "call {1}",             // call vmexit_handler
-        "mov rsp, r15",         // load temporary RSP from r15
+        "sub     rsp, 68h",
+        "movaps  xmmword ptr [rsp +  0h], xmm0",
+        "movaps  xmmword ptr [rsp + 10h], xmm1",
+        "movaps  xmmword ptr [rsp + 20h], xmm2",
+        "movaps  xmmword ptr [rsp + 30h], xmm3",
+        "movaps  xmmword ptr [rsp + 40h], xmm4",
+        "movaps  xmmword ptr [rsp + 50h], xmm5",
+        
+        "mov     rcx, rsp",
+        "sub     rsp, 20h",
+        "call    {0}",
+        "add     rsp, 20h",
+        
+        "movaps  xmm0, xmmword ptr [rsp +  0h]",
+        "movaps  xmm1, xmmword ptr [rsp + 10h]",
+        "movaps  xmm2, xmmword ptr [rsp + 20h]",
+        "movaps  xmm3, xmmword ptr [rsp + 30h]",
+        "movaps  xmm4, xmmword ptr [rsp + 40h]",
+        "movaps  xmm5, xmmword ptr [rsp + 50h]",
+        "add     rsp, 68h",
+
+        "cmp     al, 1",
+        "je      {2}",
         restore_regs_from_stack!(),
         "vmresume",
-        "jmp {2}",
-        const core::mem::size_of::<GeneralRegisters>(),
+        "jmp {1}",
         sym VmExitHandler::vmexit_handler,
-        sym vmresume_failed,
+        sym vmerror,
+        sym exit,
         options(noreturn),
     );
 }
 
+#[naked]
+pub unsafe extern "C" fn exit() -> ! {
+    core::arch::asm!(
+        restore_regs_from_stack!(),
+            "vmxoff",
+            "jz {0}",
+            "jc {0}",
+            "push r8",
+            "popf",
+            "mov     rsp, rdx",
+            "push    rcx",
+            "ret",
+            sym vmerror,
+            options(noreturn),
+    );
+}
 
 fn instruction_error() -> Result<u64, HypervisorError> {
     let error = Support::vmread(vmx::vmcs::ro::VM_INSTRUCTION_ERROR)?;
     Ok(error)
 }
 
-fn vmresume_failed() -> ! {
+fn vmerror() -> ! {
     panic!("VM resume failed: {:?}", instruction_error().expect("VMREAD FAILED FROM instruction_error"));
 }

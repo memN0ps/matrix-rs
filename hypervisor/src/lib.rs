@@ -18,7 +18,7 @@ mod msr_bitmap;
 mod addresses;
 mod ept;
 mod vmm;
-mod vmcs;
+mod vmcs_region;
 mod vcpu;
 mod processor;
 mod nt;
