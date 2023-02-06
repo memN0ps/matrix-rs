@@ -1,3 +1,5 @@
+pub const PAGE_SIZE: usize = 0x1000;
+
 #[repr(C, align(4096))]
 pub struct VmxonRegion {
     pub revision_id: u32,

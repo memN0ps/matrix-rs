@@ -2,7 +2,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 use kernel_alloc::PhysicalAllocator;
 
-use crate::{vmcs_region::{VmcsRegion}, error::HypervisorError, msr_bitmap::MsrBitmap, context::Context, vmm::Vmm, vmxon_region::VmxonRegion};
+use crate::{vmcs_region::{VmcsRegion}, error::HypervisorError, msr_bitmap::MsrBitmap, context::Context, vmxon_region::VmxonRegion};
 
 pub struct Vcpu {
     /// The virtual address of the Vmcs naturally aligned 4-KByte region of memory
@@ -26,18 +26,17 @@ pub struct Vcpu {
     pub context: Context,
 
     // The Vmm Stack
-    pub vmm_stack: Box<VmmStack, PhysicalAllocator>,
-
-    // The VM exit status
-    //pub vmexit_status: VmexitStatus
+    //pub vmm_stack: Box<VmmStack, PhysicalAllocator>,
 }
 
 
+/* 
 pub const KERNEL_STACK_SIZE: usize = 0x6000;
 pub struct VmmStack {
     limit: [u8; KERNEL_STACK_SIZE - core::mem::size_of::<Vmm>()],
     pub vmm_context: Vmm,
 }
+*/
 
 
 impl Vcpu {
@@ -50,7 +49,7 @@ impl Vcpu {
             msr_bitmap: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
             msr_bitmap_physical_address: 0,
             context: Context::capture(),
-            vmm_stack: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
+            //vmm_stack: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
         })
     }
 }

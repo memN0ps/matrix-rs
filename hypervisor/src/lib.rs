@@ -99,6 +99,7 @@ impl Hypervisor {
         log::info!("[+] init_guest_register_state");
         self.vmm_context.init_guest_register_state(index)?;
 
+        log::info!("[+] init_vmlaunch");
         debug_vmlaunch()?;
         log::info!("[+] VMLAUNCH successful!");
 

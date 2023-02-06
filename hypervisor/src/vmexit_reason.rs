@@ -1,5 +1,5 @@
 
-use x86::vmx;
+use x86::{vmx, current::vmx::vmread};
 use crate::{support::Support, error::HypervisorError};
 
 #[allow(dead_code)]
@@ -76,8 +76,12 @@ pub struct VmExitHandler(u32);
 
 #[allow(dead_code)]
 impl VmExitHandler {
-    pub fn vmexit_handler(stack: usize) -> Result<(), HypervisorError> {
-        let exit_reason = Support::vmread(vmx::vmcs::ro::VM_INSTRUCTION_ERROR)?;
+    pub fn vmexit_handler(stack: u64) -> u64 {
+        let exit_reason = unsafe { vmread(vmx::vmcs::ro::VM_INSTRUCTION_ERROR).expect("VMREAD FAILED") };
+        let exit_qualification = unsafe { vmread(x86::vmx::vmcs::ro::EXIT_QUALIFICATION).expect("VMREAD FAILED") };
+
+        log::info!("Exit Reason: {:#x}", exit_reason);
+        log::info!("Exit Qualification: {:#x}", exit_qualification);
     
         match exit_reason {
             0 => log::info!("OK"),
@@ -109,7 +113,7 @@ impl VmExitHandler {
             _ => log::info!("[INVALID]"),
         };
 
-        Ok(())
+        return exit_reason;
     }
 }
 
@@ -179,7 +183,7 @@ macro_rules! restore_regs_from_stack {
 }
 
 #[naked]
-pub unsafe extern "C" fn vmm_entrypoint() -> ! {
+pub unsafe extern "C" fn vmexit_stub() -> ! {
     core::arch::asm!(
         save_regs_to_stack!(),
         "sub     rsp, 68h",

@@ -2,7 +2,7 @@ extern crate alloc;
 use alloc::{vec::Vec};
 use bitfield::{BitMut};
 use x86::{msr::{self}, controlregs::{self}, vmx::{vmcs::{guest, host, control::{PrimaryControls, SecondaryControls, EntryControls, ExitControls}}, self}, debugregs, bits64, segmentation, task, dtables};
-use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, support::{Support, vmx_adjust_entry_controls}, addresses::{PhysicalAddress}, segment::{load_segment_limit, read_access_rights, get_segment_base}, vmexit_reason::vmm_entrypoint};
+use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, support::{Support, vmx_adjust_entry_controls}, addresses::{PhysicalAddress}, segment::{load_segment_limit, read_access_rights, get_segment_base}, vmexit_reason::vmexit_stub};
 
 pub struct Vmm {
     /// The number of logical/virtual processors
@@ -75,14 +75,14 @@ impl Vmm {
     }
 
     /// Initialize the VMCS control values for the currently loaded vmcs.
-    pub fn init_vmcs_control_values(&mut self, index: usize) -> Result<(), HypervisorError> {
+    pub fn init_vmcs_control_values(&mut self, _index: usize) -> Result<(), HypervisorError> {
         // PrimaryControls (x86::msr::IA32_VMX_PROCBASED_CTLS)
         Support::vmwrite(vmx::vmcs::control::PRIMARY_PROCBASED_EXEC_CONTROLS, 
-            vmx_adjust_entry_controls(msr::IA32_VMX_PROCBASED_CTLS, PrimaryControls::HLT_EXITING.bits() | PrimaryControls::USE_MSR_BITMAPS.bits() | PrimaryControls::SECONDARY_CONTROLS.bits()) as u64)?;
+            vmx_adjust_entry_controls(msr::IA32_VMX_PROCBASED_CTLS, PrimaryControls::HLT_EXITING.bits() | /*PrimaryControls::USE_MSR_BITMAPS.bits() |*/ PrimaryControls::SECONDARY_CONTROLS.bits()) as u64)?;
         
         // SecondaryControls (x86::msr::IA32_VMX_PROCBASED_CTLS2)
         Support::vmwrite(vmx::vmcs::control::SECONDARY_PROCBASED_EXEC_CONTROLS, 
-            vmx_adjust_entry_controls(msr::IA32_VMX_PROCBASED_CTLS2, SecondaryControls::ENABLE_RDTSCP.bits() /* | SecondaryControls::ENABLE_EPT.bits() */) as u64)?;
+            vmx_adjust_entry_controls(msr::IA32_VMX_PROCBASED_CTLS2, SecondaryControls::ENABLE_RDTSCP.bits() | SecondaryControls::ENABLE_XSAVES_XRSTORS.bits() | SecondaryControls::ENABLE_INVPCID.bits() /* | SecondaryControls::ENABLE_EPT.bits() */) as u64)?;
         
         // EntryControls (x86::msr::IA32_VMX_ENTRY_CTLS)
         Support::vmwrite(vmx::vmcs::control::VMENTRY_CONTROLS, 
@@ -104,29 +104,30 @@ impl Vmm {
         log::info!("VMCS Controls Shadow Registers initialized!");
 
         /* Time-stamp counter offset */
-        Support::vmwrite(vmx::vmcs::control::TSC_OFFSET_FULL, 0)?;
-        Support::vmwrite(vmx::vmcs::control::TSC_OFFSET_HIGH, 0)?;
-        Support::vmwrite(vmx::vmcs::control::PAGE_FAULT_ERR_CODE_MASK, 0)?;
-        Support::vmwrite(vmx::vmcs::control::PAGE_FAULT_ERR_CODE_MATCH, 0)?;
-        Support::vmwrite(vmx::vmcs::control::VMEXIT_MSR_STORE_COUNT, 0)?;
-        Support::vmwrite(vmx::vmcs::control::VMEXIT_MSR_LOAD_COUNT, 0)?;
-        Support::vmwrite(vmx::vmcs::control::VMENTRY_MSR_LOAD_COUNT, 0)?;
-        Support::vmwrite(vmx::vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD, 0)?;
-        log::info!("VMCS Time-stamp counter offset initialized!");
+        //Support::vmwrite(vmx::vmcs::control::TSC_OFFSET_FULL, 0)?;
+        //Support::vmwrite(vmx::vmcs::control::TSC_OFFSET_HIGH, 0)?;
+        //Support::vmwrite(vmx::vmcs::control::PAGE_FAULT_ERR_CODE_MASK, 0)?;
+        //Support::vmwrite(vmx::vmcs::control::PAGE_FAULT_ERR_CODE_MATCH, 0)?;
+        //Support::vmwrite(vmx::vmcs::control::VMEXIT_MSR_STORE_COUNT, 0)?;
+        //Support::vmwrite(vmx::vmcs::control::VMEXIT_MSR_LOAD_COUNT, 0)?;
+        //Support::vmwrite(vmx::vmcs::control::VMENTRY_MSR_LOAD_COUNT, 0)?;
+        //Support::vmwrite(vmx::vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD, 0)?;
+        //log::info!("VMCS Time-stamp counter offset initialized!");
 
-        log::info!("[+] init_msr_bitmap");
-        self.init_msr_bitmap(index)?;
+        //log::info!("[+] init_msr_bitmap");
+        //self.init_msr_bitmap(index)?;
 
         // VMCS Controls Bitmap
-        Support::vmwrite(vmx::vmcs::control::MSR_BITMAPS_ADDR_FULL, self.vcpu_table[index].msr_bitmap_physical_address)?;
-        Support::vmwrite(vmx::vmcs::control::MSR_BITMAPS_ADDR_HIGH, self.vcpu_table[index].msr_bitmap_physical_address)?;
-        log::info!("VMCS Controls Bitmap initialized!");
+        //Support::vmwrite(vmx::vmcs::control::MSR_BITMAPS_ADDR_FULL, self.vcpu_table[index].msr_bitmap_physical_address)?;
+        //Support::vmwrite(vmx::vmcs::control::MSR_BITMAPS_ADDR_HIGH, self.vcpu_table[index].msr_bitmap_physical_address)?;
+        //log::info!("VMCS Controls Bitmap initialized!");
 
         log::info!("[+] VMCS Controls initialized!");
 
         Ok(())
     }
 
+    /* 
     /// Allocate a naturally aligned 4-KByte region of memory to avoid VM exits on MSR accesses when using rdmsr or wrmsr (Intel Manual: 25.6.2 Processor-Based VM-Execution Controls)
     fn init_msr_bitmap(&mut self, index: usize) -> Result<(), HypervisorError> {
         self.vcpu_table[index].msr_bitmap_physical_address = PhysicalAddress::pa_from_va(self.vcpu_table[index].msr_bitmap.as_mut() as *mut _ as _);
@@ -142,6 +143,7 @@ impl Vmm {
 
         Ok(())
     }
+    */
 
     /// Initialize the host state for the currently loaded vmcs.
     pub fn init_host_register_state(&mut self, index: usize) -> Result<(), HypervisorError> {
@@ -155,9 +157,9 @@ impl Vmm {
         log::info!("[+] Host Control Registers initialized!");
 
         // Host RSP/RIP        
-        let vmm_entrypoint_address = vmm_entrypoint as u64;
-        Support::vmwrite(host::RSP, &mut self.vcpu_table[index].vmm_stack.vmm_context as *mut _ as _)?;
-        Support::vmwrite(host::RIP, vmm_entrypoint_address)?;
+        let vmexit_stub = vmexit_stub as u64;
+        Support::vmwrite(host::RSP, self.vcpu_table[index].context.rsp)?;
+        Support::vmwrite(host::RIP, vmexit_stub)?;
 
         // Host Segment Selector
         const SELECTOR_MASK: u16 = 0xF8;
