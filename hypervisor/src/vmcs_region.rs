@@ -6,9 +6,3 @@ pub struct VmcsRegion {
     pub abort_indicator: u32,
     pub data: [u8; PAGE_SIZE - 8],
 }
-
-#[repr(C, align(4096))]
-pub struct VmxonRegion {
-    pub revision_id: u32,
-    pub data: [u8; PAGE_SIZE - 4],
-}

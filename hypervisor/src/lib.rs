@@ -19,6 +19,7 @@ mod addresses;
 mod ept;
 mod vmm;
 mod vmcs_region;
+mod vmxon_region;
 mod vcpu;
 mod processor;
 mod nt;

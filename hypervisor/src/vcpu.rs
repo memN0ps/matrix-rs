@@ -2,7 +2,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 use kernel_alloc::PhysicalAllocator;
 
-use crate::{vmcs_region::{VmxonRegion, VmcsRegion}, error::HypervisorError, msr_bitmap::MsrBitmap, context::Context, vmm::Vmm};
+use crate::{vmcs_region::{VmcsRegion}, error::HypervisorError, msr_bitmap::MsrBitmap, context::Context, vmm::Vmm, vmxon_region::VmxonRegion};
 
 pub struct Vcpu {
     /// The virtual address of the Vmcs naturally aligned 4-KByte region of memory
