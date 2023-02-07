@@ -2,7 +2,7 @@
 //#![feature(alloc_c_string)]
 //#![feature(core_c_str)]
 
-use hypervisor::Hypervisor;
+use hypervisor::{Hypervisor};
 use kernel_log::KernelLogger;
 use log::LevelFilter;
 use core::panic::PanicInfo;
@@ -47,7 +47,7 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
 pub extern "system" fn driver_unload(_driver: &mut DRIVER_OBJECT) {
     log::info!("Driver unloaded successfully!");
     
-    if let Some(hypervisor) = unsafe { HYPERVISOR.take() } {
+    if let Some(mut hypervisor) = unsafe { HYPERVISOR.take() } {
         match hypervisor.devirtualize() {
             Ok(_) => log::info!("[+] Devirtualized successfully!"),
             Err(err) => log::error!("[-] Failed to dervirtualize {}", err),
@@ -57,13 +57,13 @@ pub extern "system" fn driver_unload(_driver: &mut DRIVER_OBJECT) {
 
 fn virtualize() -> Option<()> {
 
-    let Ok(mut hypervisor) = Hypervisor::new() else {
-        log::error!("[-] Failed to create Hypervisor::new()");
+    let hv = Hypervisor::builder();
+
+    let Ok(mut hypervisor) = hv.build() else {
+        log::error!("[-] Failed to build hypervisor");
         return None;
     };
 
-    log::info!("[*] Initializing VMM!");
-    
     match hypervisor.virtualize() {
         Ok(_) => log::info!("[+] VMM initialized"),
         Err(err) =>  {

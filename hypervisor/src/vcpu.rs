@@ -1,55 +1,99 @@
 extern crate alloc;
-use alloc::boxed::Box;
-use kernel_alloc::PhysicalAllocator;
+use core::cell::OnceCell;
 
-use crate::{vmcs_region::{VmcsRegion}, error::HypervisorError, msr_bitmap::MsrBitmap, context::Context, vmxon_region::VmxonRegion};
+use alloc::boxed::Box;
+
+
+use crate::{error::HypervisorError, context::Context, support, vcpu_data::VcpuData};
 
 pub struct Vcpu {
-    /// The virtual address of the Vmcs naturally aligned 4-KByte region of memory
-    pub vmcs_region: Box<VmcsRegion, PhysicalAllocator>,
-
-    /// The physical address of the Vmcs naturally aligned 4-KByte region of memory
-    pub vmcs_region_physical_address: u64,
-
-    /// The virtual address of the Vmxon naturally aligned 4-KByte region of memory
-    pub vmxon_region: Box<VmxonRegion, PhysicalAllocator>,
-
-    /// The physical address of the Vmxon naturally aligned 4-KByte region of memory
-    pub vmxon_region_physical_address: u64,
-
-    /// The virtual address of the MsrBitmap naturally aligned 4-KByte region of memory
-    pub msr_bitmap: Box<MsrBitmap, PhysicalAllocator>,
-
-    /// The physical address of the MsrBitmap naturally aligned 4-KByte region of memory
-    pub msr_bitmap_physical_address: u64,
-
-    pub context: Context,
-
-    // The Vmm Stack
-    //pub vmm_stack: Box<VmmStack, PhysicalAllocator>,
+    /// The index of the processor.
+    index: u32,
+    
+    data: OnceCell<Box<VcpuData>>,
 }
-
-
-/* 
-pub const KERNEL_STACK_SIZE: usize = 0x6000;
-pub struct VmmStack {
-    limit: [u8; KERNEL_STACK_SIZE - core::mem::size_of::<Vmm>()],
-    pub vmm_context: Vmm,
-}
-*/
-
 
 impl Vcpu {
-    pub fn new() -> Result<Self, HypervisorError> {
+    pub fn new(index: u32) -> Result<Self, HypervisorError> {
+        log::trace!("Creating processor {}", index);
+
         Ok (Self {
-            vmcs_region: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
-            vmcs_region_physical_address: 0,
-            vmxon_region: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
-            vmxon_region_physical_address: 0,
-            msr_bitmap: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
-            msr_bitmap_physical_address: 0,
-            context: Context::capture(),
-            //vmm_stack: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
+            index,
+            data: OnceCell::new(),
         })
     }
+
+    /// Virtualize the CPU by capturing the context, enabling VMX operation, adjusting control registers, calling VMXON, VMPTRLD and VMLAUNCH
+    pub fn virtualize_cpu(&mut self) -> Result<(), HypervisorError> {
+        log::info!("Capturing context");
+        let context = Context::capture();
+
+        //Check if already virtualized or not, then do it otherwise don't.
+
+        //
+        // 2) Intel Manual: 24.7 Enable and Enter VMX Operation
+        //
+        log::info!("[+] Enabling Virtual Machine Extensions (VMX)");
+        support::enable_vmx_operation()?;
+
+        log::info!("[+] Adjusting Control Registers");
+        support::adjust_control_registers();
+
+        log::info!("[+] Attempting to create new VCPU data");
+        let mut vcpu_data = VcpuData::new(context)?;
+
+        log::info!("[+] init_vmxon_region");
+        vcpu_data.init_vmxon_region()?;
+
+        log::info!("[+] init_vmxon_region");
+        vcpu_data.init_vmcs_region()?;
+
+        log::info!("[+] init_vmclear");
+        vcpu_data.init_vmclear()?;
+
+        log::info!("[+] init_vmptrld");
+        support::vmptrld(vcpu_data.vmcs_region_physical_address)?;
+        log::info!("[+] VMPTRLD successful!");
+
+        //log::info!("[+] init_vmcs_control_values");
+        //init_vmcs_control_values(index)?;
+
+        //log::info!("[+] init_host_register_state");
+        //init_host_register_state(index)?;
+
+        //log::info!("[+] init_guest_register_state");
+        //init_guest_register_state(index)?;
+
+        //log::info!("[+] init_vmlaunch");
+        //debug_vmlaunch()?;
+        //log::info!("[+] VMLAUNCH successful!");
+        Ok(())
+    }
+
+    /// Devirtualize the CPU using vmxoff
+    pub fn devirtualize_cpu(&self) -> Result<(), HypervisorError> {
+        support::vmxoff()?;
+        Ok(())
+    }
+
+    /// Gets the index of the current logical/virtual processor
+    pub fn id(&self) -> u32 {
+        self.index
+    }
 }
+
+pub fn debug_vmlaunch() -> Result<(), HypervisorError> {
+
+    match support::vmlaunch() {
+        Ok(_) => {
+            log::info!("[+] VMLAUNCH successful!");
+            Ok(())
+        }
+        Err(e) => {        
+            log::info!("VM exit: {:#x}", support::vmread(x86::vmx::vmcs::ro::EXIT_REASON)?);
+            log::info!("VM instruction error: {:#x}", support::vmread(x86::vmx::vmcs::ro::VM_INSTRUCTION_ERROR)?);
+            Err(e)
+        }
+    }
+}
+
