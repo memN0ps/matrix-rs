@@ -81,7 +81,7 @@ impl Hypervisor {
     }
 
     pub fn devirtualize(&mut self) -> Result<(), HypervisorError> {
-        log::info!("Virtualizing processors");
+        log::info!("Devirtualizing processors");
 
         for processor in self.processors.iter_mut() {
             
