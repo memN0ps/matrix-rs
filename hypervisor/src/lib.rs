@@ -37,7 +37,7 @@ impl Hypervisor {
         })
     }
 
-    pub fn vmm_init(&mut self) -> Result<(), HypervisorError> {
+    pub fn virtualize(&mut self) -> Result<(), HypervisorError> {
         //
         // 1) Intel Manual: 24.6 Discover Support for Virtual Machine Extension (VMX)
         //

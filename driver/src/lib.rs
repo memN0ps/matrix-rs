@@ -64,7 +64,7 @@ fn virtualize() -> Option<()> {
 
     log::info!("[*] Initializing VMM!");
     
-    match hypervisor.vmm_init() {
+    match hypervisor.virtualize() {
         Ok(_) => log::info!("[+] VMM initialized"),
         Err(err) =>  {
             log::error!("[-] VMM initialization failed: {}", err);
