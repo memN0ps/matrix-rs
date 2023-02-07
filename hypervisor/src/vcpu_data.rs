@@ -11,6 +11,7 @@ pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE
     - (core::mem::size_of::<*mut u64>() * 6)
     - core::mem::size_of::<KTRAP_FRAME>();
 
+#[derive(Clone, Copy)]
 #[repr(C, align(4096))]
 pub struct HostStackLayout {
     pub stack_contents: [u8; STACK_CONTENTS_SIZE],
@@ -53,6 +54,18 @@ impl VcpuData {
 
         //instance.host_stack_layout.self_data = &mut *instance as *mut _ as _;
                 
+        log::info!("[+] init_vmxon_region");
+        instance.init_vmxon_region()?;
+
+        log::info!("[+] init_vmxon_region");
+        instance.init_vmcs_region()?;
+
+        log::info!("[+] init_vmclear");
+        instance.init_vmclear()?;
+
+        log::info!("[+] init_vmptrld");
+        instance.init_vmptrld()?;
+
         //instance.guest_vmcs.save_area.build(context);
 
         Ok(instance)
@@ -101,6 +114,13 @@ impl VcpuData {
     pub fn init_vmclear(&mut self) -> Result<(), HypervisorError> {
         support::vmclear(self.vmcs_region_physical_address)?;
         log::info!("[+] VMCLEAR successful!");
+        Ok(())
+    }
+
+    ///Load current VMCS pointer.
+    pub fn init_vmptrld(&mut self) -> Result<(), HypervisorError> {
+        support::vmptrld(self.vmcs_region_physical_address)?;
+        log::info!("[+] VMPTRLD successful!");
         Ok(())
     }
 }

@@ -45,5 +45,5 @@ pub enum HypervisorError {
     ProcessorSwitchFailed,
     
     #[error("Failed to access VCPU table")]
-    VcpuIsNone
+    VcpuIsNone,
 }

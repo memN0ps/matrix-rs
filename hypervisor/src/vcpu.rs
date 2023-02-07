@@ -24,7 +24,7 @@ impl Vcpu {
     }
 
     /// Virtualize the CPU by capturing the context, enabling VMX operation, adjusting control registers, calling VMXON, VMPTRLD and VMLAUNCH
-    pub fn virtualize_cpu(&mut self) -> Result<(), HypervisorError> {
+    pub fn virtualize_cpu(&self) -> Result<(), HypervisorError> {
         log::info!("Capturing context");
         let context = Context::capture();
 
@@ -39,21 +39,9 @@ impl Vcpu {
         log::info!("[+] Adjusting Control Registers");
         support::adjust_control_registers();
 
-        log::info!("[+] Attempting to create new VCPU data");
-        let mut vcpu_data = VcpuData::new(context)?;
-
-        log::info!("[+] init_vmxon_region");
-        vcpu_data.init_vmxon_region()?;
-
-        log::info!("[+] init_vmxon_region");
-        vcpu_data.init_vmcs_region()?;
-
-        log::info!("[+] init_vmclear");
-        vcpu_data.init_vmclear()?;
-
-        log::info!("[+] init_vmptrld");
-        support::vmptrld(vcpu_data.vmcs_region_physical_address)?;
-        log::info!("[+] VMPTRLD successful!");
+        log::info!("[+] Initializing VcpuData");        
+ 
+        let vcpu_data = &self.data.get_or_try_init(|| VcpuData::new(context))?;
 
         //log::info!("[+] init_vmcs_control_values");
         //init_vmcs_control_values(index)?;
