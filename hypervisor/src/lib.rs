@@ -12,7 +12,6 @@ use crate::{processor::{ProcessorExecutor}, vmm::Vmm};
 
 mod context;
 mod vmexit_reason;
-mod segment;
 mod msr_bitmap;
 mod addresses;
 mod ept;

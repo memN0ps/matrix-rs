@@ -2,7 +2,7 @@ extern crate alloc;
 use alloc::{vec::Vec};
 use bitfield::{BitMut};
 use x86::{msr::{self}, controlregs::{self}, vmx::{vmcs::{guest, host, control::{PrimaryControls, SecondaryControls, EntryControls, ExitControls}}, self}, debugregs, bits64, segmentation, task, dtables};
-use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, support::{vmx_adjust_entry_controls, self}, addresses::{PhysicalAddress}, segment::{load_segment_limit, read_access_rights, get_segment_base}, vmexit_reason::vmexit_stub};
+use crate::{vcpu::Vcpu, error::HypervisorError, processor::processor_count, support::{vmx_adjust_entry_controls, self, load_segment_limit, read_access_rights, get_segment_base}, addresses::{PhysicalAddress}, vmexit_reason::vmexit_stub};
 
 pub struct Vmm {
     /// The number of logical/virtual processors
