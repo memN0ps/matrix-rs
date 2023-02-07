@@ -7,7 +7,6 @@
 #![feature(asm_const)]
 
 use error::HypervisorError;
-use support::Support;
 
 use crate::{processor::{ProcessorExecutor}, vmm::Vmm};
 
@@ -29,7 +28,6 @@ mod error;
 
 pub struct Hypervisor {
     vmm_context: Vmm,
-    support: Support,
 }
 
 impl Hypervisor {
@@ -37,7 +35,6 @@ impl Hypervisor {
     pub fn new() -> Result<Self, HypervisorError> {
         Ok(Self {
             vmm_context: Vmm::new()?,
-            support: Support::new(),
         })
     }
 
@@ -46,10 +43,10 @@ impl Hypervisor {
         // 1) Intel Manual: 24.6 Discover Support for Virtual Machine Extension (VMX)
         //
         
-        self.support.has_intel_cpu()?;
+        support::has_intel_cpu()?;
         log::info!("[+] CPU is Intel");
     
-        self.support.has_vmx_support()?;
+        support::has_vmx_support()?;
         log::info!("[+] Virtual Machine Extension (VMX) technology is supported");
     
         log::info!("[+] Initializing VMM Context");
@@ -76,10 +73,10 @@ impl Hypervisor {
     /// Enable and Enter VMX Operation via VMXON and load current VMCS pointer via VMPTRLD
     pub fn init_logical_processor(&mut self, index: usize) -> Result<(), HypervisorError> {
         log::info!("[+] Enabling Virtual Machine Extensions (VMX)");
-        Support::enable_vmx_operation()?;
+        support::enable_vmx_operation()?;
 
         log::info!("[+] Adjusting Control Registers");
-        Support::adjust_control_registers();
+        support::adjust_control_registers();
 
         log::info!("[+] init_vmxon");
         self.vmm_context.init_vmxon(index)?;
@@ -117,7 +114,7 @@ impl Hypervisor {
                 return Err(HypervisorError::ProcessorSwitchFailed);
             };
 
-            Support::vmxoff()?;
+            support::vmxoff()?;
     
             core::mem::drop(executor);
         }
@@ -128,14 +125,14 @@ impl Hypervisor {
 
 pub fn debug_vmlaunch() -> Result<(), HypervisorError> {
 
-    match Support::vmlaunch() {
+    match support::vmlaunch() {
         Ok(_) => {
             log::info!("[+] VMLAUNCH successful!");
             Ok(())
         }
         Err(e) => {        
-            log::info!("VM exit: {:#x}", Support::vmread(x86::vmx::vmcs::ro::EXIT_REASON)?);
-            log::info!("VM instruction error: {:#x}", Support::vmread(x86::vmx::vmcs::ro::VM_INSTRUCTION_ERROR)?);
+            log::info!("VM exit: {:#x}", support::vmread(x86::vmx::vmcs::ro::EXIT_REASON)?);
+            log::info!("VM instruction error: {:#x}", support::vmread(x86::vmx::vmcs::ro::VM_INSTRUCTION_ERROR)?);
             Err(e)
         }
     }

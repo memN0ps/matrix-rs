@@ -1,6 +1,6 @@
 
 use x86::{vmx, current::vmx::vmread};
-use crate::{support::Support, error::HypervisorError};
+use crate::{error::HypervisorError, support};
 
 #[allow(dead_code)]
 pub enum VmxExitReason {
@@ -237,7 +237,7 @@ pub unsafe extern "C" fn exit() -> ! {
 }
 
 fn instruction_error() -> Result<u64, HypervisorError> {
-    let error = Support::vmread(vmx::vmcs::ro::VM_INSTRUCTION_ERROR)?;
+    let error = support::vmread(vmx::vmcs::ro::VM_INSTRUCTION_ERROR)?;
     Ok(error)
 }
 
