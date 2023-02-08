@@ -29,6 +29,9 @@ pub struct VcpuData {
     pub vmxon_region_physical_address: u64,
 
     pub host_stack_layout: Box<HostStackLayout, PhysicalAllocator>,
+    
+    pub host_rsp: u64,
+    pub host_rip: u64,
 }
 
 impl VcpuData {
@@ -40,6 +43,8 @@ impl VcpuData {
             vmxon_region: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
             vmxon_region_physical_address: 0,
             host_stack_layout: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
+            host_rsp: 0,
+            host_rip: 0,
         };
 
         log::info!("[+] Box::new(instance)");
@@ -66,8 +71,14 @@ impl VcpuData {
         log::info!("[+] init_host_register_state");
         instance.init_host_register_state()?;
 
+        //vmlaunch
+        instance.host_rsp = bits64::registers::rsp();
+        instance.host_rip = bits64::registers::rip();
+
         log::info!("[+] init_guest_register_state");
         instance.init_guest_register_state()?;
+
+
 
         Ok(instance)
     }
@@ -192,8 +203,8 @@ impl VcpuData {
         log::info!("[+] Guest Debug Registers initialized!");
 
         // Guest RSP and RIP
-        support::vmwrite(guest::RSP, bits64::registers::rsp())?;
-        support::vmwrite(guest::RIP, bits64::registers::rip())?;
+        support::vmwrite(guest::RSP, self.host_rsp)?;
+        support::vmwrite(guest::RIP, self.host_rip)?;
         log::info!("[+] Guest RSP and RIP initialized!");
 
         // Guest RFLAGS
@@ -349,6 +360,45 @@ struct VmxTrueControlSettings {
     pub allowed_1_settings: u32,
 }
 
+
+pub fn vmx_adjust_entry_controls(msr: u32, controls: u32) -> u64 {
+    let controls = u32::try_from(controls).expect("Controls should be a 32 bit field"); // 503 953 2390
+    let pair = rdmsr(msr);
+    let fixed0 = pair.edx;
+    let fixed1 = pair.eax;
+    if controls & fixed0 != controls {
+        log::warn!(
+            "Requested unsupported controls for msr {:?}, fixed0 {:x} fixed1 {:x} controls {:x}",
+            msr, fixed0, fixed1, controls
+        );
+    }
+    u64::from(fixed1 | (controls & fixed0))
+}
+
+/// Represents the value of an Model specific register.
+/// rdmsr returns the value with the high bits of the MSR in edx and the low bits in eax.
+/// wrmsr recieves the value similarly.
+pub struct MsrValuePair {
+    pub edx: u32,
+    pub eax: u32,
+}
+
+/// Read a model specific register as a pair of two values.
+pub fn rdmsr(msr: u32) -> MsrValuePair {
+    let edx: u32;
+    let eax: u32;
+    unsafe {
+        asm!(
+        "rdmsr",
+         lateout("eax")(eax),
+          lateout("edx")(edx),
+          in("ecx")(msr as u32)
+        );
+    }
+    MsrValuePair { edx, eax }
+}
+
+/* 
 pub fn vmx_adjust_entry_controls(msr: u32, value: u32) -> u16 {
     let mut cap = VmxTrueControlSettings::default();
     
@@ -360,6 +410,7 @@ pub fn vmx_adjust_entry_controls(msr: u32, value: u32) -> u16 {
 
     actual as u16
 }
+*/
 
 fn segment_access_right(segment_selector: u16, gdt_base: u64) -> u16 {
     const RPL_MASK: u16 = 3;
