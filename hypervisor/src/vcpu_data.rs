@@ -8,7 +8,7 @@ use x86_64::instructions::tables::{sgdt, sidt};
 use crate::{vmcs_region::VmcsRegion, vmxon_region::VmxonRegion, addresses::{physical_address}, error::HypervisorError, support, vmexit_reason::vmexit_stub, segmentation::{SegmentDescriptor, SegmentAttribute}};
 
 pub const KERNEL_STACK_SIZE: usize = 0x6000;
-pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - (core::mem::size_of::<*mut u64>());
+pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - core::mem::size_of::<*mut u64>();
 
 #[derive(Clone, Copy)]
 #[repr(C, align(4096))]
