@@ -13,7 +13,6 @@ use error::HypervisorError;
 
 use crate::{processor::{ProcessorExecutor, processor_count}, vcpu::Vcpu};
 
-mod context;
 mod vmexit_reason;
 mod addresses;
 mod ept;
@@ -21,9 +20,8 @@ mod vmcs_region;
 mod vmxon_region;
 mod vcpu;
 mod vcpu_data;
-mod save_area;
+mod context;
 mod segmentation;
-mod msr;
 mod processor;
 mod nt;
 mod support;

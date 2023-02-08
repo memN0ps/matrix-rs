@@ -4,7 +4,7 @@ use core::cell::OnceCell;
 use alloc::boxed::Box;
 
 
-use crate::{error::HypervisorError, context::Context, support, vcpu_data::VcpuData};
+use crate::{error::HypervisorError, support, vcpu_data::VcpuData, context::Context};
 
 pub struct Vcpu {
     /// The index of the processor.
@@ -41,20 +41,12 @@ impl Vcpu {
 
         log::info!("[+] Initializing VcpuData");        
  
-        let vcpu_data = &self.data.get_or_try_init(|| VcpuData::new(context))?;
+        let _vcpu_data = &self.data.get_or_try_init(|| VcpuData::new(context))?;
 
-        //log::info!("[+] init_vmcs_control_values");
-        //init_vmcs_control_values(index)?;
-
-        //log::info!("[+] init_host_register_state");
-        //init_host_register_state(index)?;
-
-        //log::info!("[+] init_guest_register_state");
-        //init_guest_register_state(index)?;
-
-        //log::info!("[+] init_vmlaunch");
-        //debug_vmlaunch()?;
-        //log::info!("[+] VMLAUNCH successful!");
+        log::info!("[+] Launching VM...............");
+        debug_vmlaunch()?;
+        log::info!("[+] VMLAUNCH successful!");
+        
         Ok(())
     }
 

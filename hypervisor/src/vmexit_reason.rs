@@ -76,7 +76,7 @@ pub struct VmExitHandler(u32);
 
 #[allow(dead_code)]
 impl VmExitHandler {
-    pub fn vmexit_handler(stack: u64) -> u64 {
+    pub fn vmexit_handler(_stack: u64) -> u64 {
         let exit_reason = unsafe { vmread(vmx::vmcs::ro::VM_INSTRUCTION_ERROR).expect("VMREAD FAILED") };
         let exit_qualification = unsafe { vmread(x86::vmx::vmcs::ro::EXIT_QUALIFICATION).expect("VMREAD FAILED") };
 
@@ -182,6 +182,7 @@ macro_rules! restore_regs_from_stack {
     };
 }
 
+#[allow(dead_code)]
 #[naked]
 pub unsafe extern "C" fn vmexit_stub() -> ! {
     core::arch::asm!(
