@@ -1,10 +1,10 @@
 extern crate alloc;
-use core::cell::OnceCell;
+use core::{cell::OnceCell};
 
 use alloc::boxed::Box;
 
 
-use crate::{error::HypervisorError, support, vcpu_data::VcpuData, context::Context};
+use crate::{error::HypervisorError, support, vcpu_data::VcpuData};
 
 pub struct Vcpu {
     /// The index of the processor.
@@ -25,8 +25,8 @@ impl Vcpu {
 
     /// Virtualize the CPU by capturing the context, enabling VMX operation, adjusting control registers, calling VMXON, VMPTRLD and VMLAUNCH
     pub fn virtualize_cpu(&self) -> Result<(), HypervisorError> {
-        log::info!("[+] Capturing context");
-        let context = Context::capture();
+        //log::info!("[+] Capturing context");
+        //let context = Context::capture();
 
         //Check if already virtualized or not, then do it otherwise don't.
 
@@ -41,7 +41,7 @@ impl Vcpu {
 
         log::info!("[+] Initializing VcpuData");        
  
-        let _vcpu_data = &self.data.get_or_try_init(|| VcpuData::new(context))?;
+        let _vcpu_data = &self.data.get_or_try_init(|| VcpuData::new())?;
 
         log::info!("[+] Launching VM...............");
         debug_vmlaunch()?;

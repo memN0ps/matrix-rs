@@ -1,8 +1,11 @@
+use core::arch::asm;
+
 use alloc::boxed::Box;
 use bitfield::BitMut;
 use kernel_alloc::PhysicalAllocator;
-use x86::{vmx::{self, vmcs::{control::{PrimaryControls, SecondaryControls, EntryControls, ExitControls}, guest, host}}, msr};
-use crate::{vmcs_region::VmcsRegion, vmxon_region::VmxonRegion, addresses::{physical_address}, error::HypervisorError, support, context::Context, vmexit_reason::vmexit_stub};
+use x86::{vmx::{self, vmcs::{control::{PrimaryControls, SecondaryControls, EntryControls, ExitControls}, guest, host}}, msr, controlregs, segmentation::{self, Descriptor}, task, dtables, debugregs, bits64};
+use x86_64::instructions::tables::{sgdt, sidt};
+use crate::{vmcs_region::VmcsRegion, vmxon_region::VmxonRegion, addresses::{physical_address}, error::HypervisorError, support, vmexit_reason::vmexit_stub, segmentation::{SegmentDescriptor, SegmentAttribute}};
 
 pub const KERNEL_STACK_SIZE: usize = 0x6000;
 pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - (core::mem::size_of::<*mut u64>());
@@ -13,7 +16,7 @@ pub struct HostStackLayout {
     pub stack_contents: [u8; STACK_CONTENTS_SIZE],
     //pub guest_vmcs_pa: u64,
     //pub host_vmcs_pa: u64,
-    pub vmm_context: *mut u64, // A pointer VcpuData
+    pub self_data: *mut u64, // A pointer VcpuData
 }
 
 pub struct VcpuData {
@@ -26,11 +29,10 @@ pub struct VcpuData {
     pub vmxon_region_physical_address: u64,
 
     pub host_stack_layout: Box<HostStackLayout, PhysicalAllocator>,
-    pub context: Context,
 }
 
 impl VcpuData {
-    pub fn new(context: Context) -> Result<Box<Self>, HypervisorError> {
+    pub fn new() -> Result<Box<Self>, HypervisorError> {
         
         let instance = Self {
             vmcs_region: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
@@ -38,13 +40,13 @@ impl VcpuData {
             vmxon_region: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
             vmxon_region_physical_address: 0,
             host_stack_layout: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
-            context,
         };
 
         log::info!("[+] Box::new(instance)");
         let mut instance = Box::new(instance);
 
-        instance.host_stack_layout.vmm_context = &mut *instance as *mut _ as _;
+        instance.host_stack_layout.self_data = &mut *instance as *mut _ as _;
+
                 
         log::info!("[+] init_vmxon_region");
         instance.init_vmxon_region()?;
@@ -145,12 +147,12 @@ impl VcpuData {
         support::vmwrite(vmx::vmcs::control::PINBASED_EXEC_CONTROLS, 
             vmx_adjust_entry_controls(msr::IA32_VMX_PINBASED_CTLS, 0) as u64)?;
         
-        log::info!("[+] VMCS Primary, Secondary, Entry, Exit and Pinbased, Controls initialized!");
+        log::info!("VMCS Primary, Secondary, Entry, Exit and Pinbased, Controls initialized!");
 
         // Control Register Shadows
-        support::vmwrite(x86::vmx::vmcs::control::CR0_READ_SHADOW, self.context.cr0)?;
-        support::vmwrite(x86::vmx::vmcs::control::CR4_READ_SHADOW, self.context.cr4)?;
-        log::info!("[+] VMCS Controls Shadow Registers initialized!");
+        unsafe { support::vmwrite(x86::vmx::vmcs::control::CR0_READ_SHADOW, controlregs::cr0().bits() as u64)? };
+        unsafe { support::vmwrite(x86::vmx::vmcs::control::CR4_READ_SHADOW, controlregs::cr4().bits() as u64)? };
+        log::info!("VMCS Controls Shadow Registers initialized!");
 
         /* Time-stamp counter offset */
         support::vmwrite(vmx::vmcs::control::TSC_OFFSET_FULL, 0)?;
@@ -161,7 +163,7 @@ impl VcpuData {
         support::vmwrite(vmx::vmcs::control::VMEXIT_MSR_LOAD_COUNT, 0)?;
         support::vmwrite(vmx::vmcs::control::VMENTRY_MSR_LOAD_COUNT, 0)?;
         support::vmwrite(vmx::vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD, 0)?;
-        log::info!("[+] VMCS Time-stamp counter offset initialized!");
+        log::info!("VMCS Time-stamp counter offset initialized!");
 
         // VMCS Controls Bitmap
         //support::vmwrite(vmx::vmcs::control::MSR_BITMAPS_ADDR_FULL, msr_bitmap_physical_address)?;
@@ -178,84 +180,99 @@ impl VcpuData {
         log::info!("[+] Guest Register State");
 
         // Guest Control Registers
-        support::vmwrite(guest::CR0, self.context.cr0)?;
-        support::vmwrite(guest::CR3, self.context.cr3)?;
-        support::vmwrite(guest::CR4, self.context.cr4)?;
+        unsafe { 
+            support::vmwrite(guest::CR0, controlregs::cr0().bits() as u64)?;
+            support::vmwrite(guest::CR3, controlregs::cr3())?;
+            support::vmwrite(guest::CR4, controlregs::cr4().bits() as u64)?;
+        }
         log::info!("[+] Guest Control Registers initialized!");
 
         // Guest Debug Register
-        support::vmwrite(guest::DR7, self.context.dr7)?;
+        unsafe { support::vmwrite(guest::DR7, debugregs::dr7().0 as u64)? };
         log::info!("[+] Guest Debug Registers initialized!");
 
         // Guest RSP and RIP
-        support::vmwrite(guest::RSP, self.context.rsp)?;
-        support::vmwrite(guest::RIP, self.context.rip)?;
+        support::vmwrite(guest::RSP, bits64::registers::rsp())?;
+        support::vmwrite(guest::RIP, bits64::registers::rip())?;
         log::info!("[+] Guest RSP and RIP initialized!");
 
         // Guest RFLAGS
-        support::vmwrite(guest::RFLAGS, self.context.rflags)?;
+        support::vmwrite(guest::RFLAGS, bits64::rflags::read().bits())?;
         log::info!("[+] Guest RFLAGS Registers initialized!");
 
         // Guest Segment Selector
-        support::vmwrite(guest::CS_SELECTOR, self.context.cs_selector as _)?;
-        support::vmwrite(guest::SS_SELECTOR, self.context.ss_selector as _)?;
-        support::vmwrite(guest::DS_SELECTOR, self.context.ds_selector as _)?;
-        support::vmwrite(guest::ES_SELECTOR, self.context.es_selector as _)?;
-        support::vmwrite(guest::FS_SELECTOR, self.context.fs_selector as _)?;
-        support::vmwrite(guest::GS_SELECTOR, self.context.gs_selector as _)?;
-        support::vmwrite(guest::LDTR_SELECTOR, self.context.ldtr_selector as _)?;
-        support::vmwrite(guest::TR_SELECTOR, self.context.tr_selector as _)?;
+        support::vmwrite(guest::CS_SELECTOR, segmentation::cs().bits() as u64)?;
+        support::vmwrite(guest::SS_SELECTOR, segmentation::ss().bits() as u64)?;
+        support::vmwrite(guest::DS_SELECTOR, segmentation::ds().bits() as u64)?;
+        support::vmwrite(guest::ES_SELECTOR, segmentation::es().bits() as u64)?;
+        support::vmwrite(guest::FS_SELECTOR, segmentation::fs().bits() as u64)?;
+        support::vmwrite(guest::GS_SELECTOR, segmentation::gs().bits() as u64)?;
+        unsafe { support::vmwrite(guest::LDTR_SELECTOR, dtables::ldtr().bits() as u64)? };
+        unsafe { support::vmwrite(guest::TR_SELECTOR, task::tr().bits() as u64)? };
         log::info!("[+] Guest Segmentation Selector initialized!");
 
         // Guest Segment Limit
-        support::vmwrite(guest::CS_LIMIT, self.context.cs_limit as _)?;
-        support::vmwrite(guest::SS_LIMIT, self.context.ss_limit as _)?;
-        support::vmwrite(guest::DS_LIMIT, self.context.ds_limit as _)?;
-        support::vmwrite(guest::ES_LIMIT, self.context.es_limit as _)?;
-        support::vmwrite(guest::FS_LIMIT, self.context.fs_limit as _)?;
-        support::vmwrite(guest::GS_LIMIT, self.context.gs_limit as _)?;
-        support::vmwrite(guest::LDTR_LIMIT, self.context.ldtr_limit as _)?;
-        support::vmwrite(guest::TR_LIMIT, self.context.tr_limit as _)?;
+        support::vmwrite(guest::CS_LIMIT, segment_limit(segmentation::cs().bits()) as _)?;
+        support::vmwrite(guest::SS_LIMIT, segment_limit(segmentation::ss().bits()) as _)?;
+        support::vmwrite(guest::DS_LIMIT, segment_limit(segmentation::ds().bits()) as _)?;
+        support::vmwrite(guest::ES_LIMIT, segment_limit(segmentation::es().bits()) as _)?;
+        support::vmwrite(guest::FS_LIMIT, segment_limit(segmentation::fs().bits()) as _)?;
+        support::vmwrite(guest::GS_LIMIT, segment_limit(segmentation::gs().bits()) as _)?;
+        unsafe { support::vmwrite(guest::LDTR_LIMIT, segment_limit(dtables::ldtr().bits()) as _)? };
+        unsafe { support::vmwrite(guest::TR_LIMIT, segment_limit(task::tr().bits()) as _)? };
         log::info!("[+] Guest Segment Limit initialized!");
 
+        // GDTR and IDTR Limit/Base
+        let gdt = sgdt();
+        let idt = sidt();
+
+        let gdtr_base = gdt.base.as_u64();
+        let gdtr_limit = gdt.limit as u64;
+
+        let idtr_base = idt.base.as_u64();
+        let idtr_limit = idt.limit as u64;
+
         // Guest Segment Access Writes
-        support::vmwrite(guest::CS_ACCESS_RIGHTS, self.context.cs_attrib as _)?;
-        support::vmwrite(guest::SS_ACCESS_RIGHTS, self.context.ss_attrib as _)?;
-        support::vmwrite(guest::DS_ACCESS_RIGHTS, self.context.ds_attrib as _)?;
-        support::vmwrite(guest::ES_ACCESS_RIGHTS, self.context.es_attrib as _)?;
-        support::vmwrite(guest::FS_ACCESS_RIGHTS, self.context.fs_attrib as _)?;
-        support::vmwrite(guest::GS_ACCESS_RIGHTS, self.context.gs_attrib as _)?;
-        support::vmwrite(guest::LDTR_ACCESS_RIGHTS, self.context.ldtr_attrib as _)?;
-        support::vmwrite(guest::TR_ACCESS_RIGHTS, self.context.tr_attrib as _)?;
+        support::vmwrite(guest::CS_ACCESS_RIGHTS, segment_access_right(segmentation::cs().bits(), gdt.base.as_u64()) as _)?;
+        support::vmwrite(guest::SS_ACCESS_RIGHTS, segment_access_right(segmentation::ss().bits(), gdt.base.as_u64()) as _)?;
+        support::vmwrite(guest::DS_ACCESS_RIGHTS, segment_access_right(segmentation::ds().bits(), gdt.base.as_u64()) as _)?;
+        support::vmwrite(guest::ES_ACCESS_RIGHTS, segment_access_right(segmentation::es().bits(), gdt.base.as_u64()) as _)?;
+        support::vmwrite(guest::FS_ACCESS_RIGHTS, segment_access_right(segmentation::fs().bits(), gdt.base.as_u64()) as _)?;
+        support::vmwrite(guest::GS_ACCESS_RIGHTS, segment_access_right(segmentation::gs().bits(), gdt.base.as_u64()) as _)?;
+        unsafe { support::vmwrite(guest::LDTR_ACCESS_RIGHTS, segment_access_right(dtables::ldtr().bits(), gdt.base.as_u64()) as _)? };
+        unsafe { support::vmwrite(guest::TR_ACCESS_RIGHTS, segment_access_right(task::tr().bits(), gdt.base.as_u64()) as _)? };
         log::info!("[+] Guest Segment Access Writes initialized!");
         
         // Guest Segment GDTR and LDTR
-        support::vmwrite(guest::GDTR_LIMIT, self.context.gdtr_limit as _)?;
-        support::vmwrite(guest::IDTR_LIMIT, self.context.idtr_limit as _)?;
-        support::vmwrite(guest::GDTR_BASE, self.context.gdtr_base)?;
-        support::vmwrite(guest::IDTR_BASE, self.context.idtr_base)?;
+        support::vmwrite(guest::GDTR_LIMIT, gdtr_limit as _)?;
+        support::vmwrite(guest::IDTR_LIMIT, idtr_limit as _)?;
+        support::vmwrite(guest::GDTR_BASE, gdtr_base)?;
+        support::vmwrite(guest::IDTR_BASE, idtr_base)?;
         log::info!("[+] Guest GDTR and LDTR Limit and Base initialized!");
 
         // Guest Segment, CS, SS, DS, ES
-        support::vmwrite(guest::CS_BASE, self.context.cs_base)?;
-        support::vmwrite(guest::SS_BASE, self.context.ss_base)?;
-        support::vmwrite(guest::DS_BASE, self.context.ds_base)?;
-        support::vmwrite(guest::ES_BASE, self.context.es_base)?;
-        support::vmwrite(guest::LDTR_BASE, self.context.ldtr_base)?;
-        support::vmwrite(guest::TR_BASE, self.context.tr_base)?;
+        support::vmwrite(guest::CS_BASE, get_segment_base(gdt.base.as_u64() as _, segmentation::cs().bits()))?;
+        support::vmwrite(guest::SS_BASE, get_segment_base(gdt.base.as_u64() as _, segmentation::ss().bits()))?;
+        support::vmwrite(guest::DS_BASE, get_segment_base(gdt.base.as_u64() as _, segmentation::ds().bits()))?;
+        support::vmwrite(guest::ES_BASE, get_segment_base(gdt.base.as_u64() as _, segmentation::es().bits()))?;
+        unsafe { support::vmwrite(guest::LDTR_BASE, get_segment_base(gdt.base.as_u64() as _, dtables::ldtr().bits()))? };
+        unsafe { support::vmwrite(guest::TR_BASE, get_segment_base(gdt.base.as_u64() as _, task::tr().bits()))? };
         log::info!("[+] Guest Segment, CS, SS, DS, ES, LDTR and TR initialized!");
 
         // Guest MSR's
-        support::vmwrite(guest::IA32_DEBUGCTL_FULL, self.context.dbg_ctl)?;
-        support::vmwrite(guest::IA32_DEBUGCTL_HIGH, self.context.dbg_ctl)?;
-        support::vmwrite(guest::IA32_SYSENTER_CS, self.context.sysenter_cs)?;
-        support::vmwrite(guest::IA32_SYSENTER_ESP, self.context.sysenter_esp)?;
-        support::vmwrite(guest::IA32_SYSENTER_EIP, self.context.sysenter_eip)?;
-        support::vmwrite(guest::LINK_PTR_FULL, u64::MAX)?;
-        support::vmwrite(guest::LINK_PTR_HIGH, u64::MAX)?;
-        support::vmwrite(guest::FS_BASE, self.context.fs_base)?;
-        support::vmwrite(guest::GS_BASE, self.context.gs_base)?;
-        log::info!("[+] Guest MSRs initialized!");
+        unsafe {
+            support::vmwrite(guest::IA32_DEBUGCTL_FULL, msr::rdmsr(msr::IA32_DEBUGCTL))?;
+            support::vmwrite(guest::IA32_DEBUGCTL_HIGH, msr::rdmsr(msr::IA32_DEBUGCTL))?;
+            support::vmwrite(guest::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS))?;
+            support::vmwrite(guest::IA32_SYSENTER_ESP, msr::rdmsr(msr::IA32_SYSENTER_ESP))?;
+            support::vmwrite(guest::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP))?;
+            support::vmwrite(guest::LINK_PTR_FULL, u64::MAX)?;
+            support::vmwrite(guest::LINK_PTR_HIGH, u64::MAX)?;
+            
+            support::vmwrite(guest::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE))?;
+            support::vmwrite(guest::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE))?;
+            log::info!("[+] Guest MSRs initialized!");
+        }
 
         log::info!("[+] Guest initialized!");
 
@@ -267,40 +284,56 @@ impl VcpuData {
         log::info!("[+] Host Register State");
         
         // Host Control Registers
-        support::vmwrite(host::CR0, self.context.cr0)?;
-        support::vmwrite(host::CR3, self.context.cr3)?;
-        support::vmwrite(host::CR4, self.context.cr4)?;  
+        unsafe { 
+            support::vmwrite(host::CR0, controlregs::cr0().bits() as u64)?;
+            support::vmwrite(host::CR3, controlregs::cr3())?;
+            support::vmwrite(host::CR4, controlregs::cr4().bits() as u64)?;
+        } 
         log::info!("[+] Host Control Registers initialized!");
 
-        // Host RSP/RIP ??????????????????????????????????????????????????????????????????????????????????????????????????????????
+        // Host RSP/RIP
         let vmexit_stub = vmexit_stub as u64;
-        support::vmwrite(host::RSP, self.host_stack_layout.vmm_context as _)?;
+        support::vmwrite(host::RSP, self.host_stack_layout.self_data as _)?;
         support::vmwrite(host::RIP, vmexit_stub)?;
 
         // Host Segment Selector
         const SELECTOR_MASK: u16 = 0xF8;
-        support::vmwrite(host::CS_SELECTOR, (self.context.cs_selector & SELECTOR_MASK) as u64)?;
-        support::vmwrite(host::SS_SELECTOR, (self.context.ss_selector & SELECTOR_MASK) as u64)?;
-        support::vmwrite(host::DS_SELECTOR, (self.context.ds_selector & SELECTOR_MASK) as u64)?;
-        support::vmwrite(host::ES_SELECTOR, (self.context.es_selector & SELECTOR_MASK) as u64)?;
-        support::vmwrite(host::FS_SELECTOR, (self.context.fs_selector & SELECTOR_MASK) as u64)?;
-        support::vmwrite(host::GS_SELECTOR, (self.context.gs_selector & SELECTOR_MASK) as u64)?;
-        support::vmwrite(host::TR_SELECTOR, (self.context.tr_selector & SELECTOR_MASK) as u64)?;
+        support::vmwrite(host::CS_SELECTOR, (segmentation::cs().bits() & SELECTOR_MASK) as u64)?;
+        support::vmwrite(host::SS_SELECTOR, (segmentation::ss().bits() & SELECTOR_MASK) as u64)?;
+        support::vmwrite(host::DS_SELECTOR, (segmentation::ds().bits() & SELECTOR_MASK) as u64)?;
+        support::vmwrite(host::ES_SELECTOR, (segmentation::es().bits() & SELECTOR_MASK) as u64)?;
+        support::vmwrite(host::FS_SELECTOR, (segmentation::fs().bits() & SELECTOR_MASK) as u64)?;
+        support::vmwrite(host::GS_SELECTOR, (segmentation::gs().bits() & SELECTOR_MASK) as u64)?;
+        unsafe { support::vmwrite(host::TR_SELECTOR, (task::tr().bits() & SELECTOR_MASK) as u64)? };
         log::info!("[+] Host Segmentation Registers initialized!");
 
+        // GDTR and IDTR Limit/Base
+        let gdt = sgdt();
+        let idt = sidt();
+
+        let gdtr_base = gdt.base.as_u64();
+        //let gdtr_limit = gdt.limit as u64;
+
+        let idtr_base = idt.base.as_u64();
+        //let idtr_limit = idt.limit as u64;
+
         // Host Segment TR, GDTR and LDTR
-        support::vmwrite(host::TR_BASE, self.context.tr_base)?;
-        support::vmwrite(host::GDTR_BASE, self.context.gdtr_base)?;
-        support::vmwrite(host::IDTR_BASE, self.context.idtr_base)?;
+        unsafe { support::vmwrite(host::TR_BASE, get_segment_base(gdt.base.as_u64() as _, task::tr().bits()))? };
+        support::vmwrite(host::GDTR_BASE, gdtr_base)?;
+        support::vmwrite(host::IDTR_BASE, idtr_base)?;
         log::info!("[+] Host TR, GDTR and LDTR initialized!");
 
         // Host MSR's
-        support::vmwrite(host::IA32_SYSENTER_CS, self.context.sysenter_cs)?;
-        support::vmwrite(host::IA32_SYSENTER_ESP, self.context.sysenter_esp)?;
-        support::vmwrite(host::IA32_SYSENTER_EIP, self.context.sysenter_eip)?;
-        support::vmwrite(host::FS_BASE, self.context.fs_base)?;
-        support::vmwrite(host::GS_BASE, self.context.gs_base)?;
-        log::info!("[+] Host MSRs initialized!");
+        unsafe {
+            support::vmwrite(host::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS))?;
+            support::vmwrite(host::IA32_SYSENTER_ESP, msr::rdmsr(msr::IA32_SYSENTER_ESP))?;
+            support::vmwrite(host::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP))?;
+            
+            support::vmwrite(host::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE))?;
+            support::vmwrite(host::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE))?;
+            
+            log::info!("[+] Host MSRs initialized!");
+        }
         
         log::info!("[+] Host initialized!");
 
@@ -326,4 +359,61 @@ pub fn vmx_adjust_entry_controls(msr: u32, value: u32) -> u16 {
     actual &= cap.allowed_1_settings;
 
     actual as u16
+}
+
+fn segment_access_right(segment_selector: u16, gdt_base: u64) -> u16 {
+    const RPL_MASK: u16 = 3;
+    let descriptor = gdt_base + (segment_selector & !RPL_MASK) as u64;
+
+    let descriptor = descriptor as *mut u64 as *mut SegmentDescriptor;
+    let descriptor = unsafe { descriptor.read_volatile() };
+
+    let mut attribute = SegmentAttribute(0);
+    attribute.set_type(descriptor.get_type() as u16);
+    attribute.set_system(descriptor.get_system() as u16);
+    attribute.set_dpl(descriptor.get_dpl() as u16);
+    attribute.set_present(descriptor.get_present() as u16);
+    attribute.set_avl(descriptor.get_avl() as u16);
+    attribute.set_long_mode(descriptor.get_long_mode() as u16);
+    attribute.set_default_bit(descriptor.get_default_bit() as u16);
+    attribute.set_granularity(descriptor.get_granularity() as u16);
+
+    attribute.0
+}
+
+fn segment_limit(selector: u16) -> u32 {
+    let limit: u32;
+    unsafe {
+        asm!("lsl {0:e}, {1:x}", out(reg) limit, in(reg) selector, options(nostack, nomem));
+    }
+    limit
+}
+
+pub fn get_segment_base(gdt_base: *const usize, segment_selector: u16) -> u64 {
+    const RPL_MASK: u16 = 3;
+
+    let mut segment_base = 0u64;
+
+    if segment_selector == 0 {
+        return segment_base;
+    }
+
+    let descriptor = gdt_base as u64 + ((segment_selector & !RPL_MASK) * 8) as u64;
+
+    let descriptor = descriptor as *mut u64 as *mut SegmentDescriptor;
+    let descriptor = unsafe { descriptor.read_volatile() };
+
+    segment_base |= descriptor.get_base_low() as u64;
+    segment_base |= descriptor.get_base_middle() << 16;
+    segment_base |= descriptor.get_base_high() << 24;
+
+    if descriptor.get_system() == 0 {
+        let expanded_descriptor = unsafe {
+            (gdt_base.wrapping_add((segment_selector & !RPL_MASK) as usize) as *const Descriptor)
+                .read_volatile()
+        };
+        segment_base |= (expanded_descriptor.lower as u64) << 32;
+    }
+
+    segment_base
 }

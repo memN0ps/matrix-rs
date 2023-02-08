@@ -20,7 +20,6 @@ mod vmcs_region;
 mod vmxon_region;
 mod vcpu;
 mod vcpu_data;
-mod context;
 mod segmentation;
 mod processor;
 mod nt;
