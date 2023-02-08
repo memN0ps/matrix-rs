@@ -25,7 +25,7 @@ impl Vcpu {
 
     /// Virtualize the CPU by capturing the context, enabling VMX operation, adjusting control registers, calling VMXON, VMPTRLD and VMLAUNCH
     pub fn virtualize_cpu(&self) -> Result<(), HypervisorError> {
-        log::info!("Capturing context");
+        log::info!("[+] Capturing context");
         let context = Context::capture();
 
         //Check if already virtualized or not, then do it otherwise don't.

@@ -46,7 +46,7 @@ impl HypervisorBuilder {
         for i in 0..processor_count() {
             processors.push(Vcpu::new(i)?);
         }
-        log::info!("Found {} processors", processors.len());
+        log::info!("[+] Found {} processors", processors.len());
 
         Ok(Hypervisor { processors })
     }
@@ -63,7 +63,7 @@ impl Hypervisor {
     }
 
     pub fn virtualize(&mut self) -> Result<(), HypervisorError> {
-        log::info!("Virtualizing processors");
+        log::info!("[+] Virtualizing processors");
 
         for processor in self.processors.iter_mut() {
             
@@ -79,7 +79,7 @@ impl Hypervisor {
     }
 
     pub fn devirtualize(&mut self) -> Result<(), HypervisorError> {
-        log::info!("Devirtualizing processors");
+        log::info!("[+] Devirtualizing processors");
 
         for processor in self.processors.iter_mut() {
             

@@ -145,12 +145,12 @@ impl VcpuData {
         support::vmwrite(vmx::vmcs::control::PINBASED_EXEC_CONTROLS, 
             vmx_adjust_entry_controls(msr::IA32_VMX_PINBASED_CTLS, 0) as u64)?;
         
-        log::info!("VMCS Primary, Secondary, Entry, Exit and Pinbased, Controls initialized!");
+        log::info!("[+] VMCS Primary, Secondary, Entry, Exit and Pinbased, Controls initialized!");
 
         // Control Register Shadows
         support::vmwrite(x86::vmx::vmcs::control::CR0_READ_SHADOW, self.context.cr0)?;
         support::vmwrite(x86::vmx::vmcs::control::CR4_READ_SHADOW, self.context.cr4)?;
-        log::info!("VMCS Controls Shadow Registers initialized!");
+        log::info!("[+] VMCS Controls Shadow Registers initialized!");
 
         /* Time-stamp counter offset */
         support::vmwrite(vmx::vmcs::control::TSC_OFFSET_FULL, 0)?;
@@ -161,7 +161,7 @@ impl VcpuData {
         support::vmwrite(vmx::vmcs::control::VMEXIT_MSR_LOAD_COUNT, 0)?;
         support::vmwrite(vmx::vmcs::control::VMENTRY_MSR_LOAD_COUNT, 0)?;
         support::vmwrite(vmx::vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD, 0)?;
-        log::info!("VMCS Time-stamp counter offset initialized!");
+        log::info!("[+] VMCS Time-stamp counter offset initialized!");
 
         // VMCS Controls Bitmap
         //support::vmwrite(vmx::vmcs::control::MSR_BITMAPS_ADDR_FULL, msr_bitmap_physical_address)?;
