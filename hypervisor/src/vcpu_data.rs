@@ -4,19 +4,19 @@ use kernel_alloc::PhysicalAllocator;
 use crate::{vmxon_region::VmxonRegion, addresses::{physical_address}, error::HypervisorError, support, vmcs::vmcs_region::VmcsRegion};
 
 pub const KERNEL_STACK_SIZE: usize = 0x6000;
-pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - (core::mem::size_of::<*mut u64>() * 2);
+pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE;
 
 #[derive(Clone, Copy)]
 #[repr(C, align(4096))]
 pub struct HostStackLayout {
     pub stack_contents: [u8; STACK_CONTENTS_SIZE],
-    pub vmcs_region_physical_address: u64,
-    pub self_data: *mut u64, // A pointer VcpuData
+    //pub self_data: *mut u64, // A pointer VcpuData
 }
 
 pub struct VcpuData {
     /// The virtual and physical address of the Vmcs naturally aligned 4-KByte region of memory
     pub vmcs_region: Box<VmcsRegion, PhysicalAllocator>,
+    pub vmcs_region_physical_address: u64,
 
     /// The virtual and physical address of the Vmxon naturally aligned 4-KByte region of memory
     pub vmxon_region: Box<VmxonRegion, PhysicalAllocator>,
@@ -30,6 +30,7 @@ impl VcpuData {
         
         let instance = Self {
             vmcs_region: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
+            vmcs_region_physical_address: 0,
             vmxon_region: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
             vmxon_region_physical_address: 0,
             host_stack_layout: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
@@ -38,7 +39,7 @@ impl VcpuData {
         log::info!("[+] Box::new(instance)");
         let mut instance = Box::new(instance);
 
-        instance.host_stack_layout.self_data = &mut *instance as *mut _ as _;
+        //instance.host_stack_layout.self_data = &mut *instance as *mut _ as _;
                 
         log::info!("[+] init_vmxon_region");
         instance.init_vmxon_region()?;
@@ -60,7 +61,8 @@ impl VcpuData {
         instance.vmcs_region.vmcs_data.init_guest_register_state()?;
 
         log::info!("[+] init_host_register_state");
-        instance.vmcs_region.vmcs_data.init_host_register_state(instance.host_stack_layout.vmcs_region_physical_address)?;
+        let stack = instance.host_stack_layout.as_mut() as *const _ as u64;
+        instance.vmcs_region.vmcs_data.init_host_register_state(stack)?;
 
 
         Ok(instance)
@@ -88,14 +90,14 @@ impl VcpuData {
 
     /// Allocate a naturally aligned 4-KByte VMCS region of memory (Intel Manual: 25.11.5 VMCS Region)
     pub fn init_vmcs_region(&mut self) -> Result<(), HypervisorError> {
-        self.host_stack_layout.vmcs_region_physical_address = physical_address(self.vmcs_region.as_ref() as *const _ as _).as_u64();
+        self.vmcs_region_physical_address = physical_address(self.vmcs_region.as_ref() as *const _ as _).as_u64();
 
-        if self.host_stack_layout.vmcs_region_physical_address == 0 {
+        if self.vmcs_region_physical_address == 0 {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
         log::info!("[+] VMCS Region Virtual Address: {:p}", self.vmcs_region);
-        log::info!("[+] VMCS Region Physical Addresss: 0x{:x}", self.host_stack_layout.vmcs_region_physical_address);
+        log::info!("[+] VMCS Region Physical Addresss: 0x{:x}", self.vmcs_region_physical_address);
 
         self.vmcs_region.revision_id = support::get_vmcs_revision_id();
         self.vmcs_region.as_mut().revision_id.set_bit(31, false);
@@ -107,14 +109,14 @@ impl VcpuData {
 
     /// Ensures that VMCS data maintained on the processor is copied to the VMCS region located at 4KB-aligned physical address addr and initializes some parts of it. (Intel Manual: 25.11.3 Initializing a VMCS)
     pub fn init_vmclear(&mut self) -> Result<(), HypervisorError> {
-        support::vmclear(self.host_stack_layout.vmcs_region_physical_address)?;
+        support::vmclear(self.vmcs_region_physical_address)?;
         log::info!("[+] VMCLEAR successful!");
         Ok(())
     }
 
     ///Load current VMCS pointer.
     pub fn init_vmptrld(&mut self) -> Result<(), HypervisorError> {
-        support::vmptrld(self.host_stack_layout.vmcs_region_physical_address)?;
+        support::vmptrld(self.vmcs_region_physical_address)?;
         log::info!("[+] VMPTRLD successful!");
         Ok(())
     }

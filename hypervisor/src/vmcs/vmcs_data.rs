@@ -161,7 +161,7 @@ impl VmcsData {
     }
 
     /// Initialize the host state for the currently loaded vmcs.
-    pub fn init_host_register_state(&mut self, vmcs_region_physical_address: u64) -> Result<(), HypervisorError> {
+    pub fn init_host_register_state(&mut self, host_rsp_stack: u64) -> Result<(), HypervisorError> {
         log::info!("[+] Host Register State");
         
         // Host Control Registers
@@ -174,7 +174,7 @@ impl VmcsData {
 
         // Host RSP/RIP
         let vmexit_stub = vmexit_stub as u64;
-        support::vmwrite(host::RSP, vmcs_region_physical_address)?; //self.host_stack_layout.self_data as _
+        support::vmwrite(host::RSP, host_rsp_stack)?; //self.host_stack_layout.self_data as _
         support::vmwrite(host::RIP, vmexit_stub)?;
 
         // Host Segment Selector
