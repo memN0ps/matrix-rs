@@ -1,7 +1,7 @@
 use core::arch::asm;
-use x86::{vmx::{self, vmcs::{control::{PrimaryControls, SecondaryControls, EntryControls, ExitControls}, guest, host}}, msr, controlregs, segmentation::{self, Descriptor}, task, dtables, debugregs, bits64};
+use x86::{vmx::{self, vmcs::{control::{PrimaryControls, SecondaryControls, EntryControls, ExitControls}, guest, host}}, msr, controlregs, segmentation::{self}, task, dtables, debugregs, bits64};
 use x86_64::instructions::tables::{sgdt, sidt};
-use crate::{error::HypervisorError, support, vmexit_reason::vmexit_stub, segmentation::{SegmentDescriptor, SegmentAttribute}};
+use crate::{error::HypervisorError, support, vmexit_reason::vmexit_stub, segmentation::Segment, tables::GdtStruct};
 
 pub struct VmcsData;
 
@@ -56,6 +56,7 @@ impl VmcsData {
         Ok(())
     }
 
+    
     /// Initialize the guest state for the currently loaded vmcs.
     pub fn init_guest_register_state(&self) -> Result<(), HypervisorError> {
         log::info!("[+] Guest Register State");
@@ -104,7 +105,7 @@ impl VmcsData {
         log::info!("[+] Guest Segment Limit initialized!");
 
         // GDTR and IDTR Limit/Base
-        let gdt = sgdt();
+        let gdt = GdtStruct::sgdt();
         let idt = sidt();
 
         let gdtr_base = gdt.base.as_u64();
@@ -113,15 +114,15 @@ impl VmcsData {
         let idtr_base = idt.base.as_u64();
         let idtr_limit = idt.limit as u64;
 
-        // Guest Segment Access Writes
-        support::vmwrite(guest::CS_ACCESS_RIGHTS, segment_access_right(segmentation::cs().bits(), gdt.base.as_u64()) as _)?;
-        support::vmwrite(guest::SS_ACCESS_RIGHTS, segment_access_right(segmentation::ss().bits(), gdt.base.as_u64()) as _)?;
-        support::vmwrite(guest::DS_ACCESS_RIGHTS, segment_access_right(segmentation::ds().bits(), gdt.base.as_u64()) as _)?;
-        support::vmwrite(guest::ES_ACCESS_RIGHTS, segment_access_right(segmentation::es().bits(), gdt.base.as_u64()) as _)?;
-        support::vmwrite(guest::FS_ACCESS_RIGHTS, segment_access_right(segmentation::fs().bits(), gdt.base.as_u64()) as _)?;
-        support::vmwrite(guest::GS_ACCESS_RIGHTS, segment_access_right(segmentation::gs().bits(), gdt.base.as_u64()) as _)?;
-        unsafe { support::vmwrite(guest::LDTR_ACCESS_RIGHTS, segment_access_right(dtables::ldtr().bits(), gdt.base.as_u64()) as _)? };
-        unsafe { support::vmwrite(guest::TR_ACCESS_RIGHTS, segment_access_right(task::tr().bits(), gdt.base.as_u64()) as _)? };
+        // Guest Segment Access Writes ?????????????????????????????????????????????????????????????? RIGHTS?
+        support::vmwrite(guest::CS_ACCESS_RIGHTS, Segment::from_selector(segmentation::cs(), &gdt).access_rights.bits() as _)?;
+        support::vmwrite(guest::SS_ACCESS_RIGHTS, Segment::from_selector(segmentation::ss(), &gdt).access_rights.bits() as _)?;
+        support::vmwrite(guest::DS_ACCESS_RIGHTS, Segment::from_selector(segmentation::ds(), &gdt).access_rights.bits() as _)?;
+        support::vmwrite(guest::ES_ACCESS_RIGHTS, Segment::from_selector(segmentation::es(), &gdt).access_rights.bits() as _)?;
+        support::vmwrite(guest::FS_ACCESS_RIGHTS, Segment::from_selector(segmentation::fs(), &gdt).access_rights.bits() as _)?;
+        support::vmwrite(guest::GS_ACCESS_RIGHTS, Segment::from_selector(segmentation::gs(), &gdt).access_rights.bits() as _)?;
+        unsafe { support::vmwrite(guest::LDTR_ACCESS_RIGHTS, Segment::from_selector(dtables::ldtr(), &gdt).access_rights.bits() as _)? };
+        unsafe { support::vmwrite(guest::TR_ACCESS_RIGHTS, Segment::from_selector(task::tr(), &gdt).access_rights.bits() as _)? };
         log::info!("[+] Guest Segment Access Writes initialized!");
         
         // Guest Segment GDTR and LDTR
@@ -131,13 +132,14 @@ impl VmcsData {
         support::vmwrite(guest::IDTR_BASE, idtr_base)?;
         log::info!("[+] Guest GDTR and LDTR Limit and Base initialized!");
 
-        // Guest Segment, CS, SS, DS, ES
-        support::vmwrite(guest::CS_BASE, get_segment_base(gdt.base.as_u64() as _, segmentation::cs().bits()))?;
-        support::vmwrite(guest::SS_BASE, get_segment_base(gdt.base.as_u64() as _, segmentation::ss().bits()))?;
-        support::vmwrite(guest::DS_BASE, get_segment_base(gdt.base.as_u64() as _, segmentation::ds().bits()))?;
-        support::vmwrite(guest::ES_BASE, get_segment_base(gdt.base.as_u64() as _, segmentation::es().bits()))?;
-        unsafe { support::vmwrite(guest::LDTR_BASE, get_segment_base(gdt.base.as_u64() as _, dtables::ldtr().bits()))? };
-        unsafe { support::vmwrite(guest::TR_BASE, get_segment_base(gdt.base.as_u64() as _, task::tr().bits()))? };
+        // Guest Segment, CS, SS, DS, ES ??????????????????????????????????????????????? BASE
+        support::vmwrite(guest::CS_BASE, Segment::from_selector(segmentation::cs(), &gdt).base)?;
+        support::vmwrite(guest::SS_BASE, Segment::from_selector(segmentation::ss(), &gdt).base)?;
+        support::vmwrite(guest::DS_BASE, Segment::from_selector(segmentation::ds(), &gdt).base)?;
+        support::vmwrite(guest::ES_BASE, Segment::from_selector(segmentation::es(), &gdt).base)?;
+        unsafe { support::vmwrite(guest::LDTR_BASE, Segment::from_selector(dtables::ldtr(), &gdt).base)? };
+        unsafe { support::vmwrite(guest::TR_BASE, Segment::from_selector(task::tr(), &gdt).base)? };
+        
         log::info!("[+] Guest Segment, CS, SS, DS, ES, LDTR and TR initialized!");
 
         // Guest MSR's
@@ -161,7 +163,7 @@ impl VmcsData {
     }
 
     /// Initialize the host state for the currently loaded vmcs.
-    pub fn init_host_register_state(&mut self, host_rsp_stack: u64) -> Result<(), HypervisorError> {
+    pub fn init_host_register_state(&mut self, host_rsp: u64) -> Result<(), HypervisorError> {
         log::info!("[+] Host Register State");
         
         // Host Control Registers
@@ -174,7 +176,7 @@ impl VmcsData {
 
         // Host RSP/RIP
         let vmexit_stub = vmexit_stub as u64;
-        support::vmwrite(host::RSP, host_rsp_stack)?; //self.host_stack_layout.self_data as _
+        support::vmwrite(host::RSP, host_rsp)?; //self.host_stack_layout.self_data as _
         support::vmwrite(host::RIP, vmexit_stub)?;
 
         // Host Segment Selector
@@ -198,8 +200,8 @@ impl VmcsData {
         let idtr_base = idt.base.as_u64();
         //let idtr_limit = idt.limit as u64;
 
-        // Host Segment TR, GDTR and LDTR
-        unsafe { support::vmwrite(host::TR_BASE, get_segment_base(gdt.base.as_u64() as _, task::tr().bits()))? };
+        // Host Segment TR, GDTR and LDTR ?????????????????????????????????????????????????????????????????????????????????? BASE?
+        unsafe { support::vmwrite(host::TR_BASE, Segment::from_selector(task::tr(), &gdt).base)? };
         support::vmwrite(host::GDTR_BASE, gdtr_base)?;
         support::vmwrite(host::IDTR_BASE, idtr_base)?;
         log::info!("[+] Host TR, GDTR and LDTR initialized!");
@@ -221,15 +223,6 @@ impl VmcsData {
         Ok(())
     }
 }
-
-#[repr(C, packed)]
-#[derive(Default, Copy, Clone)]
-struct VmxTrueControlSettings {
-    pub control: u64,
-    pub allowed_0_settings: u32,
-    pub allowed_1_settings: u32,
-}
-
 
 pub fn vmx_adjust_entry_controls(msr: u32, controls: u32) -> u64 {
     let controls = u32::try_from(controls).expect("Controls should be a 32 bit field"); // 503 953 2390
@@ -268,73 +261,10 @@ pub fn rdmsr(msr: u32) -> MsrValuePair {
     MsrValuePair { edx, eax }
 }
 
-/* 
-pub fn vmx_adjust_entry_controls(msr: u32, value: u32) -> u16 {
-    let mut cap = VmxTrueControlSettings::default();
-    
-    cap.control = unsafe { x86::msr::rdmsr(msr) };
-    let mut actual = value;
-
-    actual |= cap.allowed_0_settings;
-    actual &= cap.allowed_1_settings;
-
-    actual as u16
-}
-*/
-
-fn segment_access_right(segment_selector: u16, gdt_base: u64) -> u16 {
-    const RPL_MASK: u16 = 3;
-    let descriptor = gdt_base + (segment_selector & !RPL_MASK) as u64;
-
-    let descriptor = descriptor as *mut u64 as *mut SegmentDescriptor;
-    let descriptor = unsafe { descriptor.read_volatile() };
-
-    let mut attribute = SegmentAttribute(0);
-    attribute.set_type(descriptor.get_type() as u16);
-    attribute.set_system(descriptor.get_system() as u16);
-    attribute.set_dpl(descriptor.get_dpl() as u16);
-    attribute.set_present(descriptor.get_present() as u16);
-    attribute.set_avl(descriptor.get_avl() as u16);
-    attribute.set_long_mode(descriptor.get_long_mode() as u16);
-    attribute.set_default_bit(descriptor.get_default_bit() as u16);
-    attribute.set_granularity(descriptor.get_granularity() as u16);
-
-    attribute.0
-}
-
 fn segment_limit(selector: u16) -> u32 {
     let limit: u32;
     unsafe {
         asm!("lsl {0:e}, {1:x}", out(reg) limit, in(reg) selector, options(nostack, nomem));
     }
     limit
-}
-
-pub fn get_segment_base(gdt_base: *const usize, segment_selector: u16) -> u64 {
-    const RPL_MASK: u16 = 3;
-
-    let mut segment_base = 0u64;
-
-    if segment_selector == 0 {
-        return segment_base;
-    }
-
-    let descriptor = gdt_base as u64 + ((segment_selector & !RPL_MASK) * 8) as u64;
-
-    let descriptor = descriptor as *mut u64 as *mut SegmentDescriptor;
-    let descriptor = unsafe { descriptor.read_volatile() };
-
-    segment_base |= descriptor.get_base_low() as u64;
-    segment_base |= descriptor.get_base_middle() << 16;
-    segment_base |= descriptor.get_base_high() << 24;
-
-    if descriptor.get_system() == 0 {
-        let expanded_descriptor = unsafe {
-            (gdt_base.wrapping_add((segment_selector & !RPL_MASK) as usize) as *const Descriptor)
-                .read_volatile()
-        };
-        segment_base |= (expanded_descriptor.lower as u64) << 32;
-    }
-
-    segment_base
 }
