@@ -303,8 +303,9 @@ impl VcpuData {
         log::info!("[+] Host Control Registers initialized!");
 
         // Host RSP/RIP
+        let stack = self.host_stack_layout.as_ref() as *const HostStackLayout;
         let vmexit_stub = vmexit_stub as u64;
-        support::vmwrite(host::RSP, self.host_stack_layout.self_data as _)?;
+        support::vmwrite(host::RSP, stack as _)?;//self.host_stack_layout.self_data as _
         support::vmwrite(host::RIP, vmexit_stub)?;
 
         // Host Segment Selector
