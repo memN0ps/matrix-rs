@@ -60,9 +60,15 @@ impl VcpuData {
         log::info!("[+] init_guest_register_state");
         instance.vmcs_region.vmcs_data.init_guest_register_state()?;
 
+        // When a VMEXIT occurs, we want to point our HOST_RIP to our vmexit stub (VMM Entry) to handle the errors and see why it occured
+        // When a VMEXIT occurs, we want to point our HOST_RSP to our newly allocated stack (HostStackLayout) as need the space to call functions like vmexit handler
+        // We need to ADD the STACK_CONTENTS_SIZE (0x6000) so HOST_RSP points towards the bottom of the stack
+        // This is because when things are pushed on top of the stack, RSP is SUBTRACTED so we need space above.
+        // This is because if we call a function it pushes the return address to the top of the stack and if we're already at the top, we'll have an kernel stack overflow
+        // The - 8 bytes is just padding so we're not competely at the bottom of the stack.
         log::info!("[+] init_host_register_state");
-        let stack = instance.host_stack_layout.as_mut() as *const _ as u64;
-        instance.vmcs_region.vmcs_data.init_host_register_state(stack)?;
+        let host_rsp = (instance.host_stack_layout.as_mut() as *const _ as u64) + STACK_CONTENTS_SIZE as u64 - 8;
+        instance.vmcs_region.vmcs_data.init_host_register_state(host_rsp)?;
 
 
         Ok(instance)

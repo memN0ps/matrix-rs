@@ -4,6 +4,7 @@ use crate::{error::HypervisorError, support};
 
 #[no_mangle]
 pub extern "C" fn vmexit_handler(_register_state: *mut GeneralRegisters) -> u64 {
+    log::info!("[+] vmexit_handler called........");
     let exit_reason = unsafe { vmread(vmx::vmcs::ro::VM_INSTRUCTION_ERROR).expect("VMREAD FAILED") };
     let exit_qualification = unsafe { vmread(x86::vmx::vmcs::ro::EXIT_QUALIFICATION).expect("VMREAD FAILED") };
 
@@ -108,14 +109,9 @@ macro_rules! restore_regs_from_stack {
     };
 }
 
-#[allow(dead_code)]
-#[naked]
 #[no_mangle]
 pub unsafe extern "C" fn vmexit_stub() -> ! {
     core::arch::asm!(
-        "nop",
-        "int 3",
-        "nop",
         save_regs_to_stack!(),
         //"sub     rsp, 68h",
         //"movaps  xmmword ptr [rsp +  0h], xmm0",
