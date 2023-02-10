@@ -1,7 +1,7 @@
 use core::arch::asm;
 use x86::{vmx::{self, vmcs::{control::{PrimaryControls, SecondaryControls, EntryControls, ExitControls}, guest, host}}, msr, controlregs, segmentation::{self}, task, dtables, debugregs, bits64};
 use x86_64::instructions::tables::{sgdt, sidt};
-use crate::{error::HypervisorError, support, vmexit_reason::vmexit_stub, segmentation::Segment, tables::GdtStruct};
+use crate::{error::HypervisorError, support, vmexit_handler::vmexit_stub, segmentation::Segment, tables::GdtStruct};
 
 pub struct VmcsData;
 

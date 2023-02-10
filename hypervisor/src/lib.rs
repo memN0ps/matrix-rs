@@ -15,7 +15,7 @@ use crate::{processor::{ProcessorExecutor, processor_count}, vcpu::Vcpu};
 
 mod tables;
 mod segmentation;
-mod vmexit_reason;
+mod vmexit_handler;
 mod addresses;
 mod ept;
 mod vmcs;
