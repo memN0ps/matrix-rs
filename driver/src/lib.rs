@@ -21,6 +21,7 @@ static GLOBAL: kernel_alloc::KernelAlloc = kernel_alloc::KernelAlloc;
 #[export_name = "_fltused"]
 static _FLTUSED: i32 = 0;
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! { loop {} }
 
