@@ -1,3 +1,4 @@
+//Credits to not-matthias: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/utils/addresses.rs
 use core::ops::{Deref, DerefMut};
 use winapi::shared::ntdef::PHYSICAL_ADDRESS;
 use x86::bits64::paging::{PAddr, BASE_PAGE_SHIFT};

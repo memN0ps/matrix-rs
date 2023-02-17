@@ -11,18 +11,13 @@ extern crate alloc;
 use alloc::vec::Vec;
 use error::HypervisorError;
 
-use crate::{processor::{ProcessorExecutor, processor_count}, vcpu::Vcpu};
+use crate::{utils::processor::{ProcessorExecutor, processor_count}, vcpu::Vcpu};
 
-mod tables;
-mod segmentation;
+mod utils;
 mod vmexit_handler;
-mod addresses;
-mod ept;
-mod vmcs;
 mod vmxon_region;
 mod vcpu;
 mod vcpu_data;
-mod processor;
 mod nt;
 mod support;
 mod error;

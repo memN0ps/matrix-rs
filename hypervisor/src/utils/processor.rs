@@ -1,3 +1,4 @@
+//Credits not-matthias: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/utils/processor.rs
 use core::mem::MaybeUninit;
 
 use winapi::shared::ntdef::{ALL_PROCESSOR_GROUPS, PROCESSOR_NUMBER, NT_SUCCESS, GROUP_AFFINITY};

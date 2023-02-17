@@ -1,3 +1,4 @@
+//Credits to rcore-os: https://github.com/rcore-os/RVM1.5/blob/main/src/arch/x86_64/segmentation.rs
 use bit_field::BitField;
 use bitflags::bitflags;
 use x86::segmentation::SegmentSelector;

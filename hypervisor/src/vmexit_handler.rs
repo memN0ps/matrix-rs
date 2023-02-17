@@ -139,7 +139,7 @@ pub fn vmexit_handler(_register_state: *mut GeneralRegisters) -> Result<(), Hype
 pub unsafe extern "C" fn vmexit_stub() -> ! {
     core::arch::asm!(
         save_regs_to_stack!(),
-        "mov     rcx, rsp",         // Arg1: Save a pointer to the stack, containing Guest register, in RCX.
+        "mov     rcx, rsp",         // Arg1: Save a pointer to the stack, containing Guest registers, in RCX.
         "call    {0}",              // call vmexit_handler
         sym vmexit_handler,
         options(noreturn),
@@ -151,11 +151,6 @@ pub unsafe extern "C" fn vm_resume_failed() {
     panic!("[!] VMRESUME FAILED!");
 }
 
-/// Advance the guest's instruction pointer by the length of the instruction
-/// being executed by the guest when the VM exit occurred. When the guest
-/// resumes, it will start executing the next instruction.
-/// This function should not be called more than once per VM exit, or the guest
-/// may begin executing illegal or unintended instructions.
 fn advance_guest_rip() -> Result<(), HypervisorError> {
     let mut rip = support::vmread(guest::RIP)?;
     let len = support::vmread(VMEXIT_INSTRUCTION_LEN)?;

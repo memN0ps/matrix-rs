@@ -1,6 +1,5 @@
 extern crate alloc;
 
-
 use x86::{
     cpuid::CpuId, msr::{rdmsr, self}, controlregs, bits64,
 };

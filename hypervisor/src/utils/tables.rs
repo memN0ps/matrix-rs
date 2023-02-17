@@ -1,3 +1,4 @@
+//Credits to rcore-os: https://github.com/rcore-os/RVM1.5/blob/main/src/arch/x86_64/tables.rs
 use alloc::boxed::Box;
 use core::fmt::{Debug, Formatter, Result};
 use core::mem::size_of;
@@ -22,7 +23,7 @@ lazy_static! {
 }
 */
 
-pub(super) struct TssStruct {
+pub struct TssStruct {
     inner: &'static mut TaskStateSegment,
 }
 
@@ -35,7 +36,7 @@ impl TssStruct {
     }
 }
 
-pub(super) struct GdtStruct {
+pub struct GdtStruct {
     table: &'static mut [u64],
 }
 
