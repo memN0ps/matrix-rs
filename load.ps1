@@ -1,3 +1,3 @@
-sc.exe create hypervisor type= kernel binPath= C:\Users\developer\Desktop\hypervisor.sys
-sc.exe query hypervisor
-sc.exe start hypervisor
+sc.exe create SecretVisor type= kernel binPath= C:\Windows\System32\drivers\SecretVisor.sys
+sc.exe query SecretVisor
+sc.exe start SecretVisor
