@@ -2,7 +2,24 @@
 
 ## Features
 
+Virtualize All Logical Processors:
+
+* Check for Intel CPU
+* Check for VMX Support
+* Enable VMX
+* Set Lock Bit
+* Adjust Control Registers (set/clear CR0 and CR4)
+* Initialize VMXON (VMXON Region)
+* Initialize VMCS (VMCS Region)
+* Initialize VMCLEAR
+* Initialize VMPTRLD
+* Initialize VMCS Control Values
+* Initialize Guest Register State
+* Initialize Host Register State
+* Initialize VMLAUNCH
+* Handle VMEXITS / VMRESUME / VMXOFF
 * EPT (TODO)
+* MSR Bitmaps (TODO)
 
 ## Build
 
