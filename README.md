@@ -20,7 +20,7 @@
 * MSR Bitmaps (TODO)
 * Changing IRQL (TODO)
 
-## Build
+## Install
 
 ### [Install Rust](https://www.rust-lang.org/tools/install)
 
@@ -46,7 +46,7 @@ cargo install cargo-make
 * Step 2: Install Windows 11, version 22H2 SDK
 * Step 3: Install Windows 11, version 22H2 WDK
 
-### Build Driver
+## Build
 
 Change directory to `.\driver\` and build driver and hypervisor
 
@@ -54,7 +54,7 @@ Change directory to `.\driver\` and build driver and hypervisor
 cargo make sign
 ```
 
-## Enable `Test Mode` or `Test Signing` Mode 
+### Enable `Test Mode` or `Test Signing` Mode 
 
 ```
 bcdedit /set testsigning on
@@ -75,7 +75,7 @@ bcdedit /dbgsettings net hostip:<IP> port:<PORT>
 * Give it the name `DEFAULT`
 * Give it the `Value data: 8`
 
-## Usage
+## Create / Start Service
 
 ```
 sc.exe create SecretVisor type= kernel binPath= C:\Windows\System32\drivers\SecretVisor.sys
