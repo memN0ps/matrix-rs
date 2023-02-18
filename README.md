@@ -1,4 +1,71 @@
-# Hypervisor Development in Rust (Intel VT-x)
+# SecretVisor - A minimalistic Intel VT-x research hypervisor in Rust
+
+## Features
+
+* EPT (TODO)
+
+## Build
+
+### [Install Rust](https://www.rust-lang.org/tools/install)
+
+To start using Rust, [download the installer](https://www.rust-lang.org/tools/install), then run the program and follow the onscreen instructions. You may need to install the [Visual Studio C++ Build tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) when prompted to do so.
+
+
+### [Install and change to Rust nightly](https://rust-lang.github.io/rustup/concepts/channels.html)
+
+```
+rustup toolchain install nightly
+rustup default nightly
+```
+
+### [Install cargo-make](https://github.com/sagiegurari/cargo-make)
+
+```
+cargo install cargo-make
+```
+
+### [Install WDK/SDK](https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk)
+
+* Step 1: Install Visual Studio 2022
+* Step 2: Install Windows 11, version 22H2 SDK
+* Step 3: Install Windows 11, version 22H2 WDK
+
+### Build Driver
+
+Change directory to `.\driver\` and build driver and hypervisor
+
+```
+cargo make sign
+```
+
+## Enable `Test Mode` or `Test Signing` Mode 
+
+```
+bcdedit /set testsigning on
+```
+
+### [Optional] Debug via Windbg
+
+```
+bcdedit /debug on
+bcdedit /dbgsettings net hostip:<IP> port:<PORT>
+```
+
+### [Optional] Debug Print Filter
+
+* Navigate to: `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager`
+* Create a new Key called `Debug Print Filter`
+* Create a new `DWORD (32) Value`
+* Give it the name `DEFAULT`
+* Give it the `Value data: 8`
+
+## Create / Start Service
+
+```
+sc.exe create SecretVisor type= kernel binPath= C:\Windows\System32\drivers\SecretVisor.sys
+sc.exe query SecretVisor
+sc.exe start SecretVisor
+```
 
 ## Credits / References / Motivation / Thanks
 
