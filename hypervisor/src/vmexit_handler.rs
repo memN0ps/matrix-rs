@@ -111,14 +111,14 @@ pub fn vmexit_handler(_register_state: *mut GeneralRegisters) -> Result<(), Hype
             core::arch::asm!(
                 restore_regs_from_stack!(),
                 "vmxoff",
-                "jz {0}",
-                "jc {0}",
+                "jz {0}",       //call vmxoff_failed
+                "jc {0}",       //call vmxoff_failed
                 "push r8",
                 "popf",
                 "mov     rsp, rdx",
                 "push    rcx",
                 "ret",
-                sym vm_resume_failed,
+                sym vmxoff_failed,
                 options(noreturn),
             ) 
         };
@@ -128,8 +128,8 @@ pub fn vmexit_handler(_register_state: *mut GeneralRegisters) -> Result<(), Hype
         core::arch::asm!(
             restore_regs_from_stack!(),
             "vmresume",
-            "call {0}",
-            sym vm_resume_failed,
+            "call {0}",             // call vmresume_failed
+            sym vmresume_failed,
             options(noreturn),
         ) 
     };
@@ -147,7 +147,12 @@ pub unsafe extern "C" fn vmexit_stub() -> ! {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn vm_resume_failed() {
+pub unsafe extern "C" fn vmxoff_failed() {
+    panic!("[!] VMXOFF FAILED!");
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn vmresume_failed() {
     panic!("[!] VMRESUME FAILED!");
 }
 
