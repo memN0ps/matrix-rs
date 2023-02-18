@@ -20,6 +20,7 @@ Virtualize All Logical Processors:
 * Handle VMEXITS / VMRESUME / VMXOFF
 * EPT (TODO)
 * MSR Bitmaps (TODO)
+* Changing IRQL (TODO)
 
 ## Build
 
