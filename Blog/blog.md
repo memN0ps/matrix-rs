@@ -401,6 +401,26 @@ pub fn vmxon(vmxon_pa: u64) -> Result<(), HypervisorError> {
 
 Overall, the above initializes a memory region to enable VMX operation for a virtual CPU in a hypervisor. However, we want to do this for every logical/virtual CPU.
 
+## Processors, Cores and Logical/Virtual Processors (VCPUs)
+
+`Processor:` The primary part of a computer that conducts mathematical, logical, input/output (I/O), and control activities is a processor, sometimes known as a central processing unit (CPU). It is in charge of carrying out commands and controlling the data flow inside a computer system.
+
+`Cores:` A core is a physical processing unit that can carry out instructions within a CPU. In order to work in parallel with other cores, each core typically includes its arithmetic logic unit (ALU), register set, and cache.
+
+`Logical Processor:` A processing unit within a CPU that can carry out a single thread of instructions is referred to as a logical processor, also known as a virtual processor. Depending on the particular processor design, each physical core in current CPUs can house several logical processors.
+
+Say we have four physical cores in our processor; this translates to four separate processing units in our CPU. Hyper-threading technology allows for the simultaneous execution of two threads on each core. As a result, there are eight logical processors, which the operating system interprets as eight different CPUs.
+
+General purpose registers, MSR registers, VMCSs, and VMXON Regions are among the registers to which each logical processor has access. We must ensure that a Virtual Machine Monitor (VMM) is set up to use all logical processors. This will enable us to make the most of our CPU's capabilities and deliver the best performance for our virtualized workloads.
+
+
+### Rust
+
+We have a struct called `Vcpu` that represents a virtual CPU. It has two fields: `index`, which is an integer that represents the index of the processor, and `data`, which is an [`OnceCell`](https://docs.rs/once_cell/latest/once_cell/) that holds a boxed `VcpuData` instance. The `new()` function takes an `index` as an argument and creates a new `Vcpu` instance with that index and an uninitialized data field.
+
+
+The `virtualize_cpu` function is responsible for initializing the virtual CPU for virtualization. It first enables the `Virtual Machine Extensions (VMX)`, `adjusts control registers`, and then initializes the `VcpuData` structure by calling `get_or_try_init` on the `data` field. The `get_or_try_init` function initializes the `data` field if it has not been initialized before or returns the existing value if it has been initialized.
+
 ```rust
 pub struct Vcpu {
     /// The index of the processor.
@@ -430,9 +450,263 @@ impl Vcpu {
  
         let _vcpu_data = &self.data.get_or_try_init(|| VcpuData::new())?;
     }
+
+    /// Devirtualize the CPU using vmxoff
+    pub fn devirtualize_cpu(&self) -> Result<(), HypervisorError> {
+        support::vmxoff()?;
+        Ok(())
+    }
+
+    /// Gets the index of the current logical/virtual processor
+    pub fn id(&self) -> u32 {
+        self.index
+    }
 }
 ```
 
+Once again, we can reuse the code written by [@not-matthias](https://twitter.com/not_matthias) in this [amd_hypervisor](https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/utils/processor.rs) since there is no crate for it currently. The module provides utilities for managing processor affinity, which is the ability to control which processor(s) a thread can execute. 
+
+The `processor_count()` function returns the number of processors available on the system using the Windows kernel function [`KeQueryActiveProcessorCountEx`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-kequeryactiveprocessorcountex)
+
+
+The `current_processor_index()` function returns the index of the processor currently executing the calling thread using the Windows kernel function [`KeGetCurrentProcessorNumberEx`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-kegetcurrentprocessornumberex)
+
+
+The `processor_number_from_index()` function takes an `index` and returns the corresponding `PROCESSOR_NUMBER` structure, which identifies the processor's group and number within that group using the Windows kernel function [`KeGetProcessorNumberFromIndex`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-kegetprocessornumberfromindex). If the index is out of range or if there is an error in the system call, the function returns `None`.
+
+```rust
+pub fn processor_count() -> u32 {
+    unsafe { KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS) }
+}
+
+pub fn current_processor_index() -> u32 {
+    unsafe { KeGetCurrentProcessorNumberEx(core::ptr::null_mut()) }
+}
+
+/// Returns the processor number for the specified index.
+fn processor_number_from_index(index: u32) -> Option<PROCESSOR_NUMBER> {
+    let mut processor_number = MaybeUninit::uninit();
+
+    let status = unsafe { KeGetProcessorNumberFromIndex(index, processor_number.as_mut_ptr()) };
+    if NT_SUCCESS(status) {
+        Some(unsafe { processor_number.assume_init() })
+    } else {
+        None
+    }
+}
+```
+
+The `ProcessorExecutor` struct temporarily switches execution to a specified processor until it is dropped. When an instance of `ProcessorExecutor` is created with a valid processor `index`, the `switch_to_processor()` function sets the affinity of the calling thread to the specified processor and yields execution to another thread using the Windows kernel function [`KeSetSystemGroupAffinityThread`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-kesetsystemgroupaffinitythread). If there is an error setting the affinity or yielding execution, the function returns `None`. When the `ProcessorExecutor` instance is dropped, the original processor affinity is restored using the Windows kernel function [`KeRevertToUserGroupAffinityThread`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-kereverttousergroupaffinitythread).
+
+```rust
+/// Switches execution to a specific processor until dropped.
+pub struct ProcessorExecutor {
+    old_affinity: MaybeUninit<GROUP_AFFINITY>,
+}
+
+impl ProcessorExecutor {
+    pub fn switch_to_processor(i: u32) -> Option<Self> {
+        if i > processor_count() {
+            log::error!("Invalid processor index: {}", i);
+            return None;
+        }
+
+        let processor_number = processor_number_from_index(i)?;
+
+        let mut old_affinity = MaybeUninit::uninit();
+        let mut affinity: GROUP_AFFINITY = unsafe { core::mem::zeroed() };
+
+        affinity.Group = processor_number.Group;
+        affinity.Mask = 1 << processor_number.Number;
+        affinity.Reserved[0] = 0;
+        affinity.Reserved[1] = 0;
+        affinity.Reserved[2] = 0;
+
+        log::trace!("Switching execution to processor {}", i);
+        unsafe { KeSetSystemGroupAffinityThread(&mut affinity, old_affinity.as_mut_ptr()) };
+
+        log::trace!("Yielding execution");
+        if !NT_SUCCESS(unsafe { ZwYieldExecution() }) {
+            return None;
+        }
+
+        Some(Self { old_affinity })
+    }
+}
+
+impl Drop for ProcessorExecutor {
+    fn drop(&mut self) {
+        log::trace!("Switching execution back to previous processor");
+        unsafe {
+            KeRevertToUserGroupAffinityThread(self.old_affinity.as_mut_ptr());
+        }
+    }
+}
+```
+
+* Credits: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/utils/processor.rs
+
+We have a `Hypervisor` struct and a `HypervisorBuilder` struct for virtualization. The `HypervisorBuilder` struct has a `build()` function that creates a new `Hypervisor` instance and returns it as a `Result`. The `build()` function checks whether the CPU is an Intel processor and whether it supports the Virtual Machine Extension (VMX) technology. If the CPU and VMX are supported, the function creates and populates a vector (`Vec`) of virtual CPUs (`Vcpu`), one per available processor, and initializes a new `Hypervisor` instance with the vector of virtual CPUs (`Vcpu`).
+
+The `Hypervisor` struct has three methods:
+
+1. The `builder()` function returns a new `HypervisorBuilder` instance.
+
+2. The `virtualize()` function virtualizes all of the available processors by calling `ProcessorExecutor::switch_to_processor()` for each processor and then calling the `virtualize_cpu()` method on each `Vcpu` instance in the `"processors"` vector.
+
+3. The `devirtualize()` function devirtualizes all of the available processors by calling `ProcessorExecutor::switch_to_processor()` for each processor and then calling the `devirtualize_cpu()` method on each `Vcpu` object in the `"processors"` vector.
+
+The `virtualize()` and `devirtualize() functions use the `ProcessorExecutor` struct to switch execution to each processor temporarily and then switch back after the virtualization or devirtualization operation is complete.
+
+Overall, this module provides a way to build a `Hypervisor` instance with support for virtualizing all available processors and provides methods for virtualizing and devirtualizing the processors using the `Vcpu` struct and the `ProcessorExecutor` struct.
+
+
+```rust
+#[derive(Default)]
+pub struct HypervisorBuilder;
+
+impl HypervisorBuilder {
+    pub fn build(self) -> Result<Hypervisor, HypervisorError> {
+        //
+        // 1) Intel Manual: 24.6 Discover Support for Virtual Machine Extension (VMX)
+        //
+        support::has_intel_cpu()?;
+        log::info!("[+] CPU is Intel");
+    
+        support::has_vmx_support()?;
+        log::info!("[+] Virtual Machine Extension (VMX) technology is supported");
+
+        let mut processors: Vec<Vcpu> = Vec::new();
+        
+        for i in 0..processor_count() {
+            processors.push(Vcpu::new(i)?);
+        }
+        log::info!("[+] Found {} processors", processors.len());
+
+        Ok(Hypervisor { processors })
+    }
+}
+
+pub struct Hypervisor {
+    processors: Vec<Vcpu>,
+}
+
+impl Hypervisor {
+    
+    pub fn builder() -> HypervisorBuilder {
+        HypervisorBuilder::default()
+    }
+
+    pub fn virtualize(&mut self) -> Result<(), HypervisorError> {
+        log::info!("[+] Virtualizing processors");
+
+        for processor in self.processors.iter_mut() {
+            
+            let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
+                return Err(HypervisorError::ProcessorSwitchFailed);
+            };
+
+            processor.virtualize_cpu()?;
+                
+            core::mem::drop(executor);
+        }
+        Ok(())
+    }
+
+    pub fn devirtualize(&mut self) -> Result<(), HypervisorError> {
+        log::info!("[+] Devirtualizing processors");
+
+        for processor in self.processors.iter_mut() {
+            
+            let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
+                return Err(HypervisorError::ProcessorSwitchFailed);
+            };
+
+            processor.devirtualize_cpu()?;
+                
+            core::mem::drop(executor);
+        }
+
+        Ok(())
+    }
+}
+```
+
+This follows a similar neat structure to the [amd_hypervisor](https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/svm/mod.rs) made by [@not-matthias](https://twitter.com/not_matthias), which will help integrate the open-source projects if required.
+
+* Credits: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/svm/mod.rs
+
+
+
+We create a Windows kernel driver in Rust. When loaded, the `driver_entry` function is called automatically, and we initialize a logger and set the driver unload function to `driver_unload`. We then attempt to virtualize the processor by calling `virtualize().is_none()`. If the virtualization process fails, we return `STATUS_UNSUCCESSFUL`, and if it succeeds, we return `STATUS_SUCCESS`.
+
+The `virtualize()` function is responsible for virtualizing the processor using the `hypervisor` module. To do this, we create a new hypervisor using `Hypervisor::builder()` and attempt to build it using `hv.build()`. If the build process fails, we log an error message and return `None`. If the build process succeeds, we attempt to virtualize the processor using `hypervisor.virtualize()`. If the virtualization process succeeds, we log a success message, and if it fails, we log an error message and return `None`. If the virtualization process succeeds, we save the hypervisor in a static mutable variable called `HYPERVISOR` and return `Some(())`.
+
+When our driver is unloaded, the `driver_unload` function is called automatically, which devirtualizes the processor using the `hypervisor` module. If the devirtualization process succeeds, we log a success message, and if it fails, we log the error message.
+
+```rust
+static mut HYPERVISOR: Option<Hypervisor> = None;
+
+#[no_mangle]
+pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRING) -> NTSTATUS {
+    KernelLogger::init(LevelFilter::Info).expect("Failed to initialize logger");
+    log::info!("Driver Entry called");
+
+    driver.DriverUnload = Some(driver_unload);
+
+
+    if virtualize().is_none() {
+        log::error!("Failed to virtualize processors");
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    STATUS_SUCCESS
+}
+
+
+pub extern "system" fn driver_unload(_driver: &mut DRIVER_OBJECT) {
+    log::info!("Driver unloaded successfully!");
+    
+    if let Some(mut hypervisor) = unsafe { HYPERVISOR.take() } {
+        match hypervisor.devirtualize() {
+            Ok(_) => log::info!("[+] Devirtualized successfully!"),
+            Err(err) => log::error!("[-] Failed to dervirtualize {}", err),
+        }
+    }
+}
+
+fn virtualize() -> Option<()> {
+
+    let hv = Hypervisor::builder();
+
+    let Ok(mut hypervisor) = hv.build() else {
+        log::error!("[-] Failed to build hypervisor");
+        return None;
+    };
+
+    match hypervisor.virtualize() {
+        Ok(_) => log::info!("[+] VMM initialized"),
+        Err(err) =>  {
+            log::error!("[-] VMM initialization failed: {}", err);
+            return None;
+        }
+    }
+
+    unsafe { HYPERVISOR = Some(hypervisor) }
+
+    Some(())
+}
+```
+
+We can now test our code by creating a service and starting it to load our Windows kernel driver.
+
+```
+sc.exe create SecretVisor type= kernel binPath= C:\Windows\System32\drivers\SecretVisor.sys
+sc.exe query SecretVisor
+sc.exe start SecretVisor
+```
+
+The output is shown in Windbg:
 
 ```
 INFO  [driver] Driver Entry called
@@ -451,3 +725,36 @@ INFO  [hypervisor::vcpu_data] [+] VMXON Region Virtual Address: 0xffffa3801098a0
 INFO  [hypervisor::vcpu_data] [+] VMXON Region Physical Addresss: 0x23ffc1000
 INFO  [hypervisor::vcpu_data] [+] VMXON successful!
 ```
+
+Congratulations! You have completed the first part of the Intel VT-x Hypervisor Development in Rust series. I hope you enjoyed it.
+
+
+## Credits / References / Thanks / Motivation
+
+Thanks to [@daax_rynd](https://twitter.com/daax_rynd), [@vm_call](https://twitter.com/vm_call), [@Intel80x86](https://twitter.com/Intel80x86), [@not_matthias](https://twitter.com/not_matthias), [@standa_t](https://twitter.com/standa_t), and [@felix-rs / @joshuа](https://github.com/felix-rs)
+
+* 7 Days to Virtualization: A Series on Hypervisor Development: https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/
+
+* Hypervisor From Scratch: https://rayanfam.com/tutorials/
+
+* amd_hypervisor: https://github.com/not-matthias/amd_hypervisor/
+
+* Hypervisor-101-in-Rust: https://github.com/tandasat/Hypervisor-101-in-Rust
+
+* RustyVisor: https://github.com/iankronquist/rustyvisor/
+
+* RVM1.5: https://github.com/rcore-os/RVM1.5/
+
+* Barbervisor: https://github.com/Cisco-Talos/Barbervisor/
+
+* Orange Slice: https://github.com/gamozolabs/orange_slice
+
+* Orange Slice: Writing the Hypervisor: https://www.youtube.com/watch?v=WabeOICAOq4&list=PLSkhUfcCXvqFJAuFbABktmLaQvJwKxJ3i
+
+* Bluepill: https://git.back.engineering/_xeroxz/bluepill/
+
+* HyperBone: https://github.com/DarthTon/HyperBone/
+
+* BattlEye hypervisor detection: https://secret.club/2020/01/12/battleye-hypervisor-detection.html
+
+* How anti-cheats detect system emulation: https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html
