@@ -1,6 +1,6 @@
 # SecretVisor - A minimalistic Intel VT-x research hypervisor in Rust
 
-Note: VMEXIT Handler needs fixing.
+Note: I'm getting the following error in vmexit handler, which needs fixing: `VMEXIT_REASON: 25 - VM entry with invalid VM-execution control fields in executive VMCS (when attempting to return from SMM)`
 
 ## Features
 
