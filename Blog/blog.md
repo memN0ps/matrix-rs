@@ -387,7 +387,7 @@ impl VcpuData {
 }
 ```
 
-The `vmxon()` function is just a wrapper around the x86 `vmxon()` function, which calls the `vmxon <addr>` in assembly. However, it is not necessary to create wrappers, but it helps with error handling.
+The `vmxon()` function is just a wrapper around the x86 `vmxon()` function, which calls `vmxon <addr>` in assembly. However, it is not necessary to create wrappers, but it helps with error handling.
 
 ```rust
 /// Enable VMX operation.
@@ -418,8 +418,9 @@ General purpose registers, MSR registers, VMCSs, and VMXON Regions are among the
 
 We have a struct called `Vcpu` that represents a virtual CPU. It has two fields: `index`, which is an integer that represents the index of the processor, and `data`, which is an [`OnceCell`](https://docs.rs/once_cell/latest/once_cell/) that holds a boxed `VcpuData` instance. The `new()` function takes an `index` as an argument and creates a new `Vcpu` instance with that index and an uninitialized data field.
 
-
 The `virtualize_cpu` function is responsible for initializing the virtual CPU for virtualization. It first enables the `Virtual Machine Extensions (VMX)`, `adjusts control registers`, and then initializes the `VcpuData` structure by calling `get_or_try_init` on the `data` field. The `get_or_try_init` function initializes the `data` field if it has not been initialized before or returns the existing value if it has been initialized.
+
+The `devirtualize_cpu()` is used to devirtualize the CPU using the `vmxoff` instruction. This instruction is used to disable virtualization and return control to the host operating system. The function returns a `Result` indicating whether the operation was successful or not and any relevant error information. The `id()` returns the index of the current virtual processor, which is helpful in multi-processor systems where we need to identify which processor is executing the code.
 
 ```rust
 pub struct Vcpu {
@@ -460,6 +461,18 @@ impl Vcpu {
     /// Gets the index of the current logical/virtual processor
     pub fn id(&self) -> u32 {
         self.index
+    }
+}
+```
+
+The `vmxoff()` function is just a wrapper around the x86 `vmxoff()` function, which calls `vmxoff` in assembly.
+
+```rust
+/// Disable VMX operation.
+pub fn vmxoff() -> Result<(), HypervisorError> {
+    match unsafe { x86::bits64::vmx::vmxoff() } {
+        Ok(_) => Ok(()),
+        Err(_) => Err(HypervisorError::VMXOFFFailed),
     }
 }
 ```
