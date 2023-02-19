@@ -43,8 +43,8 @@ impl Vcpu {
  
         let _vcpu_data = &self.data.get_or_try_init(|| VcpuData::new())?;
 
-        log::info!("[+] Launching VM...............");
-        debug_vmlaunch()?;
+        log::info!("[+] Launching VM via VMLAUNCH..............");
+        support::vmlaunch()?;
         log::info!("[+] VMLAUNCH successful!");
         
         Ok(())
@@ -61,19 +61,3 @@ impl Vcpu {
         self.index
     }
 }
-
-pub fn debug_vmlaunch() -> Result<(), HypervisorError> {
-
-    match support::vmlaunch() {
-        Ok(_) => {
-            log::info!("[+] VMLAUNCH successful!");
-            Ok(())
-        }
-        Err(e) => {        
-            log::info!("VM exit: {:#x}", support::vmread(x86::vmx::vmcs::ro::EXIT_REASON)?);
-            log::info!("VM instruction error: {:#x}", support::vmread(x86::vmx::vmcs::ro::VM_INSTRUCTION_ERROR)?);
-            Err(e)
-        }
-    }
-}
-

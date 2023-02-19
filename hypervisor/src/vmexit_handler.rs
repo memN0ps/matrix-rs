@@ -69,7 +69,7 @@ macro_rules! restore_regs_from_stack {
 
 #[no_mangle]
 pub fn vmexit_handler(_register_state: *mut GeneralRegisters) -> Result<(), HypervisorError> {
-    log::info!("[+] vmexit_handler...");
+    log::info!("[+] Called VMEXIT Handler...");
     let vmexit_reason = support::vmread(vmx::vmcs::ro::VM_INSTRUCTION_ERROR)?;
     log::info!("[+] VMEXIT Reason: {:#x}", vmexit_reason);
 
