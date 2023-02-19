@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
 use bitfield::BitMut;
 use kernel_alloc::PhysicalAllocator;
-use crate::{vmxon_region::VmxonRegion, utils::addresses::{physical_address}, error::HypervisorError, support, vmexit_handler::vmexit_stub, utils::{segmentation::Segment, controls::{vmx_adjust_entry_controls, segment_limit}}, utils::tables::GdtStruct};
+use crate::{vmxon_region::VmxonRegion, utils::addresses::{physical_address}, error::HypervisorError, support, vmexit_handler::vmexit_stub, utils::{segmentation::Segment, controls::{adjust_vmx_controls, segment_limit, VmxControl}}, utils::tables::GdtStruct};
 use x86::{vmx::{self, vmcs::{control::{PrimaryControls, SecondaryControls, EntryControls, ExitControls}, guest, host}}, msr, controlregs, segmentation::{self}, task, dtables, debugregs, bits64};
 use x86_64::instructions::tables::{sgdt, sidt};
 
@@ -128,25 +128,31 @@ impl VcpuData {
 
     /// Initialize the VMCS control values for the currently loaded vmcs.
     pub fn init_vmcs_control_values(&mut self) -> Result<(), HypervisorError> {
+        const PRIMARY_CTL: u64 = (PrimaryControls::HLT_EXITING.bits() | /*PrimaryControls::USE_MSR_BITMAPS.bits() |*/ PrimaryControls::SECONDARY_CONTROLS.bits()) as u64;
+        const SECONDARY_CTL: u64 = (SecondaryControls::ENABLE_RDTSCP.bits() | SecondaryControls::ENABLE_XSAVES_XRSTORS.bits() | SecondaryControls::ENABLE_INVPCID.bits() /* | SecondaryControls::ENABLE_EPT.bits() */) as u64;
+        const ENTRY_CTL: u64 = (EntryControls::IA32E_MODE_GUEST.bits()) as u64;
+        const EXIT_CTL: u64 = (ExitControls::HOST_ADDRESS_SPACE_SIZE.bits() | ExitControls::ACK_INTERRUPT_ON_EXIT.bits()) as u64;
+        const PINBASED_CTL: u64 = 0;
+
         // PrimaryControls (x86::msr::IA32_VMX_PROCBASED_CTLS)
         support::vmwrite(vmx::vmcs::control::PRIMARY_PROCBASED_EXEC_CONTROLS, 
-            vmx_adjust_entry_controls(msr::IA32_VMX_PROCBASED_CTLS, PrimaryControls::HLT_EXITING.bits() | /*PrimaryControls::USE_MSR_BITMAPS.bits() |*/ PrimaryControls::SECONDARY_CONTROLS.bits()) as u64)?;
+            adjust_vmx_controls(VmxControl::ProcessorBased, PRIMARY_CTL))?;
         
         // SecondaryControls (x86::msr::IA32_VMX_PROCBASED_CTLS2)
         support::vmwrite(vmx::vmcs::control::SECONDARY_PROCBASED_EXEC_CONTROLS, 
-            vmx_adjust_entry_controls(msr::IA32_VMX_PROCBASED_CTLS2, SecondaryControls::ENABLE_RDTSCP.bits() | SecondaryControls::ENABLE_XSAVES_XRSTORS.bits() | SecondaryControls::ENABLE_INVPCID.bits() /* | SecondaryControls::ENABLE_EPT.bits() */) as u64)?;
+            adjust_vmx_controls(VmxControl::ProcessorBased2, SECONDARY_CTL))?;
         
         // EntryControls (x86::msr::IA32_VMX_ENTRY_CTLS)
         support::vmwrite(vmx::vmcs::control::VMENTRY_CONTROLS, 
-            vmx_adjust_entry_controls(msr::IA32_VMX_ENTRY_CTLS, EntryControls::IA32E_MODE_GUEST.bits()) as u64)?;
+            adjust_vmx_controls(VmxControl::VmEntry, ENTRY_CTL))?;
 
         // ExitControls (x86::msr::IA32_VMX_EXIT_CTLS)
         support::vmwrite(vmx::vmcs::control::VMEXIT_CONTROLS, 
-            vmx_adjust_entry_controls(msr::IA32_VMX_EXIT_CTLS, ExitControls::HOST_ADDRESS_SPACE_SIZE.bits() | ExitControls::ACK_INTERRUPT_ON_EXIT.bits()) as u64)?;
+            adjust_vmx_controls(VmxControl::VmExit, EXIT_CTL))?;
 
         // PinbasedControls (x86::msr::IA32_VMX_PINBASED_CTLS)
         support::vmwrite(vmx::vmcs::control::PINBASED_EXEC_CONTROLS, 
-            vmx_adjust_entry_controls(msr::IA32_VMX_PINBASED_CTLS, 0) as u64)?;
+            adjust_vmx_controls(VmxControl::PinBased, PINBASED_CTL))?;
         
         log::info!("VMCS Primary, Secondary, Entry, Exit and Pinbased, Controls initialized!");
 
@@ -155,6 +161,7 @@ impl VcpuData {
         unsafe { support::vmwrite(x86::vmx::vmcs::control::CR4_READ_SHADOW, controlregs::cr4().bits() as u64)? };
         log::info!("VMCS Controls Shadow Registers initialized!");
 
+        /* 
         /* Time-stamp counter offset */
         support::vmwrite(vmx::vmcs::control::TSC_OFFSET_FULL, 0)?;
         support::vmwrite(vmx::vmcs::control::TSC_OFFSET_HIGH, 0)?;
@@ -165,6 +172,7 @@ impl VcpuData {
         support::vmwrite(vmx::vmcs::control::VMENTRY_MSR_LOAD_COUNT, 0)?;
         support::vmwrite(vmx::vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD, 0)?;
         log::info!("VMCS Time-stamp counter offset initialized!");
+        */
 
         // VMCS Controls Bitmap
         //support::vmwrite(vmx::vmcs::control::MSR_BITMAPS_ADDR_FULL, msr_bitmap_physical_address)?;
