@@ -6,9 +6,9 @@ The knowledge acquired to make this hypervisor was from reading blogs and code, 
 
 ## Virtual Machine Architecture
 
-`Virtual Machine Monitor (VMM):` By abstracting and dividing the underlying hardware resources, a virtual machine monitor (VMM) is a software layer that generates and controls virtual machines (VMs), enabling several operating systems to operate on the same physical computer.
+`Virtual Machine Monitor (VMM):` A VMM serves as a host and has complete command over the platform's processor(s) and other hardware. A VMM enables guest software to run directly on a logical processor by providing it with an abstraction of a virtual processor. A VMM can maintain granular control over I/O, interrupt handling, physical memory, and processor resources.
 
-`Guest Software:` Any software that runs inside a virtual machine (VM) that is controlled by a virtual machine monitor (VMM) or hypervisor is referred to as guest software.
+`Guest Software:` Any software that runs inside a virtual machine (VM) controlled by a virtual machine monitor (VMM) or hypervisor is referred to as guest software. Each virtual machine (VM) supports an operating system (OS) stack and application software as a guest software environment. Each virtual machine runs independently of the others and has a standard interface with the physical platform's processor(s), memory, storage, graphics, and I/O. The software stack performs as though it were on a platform without a VMM. So that the VMM may continue to have control over platform resources, software running in virtual machines must have fewer privileges.
 
 
 ## Introduction to Virtual Machine Extension (VMX) Operation
@@ -17,11 +17,7 @@ An operation that the Virtual Machine Monitor (VMM) does to enter or depart a vi
 
 ## Life Cycle of Virtual Machine Monitor (VMM) Software
 
-The Virtual Machine Monitor (VMM) can enter and leave the execution mode of virtual machines (VMs) using low-level hardware operations called `VM ENTRY` and `VM EXIT`.
-
-Other low-level hardware operations, such as `VMXON` and `VMXOFF`, enable and disable the VMX operation, the processor's implementation of hardware virtualization that supports VMMs, respectively.
-
-In essence, `VMXON` and `VMXOFF` allow the VMM to construct and operate virtual machines, whereas `VM ENTRY` and `VM EXIT` enable the VMM to move between the host system and the guest system.
+The Virtual Machine Monitor (VMM) can enter and leave the execution mode of virtual machines (VMs) using low-level hardware operations called `VM ENTRY` and `VM EXIT`. Other low-level hardware operations, such as `VMXON` and `VMXOFF`, enable and disable the VMX operation, the processor's implementation of hardware virtualization that supports VMMs, respectively. In essence, `VMXON` and `VMXOFF` allow the VMM to construct and operate virtual machines, whereas `VM ENTRY` and `VM EXIT` enable the VMM to move between the host system and the guest system.
 
 ![Interaction of a Virtual-Machine Monitor and Guests](./pictures/Interaction_of_a_Virtual-Machine_Monitor_and_Guests.png)
 
@@ -33,7 +29,7 @@ In essence, `VMXON` and `VMXOFF` allow the VMM to construct and operate virtual 
 A virtual machine's execution is managed and controlled by the Virtual Machine Monitor (VMM) via a virtual machine control structure (VMCS).
 The virtual machine's state, the settings for the virtual processor, and the mapping between the virtual and physical resources are all contained in the VMCS.
 
-The VMM employs a collection of low-level instructions to control the VMCS. The Virtual-Machine Control Structure Pointer (VMCS pointer), which enables the VMM to access the VMCS for a particular VM, can be read using VMPTRST and loaded using `VMPTRLD`. The VMM can alter the virtual machine's state or obtain details regarding its present state by using the commands `VMREAD` and `VMWRITE`, which are used to read and write values from and to the VMCS, respectively. When a virtual machine is terminated, or its state needs to be reset, `VMCLEAR` is used to clear the contents of the VMCS.
+The VMM employs a collection of low-level instructions to control the VMCS. The Virtual-Machine Control Structure Pointer (VMCS pointer), which enables the VMM to access the VMCS for a particular VM, can be read using `VMPTRST` and loaded using `VMPTRLD`. The VMM can alter the virtual machine's state or obtain details regarding its present state by using the commands `VMREAD` and `VMWRITE`, which are used to read and write values from and to the VMCS, respectively. When a virtual machine is terminated, or its state needs to be reset, `VMCLEAR` is used to clear the contents of the VMCS.
 
 Each of the VMCSs assigned to a physical computer's logical processors corresponds to a particular virtual machine. As a result, the VMM can oversee and administer numerous virtual machines on a single physical device. In order to generate, monitor, and manage the execution of virtual machines on logical processors, the VMCS and related instructions give the VMM essential control and management capabilities.
 
@@ -42,10 +38,12 @@ Each of the VMCSs assigned to a physical computer's logical processors correspon
 
 When developing a hypervisor, it's crucial to determine whether Intel or AMD built the CPU because each manufacturer has a unique virtualization technology with unique capabilities and instructions. It is vital to identify the processor type and employ the proper approaches to use these technologies and guarantee that the hypervisor functions on various systems.
 
-The CPUID instruction can be used to determine whether Virtual Machine Extension (VMX) / Intel Virtualization Technology is supported. The processor will reveal information about its features, including whether it supports VMX, when the CPUID instruction is run with the EAX register set to 1. The EAX, EBX, ECX, and EDX registers store the CPUID data for the processor. If VMX is supported by the processor, bit 5 of ECX will be set to 1. The processor does not support VMX if the bit is not set, making virtualization unavailable.
+The `CPUID` instruction can be used to determine whether Virtual Machine Extension (VMX) / Intel Virtualization Technology is supported. The processor will reveal information about its features, including whether it supports VMX, when the `CPUID` instruction is run with the `EAX` register set to `1`. The `EAX`, `EBX`, `ECX`, and `EDX` registers store the CPUID data for the processor. If VMX is supported by the processor, bit `5` of `ECX` will be set to `1`. The processor does not support VMX if the bit is not set, making virtualization unavailable.
 
 
-**Rust**: We check whether Intel makes the CPU by examining the `CPUID` information using the Rust x86 crate. Specifically, we check the vendor information returned by the CPUID instruction to see if it equals `"GenuineIntel"`. If the vendor information indicates an Intel CPU, we return an `Ok` result; otherwise, we return an error indicating that the hypervisor does not support the CPU.
+### Rust
+
+We check whether Intel makes the CPU by examining the `CPUID` information using the Rust x86 crate. Specifically, we check the vendor information returned by the `CPUID` instruction to see if it equals `"GenuineIntel"`. If the vendor information indicates an Intel CPU, we return an `Ok` result; otherwise, we return an error indicating that the hypervisor does not support the CPU.
 
 ```rust
 /// Check to see if CPU is Intel (“GenuineIntel”).
@@ -60,7 +58,9 @@ pub fn has_intel_cpu() -> Result<(), HypervisorError> {
 }
 ```
 
-**Rust**: We check whether the processor supports Virtual Machine Extension (VMX) technology by checking if the bit 5 in the `ECX` register is set to 1 using the `CPUID` instruction. We use the Rust x86 crate to get the CPUID information and check whether the processor has VMX support by reading the feature information. If the processor supports VMX, we return an `Ok` result; otherwise, we return an error indicating that VMX is not supported.
+### Rust
+
+We check whether the processor supports Virtual Machine Extension (VMX) technology by checking if the bit `5` in the `ECX` register is set to `1` using the `CPUID` instruction. We use the Rust x86 crate to get the CPUID information and check whether the processor has VMX support by reading the feature information. If the processor supports VMX, we return an `Ok` result; otherwise, we return an error indicating that VMX is not supported.
 
 ```rust
 /// Check processor supports for Virtual Machine Extension (VMX) technology - CPUID.1:ECX.VMX[bit 5] = 1 (Intel Manual: 24.6 Discovering Support for VMX)
@@ -75,7 +75,9 @@ pub fn has_vmx_support() -> Result<(), HypervisorError> {
 }
 ```
 
-**Rust**: We use a custom `HypervisorError` enum to handle errors, which was made using [thiserror-no-std](https://crates.io/crates/thiserror-no-std) crate.
+### Rust
+
+We use a custom `HypervisorError` enum to handle errors, which was made using [thiserror-no-std](https://crates.io/crates/thiserror-no-std) crate.
 
 ```rust
 use thiserror_no_std::Error;
@@ -129,11 +131,15 @@ pub enum HypervisorError {
 }
 ```
 
-The CPU must operate in a hardware virtualization mode to execute virtual machines, made possible by Virtual Machine Extensions (VMX). System software initially sets the `CR4.VMXE[bit 13]` to 1 to enable VMX. This bit is found in the control register `CR4`, which regulates the processor's multiple operating modes. The system software can execute the `VMXON` instruction to enter VMX operating mode once the VMX bit has been set.
+## Enabling and Entering Virtual Machine Extension (VMX) Operation
+
+The CPU must operate in a hardware virtualization mode to execute virtual machines, made possible by Virtual Machine Extensions (VMX). System software initially sets the `CR4.VMXE[bit 13]` to `1` to enable VMX. This bit is found in the control register `CR4`, which regulates the processor's multiple operating modes. The system software can execute the `VMXON` instruction to enter VMX operating mode once the VMX bit has been set.
 
 Yet when `VMXON` is attempted to be executed with `CR4.VMXE = 0`, an invalid-opcode exception (`#UD`) is raised. Because VMX is not enabled, the CPU does not recognize the `VMXON` instruction, which leads to this exception. After the processor switches to VMX operation mode, the `CR4.VMXE` bit cannot be cleared. Because of this, system software must exit VMX operating mode with the `VMXOFF` instruction before `CR4.VMXE` may be cleared.
 
-**Rust**: We have a function called `enable_vmx_operation()` that enables virtual machine extensions (VMX). We do this by setting a specific bit (bit 13) in the CR4 control register to 1. We first read the current value of `CR4` using the `controlregs::cr4()` function, then set the appropriate bit using the `set()` method of the `Cr4` struct, and finally, write the updated value back to `CR4` using the `controlregs::cr4_write()` function.
+### Rust
+
+We have a function called `enable_vmx_operation()` that enables virtual machine extensions (VMX). We do this by setting a specific bit (bit `13`) in the `CR4` control register to `1`. We first read the current value of `CR4` using the `controlregs::cr4()` function, then set the appropriate bit using the `set()` method of the `Cr4` struct, and finally, write the updated value back to `CR4` using the `controlregs::cr4_write()` function.
 
 In addition to setting the `CR4` bit, we call the `set_lock_bit()` function, which sets a lock bit via the `IA32_FEATURE_CONTROL` register and logs a message indicating that the lock bit has been set. If everything goes well, we return a `Result` with an `Ok` value indicating success. If an error occurs, we return a `Result` with an `Err` value containing a `HypervisorError`.
 
@@ -151,15 +157,17 @@ pub fn enable_vmx_operation() -> Result<(), HypervisorError> {
 }
 ```
 
-The `IA32_FEATURE_CONTROL` MSR is a model-specific register that controls the processor's features, including VMX capability. This register is zeroed when a logical processor is reset. Bits 0 through 1 and 2 are crucial for `VMXON`. Whether it can be updated depends on the lock bit in the MSR. If the lock bit is not set, `VMXON` execution will fail, and the MSR cannot be modified until after a power-up reset. The lock bit, bit 1, bit 2, or both can be changed in the BIOS to deactivate VMX capability.
+The `IA32_FEATURE_CONTROL` MSR is a model-specific register that controls the processor's features, including VMX capability. This register is zeroed when a logical processor is reset. Bits `0` through `1` and `2` are crucial for `VMXON`. Whether it can be updated depends on the lock bit in the MSR. If the lock bit is not set, `VMXON` execution will fail, and the MSR cannot be modified until after a power-up reset. The lock bit, bit `1`, bit `2`, or both can be changed in the BIOS to deactivate VMX capability.
 
-* Bit 1 activates `VMXON` in SMX mode, providing a more secure setting. If this bit is not set, `VMXON` execution in SMX mode will encounter an error.
+* `Bit 1` activates `VMXON` in SMX mode, providing a more secure setting. If this bit is not set, `VMXON` execution in SMX mode will encounter an error.
 
-* Bit 2 permits `VMXON` execution while SMX mode is not active. A general protection exception is triggered when this bit is attempted to be set on logical processors that cannot support VMX operation.
+* `Bit 2` permits `VMXON` execution while SMX mode is not active. A general protection exception is triggered when this bit is attempted to be set on logical processors that cannot support VMX operation.
 
-The `IA32_FEATURE_CONTROL` MSR and control bits in `CR4` need to be set in order to activate VMX. The lock bit, bit 1, and bit 2 enable VMX. Once enabled, processors can enter the VMX operating mode and operate virtual machines using VMX instructions.
+The `IA32_FEATURE_CONTROL` MSR and control bits in `CR4` need to be set in order to activate VMX. The lock bit, bit `1`, and bit `2` enable VMX. Once enabled, processors can enter the VMX operating mode and operate virtual machines using VMX instructions.
 
-**Rust**: We first check the current value of the `IA32_FEATURE_CONTROL` MSR register to see if the lock bit is already set. If it's not set, then we set the lock bit along with the `VMXON_OUTSIDE_SMX` bit and write the new value to the `IA32_FEATURE_CONTROL MSR` register. If the lock bit is already set, but the `VMXON_OUTSIDE_SMX` bit is not set, we then return an error indicating that the BIOS has locked the VMX feature.
+### Rust
+
+We first check the current value of the `IA32_FEATURE_CONTROL` MSR register to see if the lock bit is already set. If it's not set, then we set the lock bit along with the `VMXON_OUTSIDE_SMX` bit and write the new value to the `IA32_FEATURE_CONTROL MSR` register. If the lock bit is already set, but the `VMXON_OUTSIDE_SMX` bit is not set, we then return an error indicating that the BIOS has locked the VMX feature.
 
 ```rust
 /// Check if we need to set bits in IA32_FEATURE_CONTROL (Intel Manual: 24.7 Enabling and Entering VMX Operation)
@@ -182,4 +190,264 @@ fn set_lock_bit() -> Result<(), HypervisorError> {
 
     Ok(())
 }
+```
+
+## Restrictions on VMX Operation (Adjusting Control Registers)
+
+In order to ensure that virtualization is secure and reliable when running a virtual machine, specific bits in the Control Registers (CR0 and CR4) must be set or cleared to particular values. The "Restrictions on VMX Operation" are these necessary bits and bit configurations.
+
+The VMX operation will fail if any of these bits have an unsupported value when the system is in virtualization mode. A general protection exception will be thrown if one of these bits is ever attempted to be set to an unsupported value while the VMX operation is in progress.
+
+Software should consult the VMX capability MSRs IA32 VMX CR0 FIXED0, IA32 VMX CR0 FIXED1, IA32 VMX CR4 FIXED0, and IA32 VMX CR4 FIXED1 to find out which bits in the CR0 and CR4 registers are fixed and how they should be set. 
+
+### Rust 
+
+We have implemented functions that adjust the `CR0` and `CR4` control registers for virtualization. These functions aim to ensure that the mandatory bits in the Control Registers are set and cleared appropriately to support virtualization. To achieve this, we have defined two functions: `set_cr0_bits()` and `set_cr4_bits()`. The former sets the mandatory bits in `CR0` while clearing the mandatory `zero` bits, while the latter does the same for `CR4`.
+
+To adjust `CR0` and `CR4`, we read the values stored in the `IA32_VMX_CR0_FIXED0`, `IA32_VMX_CR0_FIXED1`, `IA32_VMX_CR4_FIXED0`, and `IA32_VMX_CR4_FIXED1` Model-Specific Registers (MSRs) to determine which bits should be set and cleared. We then use the `from_bits_truncate()` function to ensure that the bit values fit within the `Cr0` and `Cr4` types, set the mandatory bits using the or bitwise operator, and clear the mandatory `zero` bits using the and bitwise operator. Finally, we write the resulting value back to the `CR0` or `CR4` register using the `cr0_write()` or `cr4_write()` functions.
+
+We have also defined a higher-level function `adjust_control_registers()` that calls both `set_cr0_bits()` and `set_cr4_bits()`. This function sets and clears the mandatory bits in both `CR0` and `CR4` and logs a message indicating that the bits have been set/cleared.
+
+```rust
+/// Adjust set and clear the mandatory bits in CR0 and CR4
+pub fn adjust_control_registers() {
+    set_cr0_bits();
+    log::info!("[+] Mandatory bits in CR0 set/cleared");
+
+    set_cr4_bits();
+    log::info!("[+] Mandatory bits in CR4 set/cleared");
+}
+
+/// Set the mandatory bits in CR0 and clear bits that are mandatory zero (Intel Manual: 24.8 Restrictions on VMX Operation)
+fn set_cr0_bits() {
+    let ia32_vmx_cr0_fixed0 = unsafe { msr::rdmsr(msr::IA32_VMX_CR0_FIXED0) };
+    let ia32_vmx_cr0_fixed1 = unsafe { msr::rdmsr(msr::IA32_VMX_CR0_FIXED1) };
+
+    let mut cr0 = unsafe { controlregs::cr0() };
+
+    cr0 |= controlregs::Cr0::from_bits_truncate(ia32_vmx_cr0_fixed0 as usize);
+    cr0 &= controlregs::Cr0::from_bits_truncate(ia32_vmx_cr0_fixed1 as usize);
+
+    unsafe { controlregs::cr0_write(cr0) };
+}
+
+/// Set the mandatory bits in CR4 and clear bits that are mandatory zero (Intel Manual: 24.8 Restrictions on VMX Operation)
+fn set_cr4_bits() {
+    let ia32_vmx_cr4_fixed0 = unsafe { msr::rdmsr(msr::IA32_VMX_CR4_FIXED0) };
+    let ia32_vmx_cr4_fixed1 = unsafe { msr::rdmsr(msr::IA32_VMX_CR4_FIXED1) };
+
+    let mut cr4 = unsafe { controlregs::cr4() };
+
+    cr4 |= controlregs::Cr4::from_bits_truncate(ia32_vmx_cr4_fixed0 as usize);
+    cr4 &= controlregs::Cr4::from_bits_truncate(ia32_vmx_cr4_fixed1 as usize);
+
+    unsafe { controlregs::cr4_write(cr4) };
+}
+```
+
+## VMXON Region
+
+Software must allot a memory region called the `VMXON` region, which will be used by the logical processor for VMX operation, before allowing virtual machine extensions (VMX) activity. The operand for the `VMXON` instruction is the physical address of this area. 
+
+The `VMXON` pointer must adhere to certain specifications, such as being 4-KByte aligned and not exceeding the processor's physical address width. Software must use a different region for each logical processor and write the VMCS revision identification (VMCS ID) to the `VMXON` region before `VMXON` is executed. Unpredictable behaviour may emerge from accessing or altering the `VMXON` region of a logical processor between the execution of `VMXON` and `VMXOFF`.
+
+### Rust
+
+Fortunately for us, [@not-matthias](https://twitter.com/not_matthias) already has a [kernel-alloc](https://crates.io/crates/kernel-alloc) crate in Rust ready for community use.
+
+The `PhysicalAllocator` is a custom allocator that allocates physical memory in Windows kernel mode. When you allocate memory using this allocator, it calls the [`MmAllocateContiguousMemorySpecifyCacheNode`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-mmallocatecontiguousmemoryspecifycachenode) function to allocate contiguous physical memory. If the allocation is successful, it returns a pointer to the allocated memory. If it fails, it returns an `AllocError`. When you deallocate memory using this allocator, it calls the [`MmFreeContiguousMemory`](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-mmfreecontiguousmemory) function to free the memory that was previously allocated. This allocator can be used with Rust's `GlobalAlloc` trait to provide a custom global allocator for Rust's heap-allocated data types like `String`, `Vec`, and `Box`. 
+
+If you want to find out more about it, please refer to the [alloc::GlobalAllocator](https://doc.rust-lang.org/std/alloc/trait.GlobalAlloc.html) or [alloc::Allocator](https://doc.rust-lang.org/std/alloc/trait.Allocator.html) and the Rust book for [global_allocator](https://doc.rust-lang.org/1.26.2/unstable-book/language-features/global-allocator.html) or [allocator_api.](https://doc.rust-lang.org/1.26.2/unstable-book/library-features/allocator-api.html)
+
+
+```rust
+/// The physical kernel allocator structure.
+pub struct PhysicalAllocator;
+
+unsafe impl Allocator for PhysicalAllocator {
+    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        let mut boundary: PHYSICAL_ADDRESS = unsafe { core::mem::zeroed() };
+        let mut lowest: PHYSICAL_ADDRESS = unsafe { core::mem::zeroed() };
+        let mut highest: PHYSICAL_ADDRESS = unsafe { core::mem::zeroed() };
+
+        unsafe { *(boundary.QuadPart_mut()) = 0 };
+        unsafe { *(lowest.QuadPart_mut()) = 0 };
+        unsafe { *(highest.QuadPart_mut()) = -1 };
+
+        let memory = unsafe {
+            MmAllocateContiguousMemorySpecifyCacheNode(
+                layout.size(),
+                lowest,
+                highest,
+                boundary,
+                MmCached,
+                MM_ANY_NODE_OK,
+            )
+        } as *mut u8;
+        if memory.is_null() {
+            Err(AllocError)
+        } else {
+            let slice = unsafe { core::slice::from_raw_parts_mut(memory, layout.size()) };
+            Ok(unsafe { NonNull::new_unchecked(slice) })
+        }
+    }
+
+    unsafe fn deallocate(&self, ptr: NonNull<u8>, _layout: Layout) {
+        MmFreeContiguousMemory(ptr.cast().as_ptr());
+    }
+}
+```
+
+* Credits: https://github.com/not-matthias/kernel-alloc-rs/
+
+
+We are defining a struct called `VmxonRegion`, which represents a `VMXON Region` in memory. This region must be aligned to the page size of `4096` bytes (or `0x1000` in hexadecimal). The `VmxonRegion` structure contains two fields: `revision_id` and `data`. The `revision_id` is a `32-bit` unsigned integer representing the version of the VMX capabilities supported by the processor, and it takes up `4` bytes of the memory region. The data field is an array of `4092` bytes that contains the rest of the `VMXON Region`. By using the `repr(C, align(4096))` attribute, we ensure that the `VmxonRegion` type is laid out exactly as specified, with `4096` bytes of memory allocated for each instance of this type. This ensures that the `VMXON Region` is aligned correctly in memory and can be used by the processor without any issues.
+
+```rust
+pub const PAGE_SIZE: usize = 0x1000;
+
+#[repr(C, align(4096))]
+pub struct VmxonRegion {
+    pub revision_id: u32,
+    pub data: [u8; PAGE_SIZE - 4],
+}
+```
+
+We define a function `get_vmcs_revision_id` that returns the Virtual Machine Control Structure (VMCS) revision ID. To get this revision ID, we read a Model Specific Register (MSR) using the `rdmsr` function, passing it the MSR identifier `IA32_VMX_BASIC`. We cast the returned value to a `32-bit` unsigned integer and then bitwise `AND` it with `0x7FFF_FFFF` to clear the high bit, which is reserved. The resulting value is the VMCS revision ID, which we return.
+
+```rust
+/// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID) (Intel Manual: 25.11.5 VMXON Region)
+pub fn get_vmcs_revision_id() -> u32 {
+    unsafe { (msr::rdmsr(msr::IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
+}
+```
+
+
+To convert a virtual address to a physical address, we can use the `MmGetVirtualForPhysical` undocumented function. Luckily for us we can reuse the code written by [@not-matthias](https://twitter.com/not_matthias) in this [amd_hypervisor](https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/utils/addresses.rs) since there is no crate for it currently.
+
+We have two functions here. The first function, `physical_address` takes a pointer to a `u64` and converts it to a physical address of type `PAddr`. This function is used to convert virtual addresses to physical addresses. The second function `va_from_pa` takes a physical address and converts it to a virtual address. This is achieved using the Windows kernel undocumented function `MmGetVirtualForPhysical`.
+
+```rust
+pub fn physical_address(ptr: *const u64) -> PAddr {
+    PhysicalAddress::from_va(ptr as u64).0
+}
+
+fn va_from_pa(pa: u64) -> u64 {
+    let mut physical_address: PHYSICAL_ADDRESS = unsafe { core::mem::zeroed() };
+    unsafe { *(physical_address.QuadPart_mut()) = pa as i64 };
+
+    unsafe { MmGetVirtualForPhysical(physical_address) as u64 }
+}
+```
+
+* Credits: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/utils/addresses.rs
+
+
+The `VcpuData` struct represents data associated with a virtual CPU in a hypervisor, and it contains a field called `vmxon_region`, which is a zero-initialized naturally aligned `4-KByte` region of memory, as well as a field called `vmxon_region_physical_address` which is its physical address. The `new()` function initializes the `VcpuData` struct and allocates the `VMXON Region` in memory using a `PhysicalAllocator`. The `init_vmxon_region()` function initializes the `VMXON Region` with the VMCS revision ID, enables VMX operation by calling `vmxon()`, and returns an error if the virtual to physical address translation fails.
+
+```rust
+pub struct VcpuData {
+    /// The virtual and physical address of the Vmxon naturally aligned 4-KByte region of memory
+    pub vmxon_region: Box<VmxonRegion, PhysicalAllocator>,
+    pub vmxon_region_physical_address: u64,
+}
+
+impl VcpuData {
+    pub fn new() -> Result<Box<Self>, HypervisorError> {
+        let instance = Self {
+            vmxon_region: unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() },
+            vmxon_region_physical_address: 0,
+        };
+
+        let mut instance = Box::new(instance);
+                
+        log::info!("[+] init_vmxon_region");
+        instance.init_vmxon_region()?;
+    }
+
+    /// Allocate a naturally aligned 4-KByte VMXON region of memory to enable VMX operation (Intel Manual: 25.11.5 VMXON Region)
+    pub fn init_vmxon_region(&mut self) -> Result<(), HypervisorError> {
+        self.vmxon_region_physical_address = physical_address(self.vmxon_region.as_ref() as *const _ as _).as_u64();
+
+        if self.vmxon_region_physical_address == 0 {
+            return Err(HypervisorError::VirtualToPhysicalAddressFailed);
+        }
+
+        log::info!("[+] VMXON Region Virtual Address: {:p}", self.vmxon_region);
+        log::info!("[+] VMXON Region Physical Addresss: 0x{:x}", self.vmxon_region_physical_address);
+
+        self.vmxon_region.revision_id = support::get_vmcs_revision_id();
+        self.vmxon_region.as_mut().revision_id.set_bit(31, false);
+
+        support::vmxon(self.vmxon_region_physical_address)?;
+        log::info!("[+] VMXON successful!");
+
+        Ok(())
+    }
+}
+```
+
+The `vmxon()` function is just a wrapper around the x86 `vmxon()` function, which calls the `vmxon <addr>` in assembly. However, it is not necessary to create wrappers, but it helps with error handling.
+
+```rust
+/// Enable VMX operation.
+pub fn vmxon(vmxon_pa: u64) -> Result<(), HypervisorError> {
+    match unsafe { x86::bits64::vmx::vmxon(vmxon_pa) } {
+        Ok(_) => Ok(()),
+        Err(_) => Err(HypervisorError::VMXONFailed),
+    }
+}
+```
+
+Overall, the above initializes a memory region to enable VMX operation for a virtual CPU in a hypervisor. However, we want to do this for every logical/virtual CPU.
+
+```rust
+pub struct Vcpu {
+    /// The index of the processor.
+    index: u32,
+    
+    data: OnceCell<Box<VcpuData>>,
+}
+
+impl Vcpu {
+    pub fn new(index: u32) -> Result<Self, HypervisorError> {
+        log::trace!("Creating processor {}", index);
+
+        Ok (Self {
+            index,
+            data: OnceCell::new(),
+        })
+    }
+
+    pub fn virtualize_cpu(&self) -> Result<(), HypervisorError> {
+        log::info!("[+] Enabling Virtual Machine Extensions (VMX)");
+        support::enable_vmx_operation()?;
+
+        log::info!("[+] Adjusting Control Registers");
+        support::adjust_control_registers();
+
+        log::info!("[+] Initializing VcpuData");        
+ 
+        let _vcpu_data = &self.data.get_or_try_init(|| VcpuData::new())?;
+    }
+}
+```
+
+
+```
+INFO  [driver] Driver Entry called
+INFO  [hypervisor] [+] CPU is Intel
+INFO  [hypervisor] [+] Virtual Machine Extension (VMX) technology is supported
+INFO  [hypervisor] [+] Found 2 processors
+INFO  [hypervisor] [+] Virtualizing processors
+INFO  [hypervisor::vcpu] [+] Enabling Virtual Machine Extensions (VMX)
+INFO  [hypervisor::support] [+] Lock bit set via IA32_FEATURE_CONTROL
+INFO  [hypervisor::vcpu] [+] Adjusting Control Registers
+INFO  [hypervisor::support] [+] Mandatory bits in CR0 set/cleared
+INFO  [hypervisor::support] [+] Mandatory bits in CR4 set/cleared
+INFO  [hypervisor::vcpu] [+] Initializing VcpuData
+INFO  [hypervisor::vcpu_data] [+] init_vmxon_region
+INFO  [hypervisor::vcpu_data] [+] VMXON Region Virtual Address: 0xffffa3801098a000
+INFO  [hypervisor::vcpu_data] [+] VMXON Region Physical Addresss: 0x23ffc1000
+INFO  [hypervisor::vcpu_data] [+] VMXON successful!
 ```
