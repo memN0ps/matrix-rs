@@ -1,5 +1,5 @@
 
-use x86::{vmx::{self, vmcs::{guest, ro::VMEXIT_INSTRUCTION_LEN}}};
+use x86::{vmx::{vmcs::{guest, ro::VMEXIT_INSTRUCTION_LEN}}};
 use crate::{error::HypervisorError, support};
 
 #[repr(C)]
@@ -70,8 +70,10 @@ macro_rules! restore_regs_from_stack {
 #[no_mangle]
 pub fn vmexit_handler(_register_state: *mut GeneralRegisters) -> Result<(), HypervisorError> {
     log::info!("[+] Called VMEXIT Handler...");
-    let vmexit_reason = support::vmread(vmx::vmcs::ro::VM_INSTRUCTION_ERROR)?;
-    log::info!("[+] VMEXIT Reason: {:#x}", vmexit_reason);
+    let vmexit_reason = support::vmread(x86::vmx::vmcs::ro::EXIT_REASON)?;
+    log::info!("[+] VMEXIT_REASON: {:#x}", vmexit_reason);
+    let vmexit_qualification = support::vmread(x86::vmx::vmcs::ro::EXIT_QUALIFICATION)?;
+    log::info!("[+] VMEXIT_QUALIFICATION: {:#x}", vmexit_qualification);
 
     match vmexit_reason {
         0 => log::info!("OK"),
