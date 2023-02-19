@@ -1,5 +1,7 @@
 # SecretVisor - A minimalistic Intel VT-x research hypervisor in Rust
 
+Note: VMEXIT Handler needs fixing.
+
 ## Features
 
 * Check for Intel CPU
