@@ -194,11 +194,7 @@ fn set_lock_bit() -> Result<(), HypervisorError> {
 
 ## Restrictions on VMX Operation (Adjusting Control Registers)
 
-In order to ensure that virtualization is secure and reliable when running a virtual machine, specific bits in the Control Registers (CR0 and CR4) must be set or cleared to particular values. The "Restrictions on VMX Operation" are these necessary bits and bit configurations.
-
-The VMX operation will fail if any of these bits have an unsupported value when the system is in virtualization mode. A general protection exception will be thrown if one of these bits is ever attempted to be set to an unsupported value while the VMX operation is in progress.
-
-Software should consult the VMX capability MSRs IA32 VMX CR0 FIXED0, IA32 VMX CR0 FIXED1, IA32 VMX CR4 FIXED0, and IA32 VMX CR4 FIXED1 to find out which bits in the CR0 and CR4 registers are fixed and how they should be set. 
+In order to ensure that Virtual Machine Extension (VMX) Operation work as intended, specific bits in the Control Registers (`CR0` and `CR4`) must be set or cleared to particular values. The VMX operation will fail if any of these bits have an unsupported value when the system is in virtualization mode. A general protection exception will be thrown if one of these bits is ever attempted to be set to an unsupported value while the VMX operation is in progress. Software should consult the VMX capability MSRs `IA32_VMX_CR0_FIXED0`, `IA32_VMX_CR0_FIXED1`, `IA32_VMX_CR4_FIXED0`, and `IA32_VMX_CR4_FIXED1` to find out which bits in the `CR0` and `CR4` registers are fixed and how they should be set.
 
 ### Rust 
 
@@ -247,7 +243,7 @@ fn set_cr4_bits() {
 
 ## VMXON Region
 
-Software must allot a memory region called the `VMXON` region, which will be used by the logical processor for VMX operation, before allowing virtual machine extensions (VMX) activity. The operand for the `VMXON` instruction is the physical address of this area. 
+Software must allocate a memory region called the `VMXON Region`, which will be used by the logical processor for VMX operation, before allowing virtual machine extensions (VMX) activity. The operand for the `VMXON` instruction is the physical address of this area. 
 
 The `VMXON` pointer must adhere to certain specifications, such as being 4-KByte aligned and not exceeding the processor's physical address width. Software must use a different region for each logical processor and write the VMCS revision identification (VMCS ID) to the `VMXON` region before `VMXON` is executed. Unpredictable behaviour may emerge from accessing or altering the `VMXON` region of a logical processor between the execution of `VMXON` and `VMXOFF`.
 
@@ -411,14 +407,14 @@ Overall, the above initializes a memory region to enable VMX operation for a vir
 
 Say we have four physical cores in our processor; this translates to four separate processing units in our CPU. Hyper-threading technology allows for the simultaneous execution of two threads on each core. As a result, there are eight logical processors, which the operating system interprets as eight different CPUs.
 
-General purpose registers, MSR registers, VMCSs, and VMXON Regions are among the registers to which each logical processor has access. We must ensure that a Virtual Machine Monitor (VMM) is set up to use all logical processors. This will enable us to make the most of our CPU's capabilities and deliver the best performance for our virtualized workloads.
+General purpose registers, MSR registers, VMCSs, and `VMXON Regions` are among the registers to which each logical processor has access. We must ensure that a Virtual Machine Monitor (VMM) is set up to use all logical processors. This will enable us to make the most of our CPU's capabilities and deliver the best performance for our virtualized workloads.
 
 
 ### Rust
 
 We have a struct called `Vcpu` that represents a virtual CPU. It has two fields: `index`, which is an integer that represents the index of the processor, and `data`, which is an [`OnceCell`](https://docs.rs/once_cell/latest/once_cell/) that holds a boxed `VcpuData` instance. The `new()` function takes an `index` as an argument and creates a new `Vcpu` instance with that index and an uninitialized data field.
 
-The `virtualize_cpu` function is responsible for initializing the virtual CPU for virtualization. It first enables the `Virtual Machine Extensions (VMX)`, `adjusts control registers`, and then initializes the `VcpuData` structure by calling `get_or_try_init` on the `data` field. The `get_or_try_init` function initializes the `data` field if it has not been initialized before or returns the existing value if it has been initialized.
+The `virtualize_cpu` function is responsible for initializing the virtual CPU for virtualization. It first enables the Virtual Machine Extensions (VMX), `adjusts control registers`, and then initializes the `VcpuData` structure by calling `get_or_try_init` on the `data` field. The `get_or_try_init` function initializes the `data` field if it has not been initialized before or returns the existing value if it has been initialized.
 
 The `devirtualize_cpu()` is used to devirtualize the CPU using the `vmxoff` instruction. This instruction is used to disable virtualization and return control to the host operating system. The function returns a `Result` indicating whether the operation was successful or not and any relevant error information. The `id()` returns the index of the current virtual processor, which is helpful in multi-processor systems where we need to identify which processor is executing the code.
 
@@ -569,7 +565,7 @@ The `Hypervisor` struct has three methods:
 
 3. The `devirtualize()` function devirtualizes all of the available processors by calling `ProcessorExecutor::switch_to_processor()` for each processor and then calling the `devirtualize_cpu()` method on each `Vcpu` object in the `"processors"` vector.
 
-The `virtualize()` and `devirtualize() functions use the `ProcessorExecutor` struct to switch execution to each processor temporarily and then switch back after the virtualization or devirtualization operation is complete.
+The `virtualize()` and `devirtualize()` functions use the `ProcessorExecutor` struct to switch execution to each processor temporarily and then switch back after the virtualization or devirtualization operation is complete.
 
 Overall, this module provides a way to build a `Hypervisor` instance with support for virtualizing all available processors and provides methods for virtualizing and devirtualizing the processors using the `Vcpu` struct and the `ProcessorExecutor` struct.
 
