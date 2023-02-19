@@ -71,10 +71,11 @@ macro_rules! restore_regs_from_stack {
 pub fn vmexit_handler(_register_state: *mut GeneralRegisters) -> Result<(), HypervisorError> {
     log::info!("[+] Called VMEXIT Handler...");
     let vmexit_reason = support::vmread(x86::vmx::vmcs::ro::EXIT_REASON)?;
-    log::info!("[+] VMEXIT_REASON: {:#x}", vmexit_reason);
+    log::info!("[+] VMEXIT_REASON: {}", vmexit_reason);
     let vmexit_qualification = support::vmread(x86::vmx::vmcs::ro::EXIT_QUALIFICATION)?;
-    log::info!("[+] VMEXIT_QUALIFICATION: {:#x}", vmexit_qualification);
+    log::info!("[+] VMEXIT_QUALIFICATION: {}", vmexit_qualification);
 
+    //Intel Manual: 31.4 VM INSTRUCTION ERROR NUMBERS (Table 31-1. VM-Instruction Error Numbers)
     match vmexit_reason {
         0 => log::info!("OK"),
         1 => log::info!("VMCALL executed in VMX root operation"),
@@ -86,10 +87,7 @@ pub fn vmexit_handler(_register_state: *mut GeneralRegisters) -> Result<(), Hype
         7 => log::info!("VM entry with invalid control field(s)"),
         8 => log::info!("VM entry with invalid host-state field(s)"),
         9 => log::info!("VMPTRLD with invalid physical address"),
-        10 => {
-            log::info!("VMPTRLD with VMXON pointer");
-            advance_guest_rip()?;
-        }
+        10 => log::info!("VMPTRLD with VMXON pointer"),
         11 => log::info!("VMPTRLD with incorrect VMCS revision identifier"),
         12 => log::info!("VMREAD/VMWRITE from/to unsupported VMCS component"),
         13 => log::info!("VMWRITE to read-only VMCS component"),
@@ -104,23 +102,18 @@ pub fn vmexit_handler(_register_state: *mut GeneralRegisters) -> Result<(), Hype
         24 => log::info!("VMCALL with invalid SMM-monitor features (when attempting to activate the dual-monitor treatment of SMIs and SMM)"),
         25 => log::info!("VM entry with invalid VM-execution control fields in executive VMCS (when attempting to return from SMM)"),
         26 => log::info!("VM entry with events blocked by MOV SS"),
-        28 => log::info!("Invalid operand to INVEPT/INVVPID"),
+        28 => log::info!("Invalid operand to INVEPT/INVVPID."),
         _ => log::info!("[INVALID]"),
     };
 
     if vmexit_reason != 0 {
+        log::info!("[+] Calling advance_guest_rip");
+        advance_guest_rip()?;
         unsafe { 
             core::arch::asm!(
                 restore_regs_from_stack!(),
                 "vmxoff",
-                "jz {0}",       //call vmxoff_failed
-                "jc {0}",       //call vmxoff_failed
-                "push r8",
-                "popf",
-                "mov     rsp, rdx",
-                "push    rcx",
                 "ret",
-                sym vmxoff_failed,
                 options(noreturn),
             ) 
         };
@@ -149,11 +142,6 @@ pub unsafe extern "C" fn vmexit_stub() -> ! {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn vmxoff_failed() {
-    panic!("[!] VMXOFF FAILED!");
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn vmresume_failed() {
     panic!("[!] VMRESUME FAILED!");
 }
@@ -162,5 +150,8 @@ fn advance_guest_rip() -> Result<(), HypervisorError> {
     let mut rip = support::vmread(guest::RIP)?;
     let len = support::vmread(VMEXIT_INSTRUCTION_LEN)?;
     rip += len;
-    support::vmwrite(guest::RIP, rip)
+    support::vmwrite(guest::RIP, rip)?;
+    log::info!("[+] Guest RIP advanced!");
+
+    Ok(())
 }
