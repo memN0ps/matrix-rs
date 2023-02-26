@@ -1,4 +1,4 @@
-# SecretVisor - A minimalistic Intel VT-x research hypervisor in Rust
+# A minimalistic Intel VT-x research hypervisor in Rust
 
 Note: I'm getting the following error in vmexit handler, which needs fixing: `VMEXIT_REASON: 25 - VM entry with invalid VM-execution control fields in executive VMCS (when attempting to return from SMM)`
 
@@ -80,14 +80,14 @@ bcdedit /dbgsettings net hostip:<IP> port:<PORT>
 ## Create / Start Service
 
 ```
-sc.exe create SecretVisor type= kernel binPath= C:\Windows\System32\drivers\SecretVisor.sys
-sc.exe query SecretVisor
-sc.exe start SecretVisor
+sc.exe create hypervisor type= kernel binPath= C:\Windows\System32\drivers\hypervisor.sys
+sc.exe query hypervisor
+sc.exe start hypervisor
 ```
 
 ## Credits / References / Thanks / Motivation
 
-Thanks to [@daax_rynd](https://twitter.com/daax_rynd), [@vm_call](https://twitter.com/vm_call), [@Intel80x86](https://twitter.com/Intel80x86), [@not_matthias](https://twitter.com/not_matthias), [@standa_t](https://twitter.com/standa_t), and [@felix-rs / @joshuа](https://github.com/felix-rs)
+Thanks to [@daax_rynd](https://twitter.com/daax_rynd), [@Intel80x86](https://twitter.com/Intel80x86), [@not_matthias](https://twitter.com/not_matthias), [@standa_t](https://twitter.com/standa_t), and [@felix-rs / @joshuа](https://github.com/felix-rs)
 
 * 7 Days to Virtualization: A Series on Hypervisor Development: https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/
 
@@ -106,11 +106,3 @@ Thanks to [@daax_rynd](https://twitter.com/daax_rynd), [@vm_call](https://twitte
 * Orange Slice: https://github.com/gamozolabs/orange_slice
 
 * Orange Slice: Writing the Hypervisor: https://www.youtube.com/watch?v=WabeOICAOq4&list=PLSkhUfcCXvqFJAuFbABktmLaQvJwKxJ3i
-
-* Bluepill: https://git.back.engineering/_xeroxz/bluepill/
-
-* HyperBone: https://github.com/DarthTon/HyperBone/
-
-* BattlEye hypervisor detection: https://secret.club/2020/01/12/battleye-hypervisor-detection.html
-
-* How anti-cheats detect system emulation: https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html

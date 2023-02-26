@@ -1,6 +1,6 @@
 # Intel VT-x Hypervisor Development in Rust
 
-This article will cover the development of a minimalistic Intel VT-x research hypervisor in Rust, code-named [SecretVisor](https://github.com/thesecretclub/SecretVisor), which can be found on Secret Club's GitHub. We will use the [x86 crate](https://crates.io/crates/x86) and [documentation](https://docs.rs/x86/latest/x86/), which help simplify the code.
+This article will cover the development of a [minimalistic Intel VT-x research hypervisor in Rust](https://github.com/memN0ps/hyerpvisor-rs). We will use the [x86 crate](https://crates.io/crates/x86) and [documentation](https://docs.rs/x86/latest/x86/), which help simplify the code.
 
 The knowledge acquired to make this hypervisor was from reading blogs and code, notably the two excellent free hypervisor development series by [@daax_rynd](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/) and [@Intel80x86](https://rayanfam.com/). The motivation came shortly [@not_matthias](https://github.com/not-matthias/amd_hypervisor) released an AMD (SVM) Hypervisor in Rust, and the majority of the hypervisor was already developed before the legendary [@tandasat](https://github.com/tandasat/Hypervisor-101-in-Rust) released Hypervisor 101 in Rust.
 
@@ -710,9 +710,9 @@ fn virtualize() -> Option<()> {
 We can now test our code by creating a service and starting it to load our Windows kernel driver.
 
 ```
-sc.exe create SecretVisor type= kernel binPath= C:\Windows\System32\drivers\SecretVisor.sys
-sc.exe query SecretVisor
-sc.exe start SecretVisor
+sc.exe create hypervisor type= kernel binPath= C:\Windows\System32\drivers\hypervisor.sys
+sc.exe query hypervisor
+sc.exe start hypervisor
 ```
 
 The output is shown in Windbg:
@@ -740,7 +740,7 @@ Congratulations! You have completed the first part of the Intel VT-x Hypervisor 
 
 ## Credits / References / Thanks / Motivation
 
-Thanks to [@daax_rynd](https://twitter.com/daax_rynd), [@vm_call](https://twitter.com/vm_call), [@Intel80x86](https://twitter.com/Intel80x86), [@not_matthias](https://twitter.com/not_matthias), [@standa_t](https://twitter.com/standa_t), and [@felix-rs / @joshuа](https://github.com/felix-rs)
+Thanks to [@daax_rynd](https://twitter.com/daax_rynd), [@Intel80x86](https://twitter.com/Intel80x86), [@not_matthias](https://twitter.com/not_matthias), [@standa_t](https://twitter.com/standa_t), and [@felix-rs / @joshuа](https://github.com/felix-rs)
 
 * 7 Days to Virtualization: A Series on Hypervisor Development: https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/
 
@@ -759,11 +759,3 @@ Thanks to [@daax_rynd](https://twitter.com/daax_rynd), [@vm_call](https://twitte
 * Orange Slice: https://github.com/gamozolabs/orange_slice
 
 * Orange Slice: Writing the Hypervisor: https://www.youtube.com/watch?v=WabeOICAOq4&list=PLSkhUfcCXvqFJAuFbABktmLaQvJwKxJ3i
-
-* Bluepill: https://git.back.engineering/_xeroxz/bluepill/
-
-* HyperBone: https://github.com/DarthTon/HyperBone/
-
-* BattlEye hypervisor detection: https://secret.club/2020/01/12/battleye-hypervisor-detection.html
-
-* How anti-cheats detect system emulation: https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html
