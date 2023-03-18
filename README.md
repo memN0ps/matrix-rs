@@ -2,7 +2,7 @@
 
 Here are some of my notes: https://memn0ps.github.io/hypervisor-development-in-rust-part-1/
 
-I made this shittyvisor for learning and fun in Dec/Jan/Feb and had planned to implement EPT but the legend Santoshi Tanda release his amazing one and I ran out of time. Maybe I'll come back to this later in the future if I ever get the time to fix the silly bug and implement EPT etc.. The original plan was to release it on the secret club blog but I can't be bothered anymore.
+I made this shittyvisor for learning and fun in Dec/Jan/Feb and had planned to implement EPT but the legend Santoshi Tanda release his amazing one and I ran out of time. Maybe I'll come back to this later in the future if I ever get the time to fix the silly bug and implement EPT etc.. The original plan was to release it on the secret club blog but I can't be bothered anymore. I'm too tried and it takes too much of an effort to write blogs and code but I'm still happy that I learned a lot during the process.
 
 Primary motivation: https://secret.club/2020/01/12/battleye-hypervisor-detection.html and https://secret.club/2020/07/06/bottleye.html and https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html
 
