@@ -1,5 +1,11 @@
 # A minimalistic Intel VT-x research hypervisor in Rust
 
+I made this shittyvisor for learning and fun in Jan/Feb and had planned to implement EPT but the legend Santoshi Tanda release his amazing one and I ran out of time. Maybe I'll come back to this later in the future if I ever get the time to fix the silly bug and implement EPT etc.. The original plan was to release it on the secret club blog but I can't be bothered anymore.
+
+Primary motivation: https://secret.club/2020/01/12/battleye-hypervisor-detection.html and https://secret.club/2020/07/06/bottleye.html and https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html
+
+Here are some of my notes: https://memn0ps.github.io/shittyvisor
+
 Note: I'm getting the following error in vmexit handler, which needs fixing: `VMEXIT_REASON: 25 - VM entry with invalid VM-execution control fields in executive VMCS (when attempting to return from SMM)`
 
 ## Features
@@ -106,3 +112,11 @@ Thanks to [@daax_rynd](https://twitter.com/daax_rynd), [@Intel80x86](https://twi
 * Orange Slice: https://github.com/gamozolabs/orange_slice
 
 * Orange Slice: Writing the Hypervisor: https://www.youtube.com/watch?v=WabeOICAOq4&list=PLSkhUfcCXvqFJAuFbABktmLaQvJwKxJ3i
+
+* https://git.back.engineering/_xeroxz/bluepill
+
+* https://secret.club/2020/07/06/bottleye.html
+
+* https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html
+
+* https://secret.club/2020/01/12/battleye-hypervisor-detection.html
