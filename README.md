@@ -1,6 +1,6 @@
 # A minimalistic Intel VT-x research hypervisor in Rust
 
-Here are some of my notes: https://memn0ps.github.io/hypervisor-development-in-rust-part-1
+Here are some of my notes: https://memn0ps.github.io/hypervisor-development-in-rust-part-1/
 
 I made this shittyvisor for learning and fun in Dec/Jan/Feb and had planned to implement EPT but the legend Santoshi Tanda release his amazing one and I ran out of time. Maybe I'll come back to this later in the future if I ever get the time to fix the silly bug and implement EPT etc.. The original plan was to release it on the secret club blog but I can't be bothered anymore.
 
