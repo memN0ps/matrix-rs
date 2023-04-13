@@ -1,4 +1,4 @@
-# A minimalistic Intel VT-x research hypervisor in Rust
+# Intel VT-x Type-2 blue-pill research hypervisor in Rust
 
 Here is a small blog post: https://memn0ps.github.io/hypervisor-development-in-rust-part-1/
 
