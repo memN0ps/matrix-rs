@@ -2,15 +2,15 @@
 
 Here is a small blog post: https://memn0ps.github.io/hypervisor-development-in-rust-part-1/
 
-I made this hypervisor for learning and fun in Dec/Jan/Feb and had planned to implement EPT but the legend Satoshi Tanda released his amazing one and I ran out of time. Maybe I'll come back to this later in the future if I ever get the time to fix the silly bug and implement EPT etc... The original plan was to release it bug-free with EPT but I can't be bothered anymore. I'm too tired and it takes too much effort to write blogs and code but I'm still happy that I learned a lot during the process. This follows a similar neat structure to the [amd_hypervisor made by @not-matthias](https://github.com/not-matthias/amd_hypervisor), which will help integrate the open-source projects if required.
+I made this hypervisor for learning and fun in Dec/Jan/Feb 2023, and the original plan was to release it as a bug-free minimalistic hypervisor with hooks. However, I got a little tired, took a break, and coded a UEFI Bootkit in Rust to load the hypervisor Windows kernel driver by disabling or bypassing security protections before the OS boots. I'll return to this later if I ever get the time and implement Extended Page Table (EPT). The legendary [Satoshi Tanda (@tandasat)](https://github.com/tandasat) released [Hypervisor 101 in Rust](https://github.com/tandasat/Hypervisor-101-in-Rust), a fuzzing hypervisor for UEFI on Intel/AMD, while I was developing this Intel Type-2 VT-x hypervisor, both of which are different.
+
+This project follows a similar neat structure to the [amd_hypervisor made by @not-matthias](https://github.com/not-matthias/amd_hypervisor), which will help integrate the open-source projects if required.
 
 The primary motivation came shortly after [@not_matthias](https://github.com/not-matthias/amd_hypervisor) released an AMD (SVM) Hypervisor in Rust and from [Secret Club's](https://twitter.com/the_secret_club) excellent articles:
 
 * https://secret.club/2020/01/12/battleye-hypervisor-detection.html 
 * https://secret.club/2020/07/06/bottleye.html 
 * https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html
-
-The majority of the hypervisor was already developed before the legendary [@tandasat released Hypervisor 101 in Rust](https://github.com/tandasat/Hypervisor-101-in-Rust).
 
 Note: I'm getting the following error in vmexit handler, which needs fixing: `VMEXIT_REASON: 25 - VM entry with invalid VM-execution control fields in executive VMCS (when attempting to return from SMM)`
 
