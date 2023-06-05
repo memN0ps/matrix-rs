@@ -1,4 +1,4 @@
-# Windows Blue Pill Type-2 Hypervisor in Rust
+# Windows Blue Pill Type-2 Hypervisor in Rust (Codename: BluePill)
 
 Here is a small blog post: https://memn0ps.github.io/hypervisor-development-in-rust-part-1/
 
