@@ -1,13 +1,16 @@
 //Credits not-matthias: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/utils/processor.rs
 use core::mem::MaybeUninit;
 
-use winapi::shared::ntdef::{ALL_PROCESSOR_GROUPS, PROCESSOR_NUMBER, NT_SUCCESS, GROUP_AFFINITY};
+use winapi::shared::ntdef::{ALL_PROCESSOR_GROUPS, GROUP_AFFINITY, NT_SUCCESS, PROCESSOR_NUMBER};
 
-use crate::nt::{KeQueryActiveProcessorCountEx, KeGetCurrentProcessorNumberEx, KeGetProcessorNumberFromIndex, KeSetSystemGroupAffinityThread, ZwYieldExecution, KeRevertToUserGroupAffinityThread};
+use crate::nt::{
+    KeGetCurrentProcessorNumberEx, KeGetProcessorNumberFromIndex, KeQueryActiveProcessorCountEx,
+    KeRevertToUserGroupAffinityThread, KeSetSystemGroupAffinityThread, ZwYieldExecution,
+};
 
 /// The KeQueryActiveProcessorCountEx routine returns the number of active logical processors in a specified group in a multiprocessor system or in the entire system.
 pub fn processor_count() -> u32 {
-    unsafe { KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS)}
+    unsafe { KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS) }
 }
 
 #[allow(dead_code)]
@@ -22,7 +25,7 @@ fn processor_number_from_index(index: u32) -> Option<PROCESSOR_NUMBER> {
 
     // The KeGetProcessorNumberFromIndex routine converts a systemwide processor index to a group number and a group-relative processor number.
     let status = unsafe { KeGetProcessorNumberFromIndex(index, processor_number.as_mut_ptr()) };
-    
+
     if NT_SUCCESS(status) {
         Some(unsafe { processor_number.assume_init() })
     } else {
@@ -54,16 +57,16 @@ impl ProcessorExecutor {
         affinity.Reserved[2] = 0;
 
         log::trace!("Switching execution to processor {}", i);
-        
+
         //The KeSetSystemGroupAffinityThread routine changes the group number and affinity mask of the calling thread.
         unsafe { KeSetSystemGroupAffinityThread(&mut affinity, old_affinity.as_mut_ptr()) };
 
         log::trace!("Yielding execution");
-        if !NT_SUCCESS(unsafe { ZwYieldExecution() } ) {
+        if !NT_SUCCESS(unsafe { ZwYieldExecution() }) {
             return None;
         }
 
-        Some( Self { old_affinity } )
+        Some(Self { old_affinity })
     }
 }
 

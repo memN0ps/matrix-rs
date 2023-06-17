@@ -1,12 +1,20 @@
 #![no_std]
 
-use hypervisor::{Hypervisor};
+use hypervisor::Hypervisor;
 use kernel_log::KernelLogger;
 use log::LevelFilter;
-use winapi::{km::wdm::{DRIVER_OBJECT}, shared::{ntdef::{UNICODE_STRING, NTSTATUS}, ntstatus::{STATUS_SUCCESS, STATUS_UNSUCCESSFUL}}};
+use winapi::{
+    km::wdm::DRIVER_OBJECT,
+    shared::{
+        ntdef::{NTSTATUS, UNICODE_STRING},
+        ntstatus::{STATUS_SUCCESS, STATUS_UNSUCCESSFUL},
+    },
+};
 
 #[no_mangle]
-pub extern "system" fn __CxxFrameHandler3(_: *mut u8, _: *mut u8, _: *mut u8, _: *mut u8) -> i32 { unimplemented!() }
+pub extern "system" fn __CxxFrameHandler3(_: *mut u8, _: *mut u8, _: *mut u8, _: *mut u8) -> i32 {
+    unimplemented!()
+}
 
 #[global_allocator]
 static GLOBAL: kernel_alloc::KernelAlloc = kernel_alloc::KernelAlloc;
@@ -18,8 +26,9 @@ static _FLTUSED: i32 = 0;
 use core::panic::PanicInfo;
 #[cfg(not(test))]
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! { loop {} }
-
+fn panic(_info: &PanicInfo) -> ! {
+    loop {}
+}
 
 static mut HYPERVISOR: Option<Hypervisor> = None;
 
@@ -30,7 +39,6 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
 
     driver.DriverUnload = Some(driver_unload);
 
-
     if virtualize().is_none() {
         log::error!("Failed to virtualize processors");
         return STATUS_UNSUCCESSFUL;
@@ -39,10 +47,9 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
     STATUS_SUCCESS
 }
 
-
 pub extern "system" fn driver_unload(_driver: &mut DRIVER_OBJECT) {
     log::info!("Driver unloaded successfully!");
-    
+
     if let Some(mut hypervisor) = unsafe { HYPERVISOR.take() } {
         match hypervisor.devirtualize() {
             Ok(_) => log::info!("[+] Devirtualized successfully!"),
@@ -52,7 +59,6 @@ pub extern "system" fn driver_unload(_driver: &mut DRIVER_OBJECT) {
 }
 
 fn virtualize() -> Option<()> {
-
     let hv = Hypervisor::builder();
 
     let Ok(mut hypervisor) = hv.build() else {
@@ -62,7 +68,7 @@ fn virtualize() -> Option<()> {
 
     match hypervisor.virtualize() {
         Ok(_) => log::info!("[+] VMM initialized"),
-        Err(err) =>  {
+        Err(err) => {
             log::error!("[-] VMM initialization failed: {}", err);
             return None;
         }

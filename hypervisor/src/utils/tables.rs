@@ -13,7 +13,7 @@ use x86_64::structures::{tss::TaskStateSegment, DescriptorTablePointer};
 
 use super::segmentation::SegmentAccessRights;
 
-/* 
+/*
 lazy_static! {
     pub(super) static ref IDT: Mutex<IdtStruct> = {
         let mut idt = IdtStruct::alloc();

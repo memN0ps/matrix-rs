@@ -1,10 +1,12 @@
 extern crate alloc;
 
 use x86::{
-    cpuid::CpuId, msr::{rdmsr, self}, controlregs, bits64,
+    bits64, controlregs,
+    cpuid::CpuId,
+    msr::{self, rdmsr},
 };
 
-use crate::{error::HypervisorError};
+use crate::error::HypervisorError;
 
 /// Check to see if CPU is Intel (“GenuineIntel”).
 pub fn has_intel_cpu() -> Result<(), HypervisorError> {

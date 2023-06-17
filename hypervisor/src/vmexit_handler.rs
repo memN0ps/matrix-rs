@@ -1,6 +1,5 @@
-
-use x86::{vmx::{vmcs::{guest, ro::VMEXIT_INSTRUCTION_LEN}}};
 use crate::{error::HypervisorError, support};
+use x86::vmx::vmcs::{guest, ro::VMEXIT_INSTRUCTION_LEN};
 
 #[repr(C)]
 #[derive(Debug, Default)]
@@ -109,24 +108,24 @@ pub fn vmexit_handler(_register_state: *mut GeneralRegisters) -> Result<(), Hype
     if vmexit_reason != 0 {
         log::info!("[+] Calling advance_guest_rip");
         advance_guest_rip()?;
-        unsafe { 
+        unsafe {
             core::arch::asm!(
                 restore_regs_from_stack!(),
                 "vmxoff",
                 "ret",
                 options(noreturn),
-            ) 
+            )
         };
     }
 
-    unsafe { 
+    unsafe {
         core::arch::asm!(
             restore_regs_from_stack!(),
             "vmresume",
             "call {0}",             // call vmresume_failed
             sym vmresume_failed,
             options(noreturn),
-        ) 
+        )
     };
 }
 

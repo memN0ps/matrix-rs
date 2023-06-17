@@ -9,12 +9,6 @@ edition = "2021"
 path = "src/lib.rs"
 crate-type = ["cdylib"]
 
-[profile.dev]
-panic = "abort"
-
-[profile.release]
-panic = "abort"
-
 [dependencies]
 log = "0.4.17" # https://crates.io/crates/log
 kernel-log = "0.1.2" # https://crates.io/crates/kernel-log
