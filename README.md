@@ -6,15 +6,16 @@ This is a Rust-based research hypervisor for Intel VT-x virtualization, designed
 
 Credit and gratitude are extended to the following individuals and their respective repositories for their invaluable contributions and references: [@daax_rynd](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/), [@Intel80x86](https://github.com/SinaKarvandi/Hypervisor-From-Scratch/), [@not_matthias](https://github.com/not-matthias/amd_hypervisor), and [@standa_t](https://github.com/tandasat/Hypervisor-101-in-Rust).
 
-This project also follows a similar neat structure to the [amd_hypervisor made by @not-matthias](https://github.com/not-matthias/amd_hypervisor), which facilitates potential integration with other open-source projects, if necessary.
 
-The inspiration for this endeavor emerged shortly after the release of [@not_matthias](https://github.com/not-matthias/amd_hypervisor)'s AMD (SVM) Hypervisor in Rust, along with the enlightening articles by [Secret Club](https://twitter.com/the_secret_club) and the unveiling of [DarthTon's HyperBone](https://github.com/DarthTon/HyperBone) on [UnknownCheats](https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html):
+The inspiration for this endeavor emerged shortly after the release of [@not_matthias](https://github.com/not-matthias/amd_hypervisor)'s AMD (SVM) Hypervisor in Rust, as well as the enlightening articles by [Secret Club](https://twitter.com/the_secret_club) and the unveiling of [DarthTon's HyperBone](https://github.com/DarthTon/HyperBone) (based on the legendary [Alex Ionescu's](https://github.com/ionescu007/SimpleVisor) version) on [UnknownCheats](https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html).
 
 - [BattlEye Hypervisor Detection](https://secret.club/2020/01/12/battleye-hypervisor-detection.html)
 - [BottlEye](https://secret.club/2020/07/06/bottleye.html)
 - [How Anti-Cheats Detect System Emulation](https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html)
 
-By leveraging the knowledge gained from these resources and building upon them, I aim to explore and contribute to the field of hypervisor development in Rust.
+Furthermore, in my pursuit of knowledge and expertise, I have been preparing for the [legendary Satoshi Tanda's Hypervisor Development for Security Researchers](https://tandasat.github.io/Hypervisor_Development_for_Security_Researchers.html) training, which has further fueled my determination to embark on this captivating journey of hypervisor development. 
+
+Additionally, I have gained valuable insights and knowledge from the exploration of [BluePill by @_xeroxz (IDontCode)](https://git.back.engineering/_xeroxz/bluepill) and various blog posts, such as [AMD-V Hypervisor Development](https://blog.back.engineering/04/08/2022/) and [Voyager - A Hyper-V Hacking Framework](https://blog.back.engineering/20/04/2021). The talented individuals at [Back Engineering Labs](https://back.engineering/) have been instrumental in providing a wealth of information and expertise. Their contributions have served as a valuable reference, further enriching my understanding and inspiring me to delve deeper into this field.
 
 ## Features
 
@@ -112,6 +113,8 @@ sc.exe start matrix
 * Mythril: https://github.com/mythril-hypervisor/mythril/
 
 * BluePill: https://git.back.engineering/_xeroxz/bluepill
+
+* AMD-V Hypervisor Development: https://blog.back.engineering/04/08/2022/
 
 * Hyperbone: https://github.com/DarthTon/HyperBone/
 
