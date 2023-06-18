@@ -4,10 +4,10 @@ Blog: https://memn0ps.github.io/hypervisor-development-in-rust-part-1/
 
 This is a Rust-based research hypervisor for Intel VT-x virtualization, designed to be lightweight and focused on studying the core concepts. While it currently lacks memory management unit (MMU) virtualization using Intel Extended Page Tables (EPT), this feature is planned for future implementation.
 
-Credit and gratitude are extended to the following individuals and their respective repositories for their invaluable contributions and references: [@daax_rynd](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/), [@Intel80x86](https://github.com/SinaKarvandi/Hypervisor-From-Scratch/), [@not_matthias](https://github.com/not-matthias/amd_hypervisor), and [@standa_t](https://github.com/tandasat/Hypervisor-101-in-Rust).
+Credit and gratitude are extended to the following individuals and their respective blogs or repositories for their invaluable contributions and references: [@daax_rynd](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/), [@Intel80x86](https://github.com/SinaKarvandi/Hypervisor-From-Scratch/), [@not_matthias](https://github.com/not-matthias/amd_hypervisor), and [@standa_t](https://github.com/tandasat/Hypervisor-101-in-Rust).
 
 
-The inspiration for this endeavor emerged shortly after the release of [@not_matthias](https://github.com/not-matthias/amd_hypervisor)'s AMD (SVM) Hypervisor in Rust, as well as the enlightening articles by [Secret Club](https://twitter.com/the_secret_club) and the unveiling of [DarthTon's HyperBone](https://github.com/DarthTon/HyperBone) (based on the legendary [Alex Ionescu's](https://github.com/ionescu007/SimpleVisor) version) on [UnknownCheats](https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html).
+The inspiration for this endeavor emerged shortly after the release of [@not_matthias](https://github.com/not-matthias/amd_hypervisor)'s AMD SVM hypervisor in Rust, as well as the enlightening articles by [Secret Club](https://twitter.com/the_secret_club) and the unveiling of [DarthTon's HyperBone](https://github.com/DarthTon/HyperBone) (based on the legendary [Alex Ionescu's](https://github.com/ionescu007/SimpleVisor) version) on [UnknownCheats](https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html).
 
 - [BattlEye Hypervisor Detection](https://secret.club/2020/01/12/battleye-hypervisor-detection.html)
 - [BottlEye](https://secret.club/2020/07/06/bottleye.html)
@@ -23,7 +23,7 @@ Additionally, I have gained valuable insights and knowledge from the exploration
     - Extended Page Tables (EPT)
     - Model Specific Register (MSR) Bitmaps
 
-- Type-2 AMD SVM Hypervisor Integration: Integration of AMD SVM (Secure Virtual Machine) hypervisor support is planned for future development.
+- Type-2 AMD SVM Hypervisor Integration: Integration of AMD SVM hypervisor support is planned for future development.
 
 By combining these features, my goal is to create a comprehensive hypervisor solution that supports both Intel VT-x and AMD SVM virtualization technologies. I'm actively working on the Intel VT-x hypervisor and have plans to integrate the AMD SVM hypervisor in the future.
 
