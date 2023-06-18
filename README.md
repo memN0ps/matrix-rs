@@ -2,19 +2,29 @@
 
 Blog: https://memn0ps.github.io/hypervisor-development-in-rust-part-1/
 
-I made this hypervisor for learning and fun in Dec/Jan/Feb 2023, and the original plan was to release it as a bug-free minimalistic hypervisor with hooks. However, I got a little tired, took a break, and coded a UEFI Bootkit in Rust to load the hypervisor Windows kernel driver by disabling or bypassing security protections before the OS boots. I'll return to this later if I ever get the time and implement Extended Page Table (EPT). The legendary [Satoshi Tanda (@tandasat)](https://github.com/tandasat) released [Hypervisor 101 in Rust](https://github.com/tandasat/Hypervisor-101-in-Rust), a fuzzing hypervisor for UEFI on Intel/AMD, while I was developing this Intel Type-2 VT-x hypervisor, both of which are different.
+This is a Rust-based research hypervisor for Intel VT-x virtualization, designed to be lightweight and focused on studying the core concepts. While it currently lacks memory management unit (MMU) virtualization using Intel Extended Page Tables (EPT), this feature is planned for future implementation.
 
-This project follows a similar neat structure to the [amd_hypervisor made by @not-matthias](https://github.com/not-matthias/amd_hypervisor), which will help integrate the open-source projects if required.
+Credit and gratitude are extended to the following individuals and their respective repositories for their invaluable contributions and references: [@daax_rynd](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/), [@Intel80x86](https://github.com/SinaKarvandi/Hypervisor-From-Scratch/), [@not_matthias](https://github.com/not-matthias/amd_hypervisor), and [@standa_t](https://github.com/tandasat/Hypervisor-101-in-Rust).
 
-The primary motivation came shortly after [@not_matthias](https://github.com/not-matthias/amd_hypervisor) released an AMD (SVM) Hypervisor in Rust and from [Secret Club's](https://twitter.com/the_secret_club) excellent articles:
+This project also follows a similar neat structure to the [amd_hypervisor made by @not-matthias](https://github.com/not-matthias/amd_hypervisor), which facilitates potential integration with other open-source projects, if necessary.
 
-* https://secret.club/2020/01/12/battleye-hypervisor-detection.html 
-* https://secret.club/2020/07/06/bottleye.html 
-* https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html
+The inspiration for this endeavor emerged shortly after the release of [@not_matthias](https://github.com/not-matthias/amd_hypervisor)'s AMD (SVM) Hypervisor in Rust, along with the enlightening articles by [Secret Club](https://twitter.com/the_secret_club) and the unveiling of [DarthTon's HyperBone](https://github.com/DarthTon/HyperBone) on [UnknownCheats](https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html):
+
+- [BattlEye Hypervisor Detection](https://secret.club/2020/01/12/battleye-hypervisor-detection.html)
+- [BottlEye](https://secret.club/2020/07/06/bottleye.html)
+- [How Anti-Cheats Detect System Emulation](https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html)
+
+By leveraging the knowledge gained from these resources and building upon them, I aim to explore and contribute to the field of hypervisor development in Rust.
 
 ## Features
 
-TODO: **Development in progress**
+- Type-2 Intel VT-x Hypervisor (under development): This hypervisor is being developed with a focus on Intel VT-x virtualization. The following features are currently in progress:
+    - Extended Page Tables (EPT)
+    - Model Specific Register (MSR) Bitmaps
+
+- Type-2 AMD SVM Hypervisor Integration: Integration of AMD SVM (Secure Virtual Machine) hypervisor support is planned for future development.
+
+By combining these features, my goal is to create a comprehensive hypervisor solution that supports both Intel VT-x and AMD SVM virtualization technologies. I'm actively working on the Intel VT-x hypervisor and have plans to integrate the AMD SVM hypervisor in the future.
 
 ## Install
 
@@ -81,8 +91,6 @@ sc.exe start matrix
 
 ## Credits / References / Thanks / Motivation
 
-Thanks to [@daax_rynd](https://twitter.com/daax_rynd), [@Intel80x86](https://twitter.com/Intel80x86), [@not_matthias](https://twitter.com/not_matthias), [@standa_t](https://twitter.com/standa_t), and [@felix-rs / @joshuа](https://github.com/felix-rs)
-
 * 7 Days to Virtualization: A Series on Hypervisor Development: https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/
 
 * Hypervisor From Scratch: https://rayanfam.com/tutorials/
@@ -107,6 +115,8 @@ Thanks to [@daax_rynd](https://twitter.com/daax_rynd), [@Intel80x86](https://twi
 
 * Hyperbone: https://github.com/DarthTon/HyperBone/
 
+* UnknownCheats: https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html
+
 * DdiMon: https://github.com/tandasat/DdiMon
 
 * Hvpp: https://github.com/wbenny/hvpp
@@ -125,4 +135,4 @@ Thanks to [@daax_rynd](https://twitter.com/daax_rynd), [@Intel80x86](https://twi
 
 * https://secret.club/2020/01/12/battleye-hypervisor-detection.html
 
-* Thanks for helping me with some errors: [Christopher aka Kharosx0](https://twitter.com/Kharosx0)
+* Thanks [@rmccrystal](https://github.com/rmccrystal), `@jessiep_`, [@felix-rs / @joshuа](https://github.com/felix-rs) and [Christopher aka Kharosx0](https://twitter.com/Kharosx0) for helping me out with some concepts, code and errors.

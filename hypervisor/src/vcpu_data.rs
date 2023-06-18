@@ -1,5 +1,6 @@
 use crate::{
     error::HypervisorError,
+    nt::{KeGetCurrentIrql, KeRaiseIrqlToDpcLevel, DISPATCH_LEVEL},
     support,
     utils::addresses::physical_address,
     utils::tables::GdtStruct,
@@ -96,6 +97,12 @@ impl VcpuData {
 
     /// Allocate a naturally aligned 4-KByte VMXON region of memory to enable VMX operation (Intel Manual: 25.11.5 VMXON Region)
     pub fn init_vmxon_region(&mut self) -> Result<(), HypervisorError> {
+        // at IRQL > DISPATCH_LEVEL memory allocation routines don't work
+        if unsafe { KeGetCurrentIrql() } > DISPATCH_LEVEL {
+            let dpc_level_irql = KeRaiseIrqlToDpcLevel();
+            log::info!("DPC Level IRQL: {:?}", dpc_level_irql);
+        }
+
         self.vmxon_region_physical_address =
             physical_address(self.vmxon_region.as_ref() as *const _ as _).as_u64();
 

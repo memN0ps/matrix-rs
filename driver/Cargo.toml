@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-path = "src/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
@@ -25,7 +24,3 @@ features = [
     "wdm",
     "ntstatus",
 ]
-
-[build-dependencies]
-winreg = "0.10.1"
-failure = "0.1.8"
