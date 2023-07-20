@@ -2,13 +2,14 @@ use core::arch::global_asm;
 
 use crate::{
     error::HypervisorError,
-    intel::{segmentation::Segment, tables::GdtStruct},
+    intel::{
+        controls::{adjust_vmx_controls, VmxControl},
+        segmentation::Segment,
+        tables::GdtStruct,
+    },
     nt::MmGetPhysicalAddress,
-    utils::{
-        help::{adjust_vmx_controls, VmxControl},
-        x86_instructions::{
-            r10, r11, r12, r13, r14, r15, r8, r9, rax, rbp, rbx, rcx, rdi, rdx, rsi, segment_limit,
-        },
+    utils::x86_instructions::{
+        r10, r11, r12, r13, r14, r15, r8, r9, rax, rbp, rbx, rcx, rdi, rdx, rsi, segment_limit,
     },
 };
 use alloc::{

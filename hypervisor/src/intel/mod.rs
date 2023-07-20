@@ -1,3 +1,4 @@
+pub mod controls;
 pub mod ept;
 pub mod registers;
 pub mod segmentation;
