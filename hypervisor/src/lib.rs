@@ -12,32 +12,24 @@ use alloc::vec::Vec;
 use error::HypervisorError;
 
 use crate::{
+    intel::{vcpu::Vcpu, vmx::Vmx},
     utils::processor::{processor_count, ProcessorExecutor},
-    vcpu::Vcpu,
 };
-
-mod ept;
 mod error;
+mod intel;
 mod nt;
-mod support;
 mod utils;
-mod vcpu;
-mod vcpu_data;
-mod vmexit_handler;
-mod vmxon_region;
 
 #[derive(Default)]
 pub struct HypervisorBuilder;
 
 impl HypervisorBuilder {
     pub fn build(self) -> Result<Hypervisor, HypervisorError> {
-        //
-        // 1) Intel Manual: 24.6 Discover Support for Virtual Machine Extension (VMX)
-        //
-        support::has_intel_cpu()?;
+        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.6 DISCOVERING SUPPORT FOR VMX */
+        Vmx::has_intel_cpu()?;
         log::info!("[+] CPU is Intel");
 
-        support::has_vmx_support()?;
+        Vmx::has_vmx_support()?;
         log::info!("[+] Virtual Machine Extension (VMX) technology is supported");
 
         let mut processors: Vec<Vcpu> = Vec::new();
@@ -75,6 +67,7 @@ impl Hypervisor {
         Ok(())
     }
 
+    /*
     pub fn devirtualize(&mut self) -> Result<(), HypervisorError> {
         log::info!("[+] Devirtualizing processors");
 
@@ -90,4 +83,5 @@ impl Hypervisor {
 
         Ok(())
     }
+    */
 }

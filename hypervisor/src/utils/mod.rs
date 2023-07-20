@@ -1,5 +1,3 @@
-pub mod addresses;
-pub mod controls;
+pub mod help;
 pub mod processor;
-pub mod segmentation;
-pub mod tables;
+pub mod x86_instructions;

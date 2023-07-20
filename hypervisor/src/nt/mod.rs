@@ -59,6 +59,9 @@ extern "system" {
 
     ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-rtlclearallbits
     pub fn RtlClearAllBits(BitMapHeader: PRTL_BITMAP);
+
+    // https://learn.microsoft.com/en-us/windows/win32/api/winnt/nf-winnt-rtlcapturecontext
+    //pub fn RtlCaptureContext(ContextRecord: *mut CONTEXT);
 }
 
 /// Passive release level

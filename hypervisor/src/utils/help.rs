@@ -1,6 +1,5 @@
-use core::arch::asm;
-
-//Credits: https://github.com/tandasat/Hypervisor-101-in-Rust/blob/main/hypervisor/src/hardware_vt/vmx.rs#L617
+// I did not know how to do this part so I took the help of Satoshi Tanda's code but I will reimplement in this in future after understanding it fully
+// Full Credits to tandasat for this complicated part: https://github.com/tandasat/Hypervisor-101-in-Rust/blob/main/hypervisor/src/hardware_vt/vmx.rs#L617
 
 /// The types of the control field.
 #[derive(Clone, Copy)]
@@ -39,12 +38,4 @@ pub fn adjust_vmx_controls(control: VmxControl, requested_value: u64) -> u64 {
     effective_value |= allowed0;
     effective_value &= allowed1;
     u64::from(effective_value)
-}
-
-pub fn segment_limit(selector: u16) -> u32 {
-    let limit: u32;
-    unsafe {
-        asm!("lsl {0:e}, {1:x}", out(reg) limit, in(reg) selector, options(nostack, nomem));
-    }
-    limit
 }

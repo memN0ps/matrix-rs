@@ -35,7 +35,7 @@ static mut HYPERVISOR: Option<Hypervisor> = None;
 #[no_mangle]
 pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRING) -> NTSTATUS {
     KernelLogger::init(LevelFilter::Info).expect("Failed to initialize logger");
-    log::info!("Driver Entry called");
+    log::info!("[+] Driver Entry called");
 
     driver.DriverUnload = Some(driver_unload);
 
@@ -49,13 +49,16 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
 
 pub extern "system" fn driver_unload(_driver: &mut DRIVER_OBJECT) {
     log::info!("Driver unloaded successfully!");
-
+    /*
     if let Some(mut hypervisor) = unsafe { HYPERVISOR.take() } {
+
         match hypervisor.devirtualize() {
             Ok(_) => log::info!("[+] Devirtualized successfully!"),
             Err(err) => log::error!("[-] Failed to dervirtualize {}", err),
         }
+
     }
+    */
 }
 
 fn virtualize() -> Option<()> {

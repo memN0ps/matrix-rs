@@ -1,3 +1,4 @@
+// I did not know how to do this part so I took the help of rcore-os' code but I will reimplement in this in future after understanding it fully
 //Credits to rcore-os: https://github.com/rcore-os/RVM1.5/blob/main/src/arch/x86_64/segmentation.rs
 use bit_field::BitField;
 use bitflags::bitflags;
@@ -14,6 +15,7 @@ bitflags! {
     /// segment descriptor. See Volume 3, Section 24.4.1 for access rights format,
     /// Volume 3, Section 3.4.5.1 for valid non-system selector types, Volume 3,
     /// Section 3.5 for valid system selectors types.
+    #[derive(Debug)]
     pub struct SegmentAccessRights: u32 {
         /// Accessed flag.
         const ACCESSED          = 1 << 0;
