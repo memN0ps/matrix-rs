@@ -4,8 +4,7 @@ use crate::{
     error::HypervisorError,
     intel::{
         controls::{adjust_vmx_controls, VmxControl},
-        segmentation::Segment,
-        tables::GdtStruct,
+        segmentation::{GdtStruct, Segment},
     },
     nt::MmGetPhysicalAddress,
     utils::x86_instructions::{

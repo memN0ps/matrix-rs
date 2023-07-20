@@ -1,12 +1,16 @@
 // I did not know how to do this part so I took the help of rcore-os' code but I will reimplement in this in future after understanding it fully
 //Credits to rcore-os: https://github.com/rcore-os/RVM1.5/blob/main/src/arch/x86_64/segmentation.rs
+//Credits to rcore-os: https://github.com/rcore-os/RVM1.5/blob/main/src/arch/x86_64/tables.rs
 use bit_field::BitField;
 use bitflags::bitflags;
+use core::{
+    fmt::{Debug, Formatter, Result},
+    mem::size_of,
+};
 use x86::segmentation::SegmentSelector;
+use x86_64::addr::VirtAddr;
 use x86_64::structures::gdt::DescriptorFlags;
 use x86_64::structures::DescriptorTablePointer;
-
-use super::tables::GdtStruct;
 
 bitflags! {
     /// Access rights for VMCS guest register states.
@@ -51,27 +55,12 @@ bitflags! {
 }
 
 impl SegmentAccessRights {
-    #[allow(dead_code)]
-    pub fn dpl(&self) -> u8 {
-        self.bits().get_bits(5..=6) as _
-    }
-
     pub fn from_descriptor(desc: u64) -> Self {
         Self::from_bits_truncate(desc.get_bits(40..56) as u32 & 0xf0ff)
     }
 
     pub fn _type_field(&self) -> Self {
         Self::from_bits_truncate(self.bits() & 0xf)
-    }
-
-    pub fn set_descriptor_type(desc: &mut u64, type_field: Self) {
-        desc.set_bits(40..44, type_field.bits() as u64);
-    }
-
-    #[cfg(feature = "amd")]
-    pub fn as_svm_segment_attributes(&self) -> u16 {
-        let bits = self.bits() as u16;
-        (bits & 0xff) | ((bits & 0xf000) >> 4)
     }
 }
 
@@ -118,5 +107,60 @@ impl Segment {
         } else {
             Self::invalid()
         }
+    }
+}
+
+pub struct GdtStruct {
+    table: &'static mut [u64],
+}
+
+impl GdtStruct {
+    pub fn from_pointer(pointer: &DescriptorTablePointer) -> Self {
+        let entry_count = (pointer.limit as usize + 1) / size_of::<u64>();
+        Self {
+            table: unsafe {
+                core::slice::from_raw_parts_mut(pointer.base.as_mut_ptr(), entry_count)
+            },
+        }
+    }
+
+    pub fn pointer(&self) -> DescriptorTablePointer {
+        DescriptorTablePointer {
+            base: VirtAddr::new(self.table.as_ptr() as u64),
+            limit: (self.table.len() * size_of::<u64>() - 1) as u16,
+        }
+    }
+
+    pub fn sgdt() -> DescriptorTablePointer {
+        let mut gdt_ptr = DescriptorTablePointer {
+            limit: 0,
+            base: VirtAddr::new(0),
+        };
+        unsafe {
+            core::arch::asm!("sgdt [{0}]", in(reg) &mut gdt_ptr, options(nostack, preserves_flags));
+        }
+        gdt_ptr
+    }
+}
+
+impl core::ops::Index<usize> for GdtStruct {
+    type Output = u64;
+    fn index(&self, idx: usize) -> &Self::Output {
+        &self.table[idx]
+    }
+}
+
+impl core::ops::IndexMut<usize> for GdtStruct {
+    fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
+        &mut self.table[idx]
+    }
+}
+
+impl Debug for GdtStruct {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        f.debug_struct("GdtStruct")
+            .field("pointer", &self.pointer())
+            .field("table", &self.table)
+            .finish()
     }
 }
