@@ -84,9 +84,6 @@ impl Vmx {
         log::info!("[+] Enabling Virtual Machine Extensions (VMX)");
         self.enable_vmx_operation()?;
 
-        log::info!("[+] init_vmxon_region");
-        self.init_vmxon_region()?;
-
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.2 FORMAT OF THE VMCS REGION */
         log::info!("[+] init_vmcs_region");
         self.init_vmcs_region()?;
@@ -96,7 +93,6 @@ impl Vmx {
         self.init_guest_register_state();
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
-        // Most of it is done in vmx_run_vm.nasm file.
         log::info!("[+] init_host_register_state");
         self.init_host_register_state();
 
@@ -114,7 +110,7 @@ impl Vmx {
         log::info!("[+] Running the guest until VM-exit occurs.");
         // Run the VM until the VM-exit occurs.
         let flags = unsafe { launch_vm(&mut self.registers, u64::from(self.launched)) };
-        vm_succeed(RFlags::from_raw(flags)).expect("[-] run_vm_vmx failed");
+        vm_succeed(RFlags::from_raw(flags)).expect("[-] VM failed to launch");
         self.launched = true;
         log::info!("[+] VM launched successfully!");
 
@@ -134,8 +130,8 @@ impl Vmx {
         Ok(())
     }
 
-    /// Allocate a naturally aligned 4-KByte VMXON region of memory to enable VMX operation (Intel Manual: 25.11.5 VMXON Region)
-    pub fn init_vmxon_region(&mut self) -> Result<(), HypervisorError> {
+    /// Execute vmxon instruction to enable vmx operation.
+    fn init_vmxon_region(&mut self) -> Result<(), HypervisorError> {
         self.vmxon_region_physical_address =
             virtual_to_physical_address(self.vmxon_region.as_ref() as *const _ as _);
 
@@ -158,10 +154,8 @@ impl Vmx {
         Ok(())
     }
 
-    /// Allocate a naturally aligned 4-KByte VMCS region of memory (Intel Manual: 25.11.5 VMCS Region)
-    /// Ensures that VMCS data maintained on the processor is copied to the VMCS region located at 4KB-aligned physical address addr and initializes some parts of it. (Intel Manual: 25.11.3 Initializing a VMCS)
-    /// Load the VMCS pointer
-    pub fn init_vmcs_region(&mut self) -> Result<(), HypervisorError> {
+    /// Clear the VMCS region and load the VMCS pointer
+    fn init_vmcs_region(&mut self) -> Result<(), HypervisorError> {
         self.vmcs_region_physical_address =
             virtual_to_physical_address(self.vmcs_region.as_ref() as *const _ as _);
 
@@ -193,7 +187,7 @@ impl Vmx {
 
     /// Initialize the VMCS control values for the currently loaded vmcs.
     #[rustfmt::skip]
-    pub fn init_vmcs_control_values(&mut self) {
+    fn init_vmcs_control_values(&mut self) {
         const PRIMARY_CTL: u64 = (PrimaryControls::HLT_EXITING.bits() | /*PrimaryControls::USE_MSR_BITMAPS.bits() |*/ PrimaryControls::SECONDARY_CONTROLS.bits()) as u64;
         const SECONDARY_CTL: u64 = (SecondaryControls::ENABLE_RDTSCP.bits() | SecondaryControls::ENABLE_XSAVES_XRSTORS.bits() | SecondaryControls::ENABLE_INVPCID.bits()/* SecondaryControls::ENABLE_XSAVES_XRSTORS.bits() | SecondaryControls::ENABLE_EPT.bits() */) as u64;
         const ENTRY_CTL: u64 = (EntryControls::IA32E_MODE_GUEST.bits()) as u64;
@@ -257,7 +251,7 @@ impl Vmx {
 
     /// Initialize the guest state for the currently loaded vmcs.
     #[rustfmt::skip]
-    pub fn init_guest_register_state(&mut self) {
+    fn init_guest_register_state(&mut self) {
         log::info!("[+] Guest Register State");
 
         // Guest Control Registers
@@ -376,7 +370,7 @@ impl Vmx {
 
     /// Initialize the host state for the currently loaded vmcs.
     #[rustfmt::skip]
-    pub fn init_host_register_state(&mut self) {
+    fn init_host_register_state(&mut self) {
         log::info!("[+] Host Register State");
 
         // Host Control Registers
@@ -438,7 +432,7 @@ impl Vmx {
         Err(HypervisorError::CPUUnsupported)
     }
 
-    /// Check processor supports for Virtual Machine Extension (VMX) technology - CPUID.1:ECX.VMX\[bit 5] = 1 (Intel Manual: 24.6 Discovering Support for VMX)
+    /// Check processor supports for Virtual Machine Extension (VMX) technology - CPUID.1:ECX.VMX\[bit 5] = 1
     pub fn has_vmx_support() -> Result<(), HypervisorError> {
         let cpuid = CpuId::new();
         if let Some(fi) = cpuid.get_feature_info() {
@@ -449,8 +443,8 @@ impl Vmx {
         Err(HypervisorError::VMXUnsupported)
     }
 
-    /// Enables Virtual Machine Extensions - CR4.VMXE\[bit 13] = 1 (Intel Manual: 24.7 Enabling and Entering VMX Operation)
-    pub fn enable_vmx_operation(&self) -> Result<(), HypervisorError> {
+    /// Enable and enter VMX operation by setting and clearing the lock bit, adjusting control registers and executing the vmxon instruction.
+    fn enable_vmx_operation(&mut self) -> Result<(), HypervisorError> {
         let mut cr4 = unsafe { controlregs::cr4() };
         cr4.set(controlregs::Cr4::CR4_ENABLE_VMX, true);
         unsafe { controlregs::cr4_write(cr4) };
@@ -463,10 +457,15 @@ impl Vmx {
         log::info!("[+] Adjusting Control Registers");
         self.adjust_control_registers();
 
+        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
+        /* - 25.11.5 VMXON Region */
+        log::info!("[+] init_vmxon_region");
+        self.init_vmxon_region()?;
+
         Ok(())
     }
 
-    /// Check if we need to set bits in IA32_FEATURE_CONTROL (Intel Manual: 24.7 Enabling and Entering VMX Operation)
+    /// Check if we need to set bits in IA32_FEATURE_CONTROL
     fn set_lock_bit(&self) -> Result<(), HypervisorError> {
         const VMX_LOCK_BIT: u64 = 1 << 0;
         const VMXON_OUTSIDE_SMX: u64 = 1 << 2;
@@ -496,7 +495,7 @@ impl Vmx {
         log::info!("[+] Mandatory bits in CR4 set/cleared");
     }
 
-    /// Set the mandatory bits in CR0 and clear bits that are mandatory zero (Intel Manual: 24.8 Restrictions on VMX Operation)
+    /// Set the mandatory bits in CR0 and clear bits that are mandatory zero
     fn set_cr0_bits(&self) {
         let ia32_vmx_cr0_fixed0 = unsafe { msr::rdmsr(msr::IA32_VMX_CR0_FIXED0) };
         let ia32_vmx_cr0_fixed1 = unsafe { msr::rdmsr(msr::IA32_VMX_CR0_FIXED1) };
@@ -509,7 +508,7 @@ impl Vmx {
         unsafe { controlregs::cr0_write(cr0) };
     }
 
-    /// Set the mandatory bits in CR4 and clear bits that are mandatory zero (Intel Manual: 24.8 Restrictions on VMX Operation)
+    /// Set the mandatory bits in CR4 and clear bits that are mandatory zero
     fn set_cr4_bits(&self) {
         let ia32_vmx_cr4_fixed0 = unsafe { msr::rdmsr(msr::IA32_VMX_CR4_FIXED0) };
         let ia32_vmx_cr4_fixed1 = unsafe { msr::rdmsr(msr::IA32_VMX_CR4_FIXED1) };
@@ -522,7 +521,7 @@ impl Vmx {
         unsafe { controlregs::cr4_write(cr4) };
     }
 
-    /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID) (Intel Manual: 25.11.5 VMXON Region)
+    /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID)
     fn get_vmcs_revision_id(&self) -> u32 {
         unsafe { (msr::rdmsr(msr::IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
     }
@@ -577,6 +576,6 @@ fn vm_succeed(flags: RFlags) -> Result<(), String> {
     }
 }
 
-pub fn virtual_to_physical_address(va: u64) -> u64 {
+fn virtual_to_physical_address(va: u64) -> u64 {
     unsafe { *MmGetPhysicalAddress(va as _).QuadPart() as u64 }
 }
