@@ -1,5 +1,16 @@
-;// Full Credits to tandasat for this: https://github.com/tandasat/Hypervisor-101-in-Rust/blob/main/hypervisor/src/hardware_vt/vmx_run_vm.nasm
-;// I found it easier to understand this and it appears easier to implement in ASM than Rust.
+// Full Credits to tandasat for this: https://github.com/tandasat/Hypervisor-101-in-Rust/blob/main/hypervisor/src/hardware_vt/vmx_run_vm.nasm
+// I found it easier to understand this and it appears easier to implement in ASM than Rust.
+
+use super::registers::GuestRegisters;
+use core::arch::global_asm;
+
+extern "C" {
+    /// Runs the guest until VM-exit occurs.
+    pub fn launch_vm(registers: &mut GuestRegisters, launched: u64) -> u64;
+}
+
+global_asm!(
+    "
 ;// The module containing the `launch_vm` function.
 
 ;// Offsets to each field in the GuestRegisters struct.
@@ -37,13 +48,13 @@
 ;// 5. saves guest general purpose register values to `GuestRegisters`.
 ;// 6. loads host general purpose register values from stack.
 ;//
-;// On VM-exit, the processor comes back to this function (at "VmExit") because
+;// On VM-exit, the processor comes back to this function (at \"VmExit\") because
 ;// the host RIP is configured so.
 ;//
 ;// Note that state swich implemented here is not complete, and some register
-;// values are "leaked" to the other side, for example, XMM registers.
+;// values are \"leaked\" to the other side, for example, XMM registers.
 ;//
-;// extern "C" fn launch_vm(registers: &mut GuestRegisters, launched: u64) -> u64;
+;// extern \"C\" fn launch_vm(registers: &mut GuestRegisters, launched: u64) -> u64;
 .global launch_vm
 launch_vm:
     int3
@@ -115,7 +126,7 @@ launch_vm:
 
 .VmEntryFailure:
     ;// VMLAUNCH or VMRESUME failed. If it were successful, VM-exit should have
-    ;// led to "VmExit" not here.
+    ;// led to \"VmExit\" not here.
     jmp     .Exit
 
 .VmExit:
@@ -164,3 +175,5 @@ launch_vm:
     pushfq
     pop     rax
     ret
+"
+);

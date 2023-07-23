@@ -1,9 +1,8 @@
-use core::arch::global_asm;
-
 use crate::{
     error::HypervisorError,
     intel::{
         controls::{adjust_vmx_controls, VmxControl},
+        launch::launch_vm,
         segmentation::{GdtStruct, Segment},
     },
     nt::MmGetPhysicalAddress,
@@ -38,12 +37,6 @@ use x86::{
 use x86_64::instructions::tables::{sgdt, sidt};
 
 use super::{registers::GuestRegisters, vmcs::Vmcs, vmxon::Vmxon};
-
-extern "C" {
-    /// Runs the guest until VM-exit occurs.
-    fn launch_vm(registers: &mut GuestRegisters, launched: u64) -> u64;
-}
-global_asm!(include_str!("launch_vm.nasm"));
 
 pub struct Vmx {
     /// The virtual and physical address of the Vmxon naturally aligned 4-KByte region of memory
@@ -80,7 +73,6 @@ impl Vmx {
 
     pub fn run(&mut self) -> Result<(), HypervisorError> {
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
-        /* - 25.11.5 VMXON Region */
         log::info!("[+] Enabling Virtual Machine Extensions (VMX)");
         self.enable_vmx_operation()?;
 
@@ -125,12 +117,17 @@ impl Vmx {
         /* APPENDIX C VMX BASIC EXIT REASONS */
         /* Table C-1. Basic Exit Reasons */
         let exit_reason = vmread(vmcs::ro::EXIT_REASON);
-        log::info!("VM-exit occurred: reason = {}", exit_reason);
+        log::info!("[!] VM-exit occurred: reason = {}", exit_reason);
+        log::info!("[*] vmcs::guest::RIP: {:#x}", self.registers.rip);
+        log::info!("[*] vmcs::guest::RSP: {:#x}", self.registers.rsp);
+        log::info!("[*] vmcs::guest::RFLAGS: {:#x}", self.registers.rflags);
 
         Ok(())
     }
 
     /// Execute vmxon instruction to enable vmx operation.
+    /// # VMXON Region
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.2 FORMAT OF THE VMCS REGION
     fn init_vmxon_region(&mut self) -> Result<(), HypervisorError> {
         self.vmxon_region_physical_address =
             virtual_to_physical_address(self.vmxon_region.as_ref() as *const _ as _);
@@ -155,6 +152,8 @@ impl Vmx {
     }
 
     /// Clear the VMCS region and load the VMCS pointer
+    /// # VMCS Region
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.2 FORMAT OF THE VMCS REGION
     fn init_vmcs_region(&mut self) -> Result<(), HypervisorError> {
         self.vmcs_region_physical_address =
             virtual_to_physical_address(self.vmcs_region.as_ref() as *const _ as _);
@@ -185,7 +184,201 @@ impl Vmx {
         Ok(())
     }
 
-    /// Initialize the VMCS control values for the currently loaded vmcs.
+    /// Initialize the guest state for the currently loaded VMCS.
+    /// # Guest state
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual 25.4 GUEST-STATE AREA:
+    /// * CR0, CR3, and CR4
+    /// * DR7
+    /// * RSP, RIP, and RFLAGS
+    /// * Segment Selector, Base address, Segment limit, Access rights:
+    ///     * CS, SS, DS, ES, FS, GS, LDTR, and TR
+    /// * Base, Limit:
+    ///     * GDTR and IDTR
+    /// * MSRs:
+    ///     * IA32_DEBUGCTL
+    ///     * IA32_SYSENTER_CS
+    ///     * IA32_SYSENTER_ESP
+    ///     * IA32_SYSENTER_EIP
+    ///     * LINK_PTR_FULL
+    #[rustfmt::skip]
+    fn init_guest_register_state(&mut self) {
+        log::info!("[+] Guest Register State");
+
+        // Guest Control Registers
+        unsafe { vmwrite(guest::CR0, controlregs::cr0().bits() as u64) };
+        unsafe { vmwrite(guest::CR3, controlregs::cr3()) };
+        unsafe { vmwrite(guest::CR4, controlregs::cr4().bits() as u64) };
+        log::info!("[+] Guest Control Registers initialized!");
+
+        // Guest Debug Register
+        unsafe { vmwrite(guest::DR7, debugregs::dr7().0 as u64) };
+        log::info!("[+] Guest Debug Registers initialized!");
+
+        // Guest RSP, RIP and RFLAGS
+        vmwrite(guest::RSP, bits64::registers::rsp());
+        vmwrite(guest::RIP, bits64::registers::rip());
+        vmwrite(guest::RFLAGS, bits64::rflags::read().bits());
+        log::info!("[+] Guest RSP, RIP and RFLAGS initialized!");
+
+        // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Selector
+        vmwrite(guest::CS_SELECTOR, segmentation::cs().bits() as u64);
+        vmwrite(guest::SS_SELECTOR, segmentation::ss().bits() as u64);
+        vmwrite(guest::DS_SELECTOR, segmentation::ds().bits() as u64);
+        vmwrite(guest::ES_SELECTOR, segmentation::es().bits() as u64);
+        vmwrite(guest::FS_SELECTOR, segmentation::fs().bits() as u64);
+        vmwrite(guest::GS_SELECTOR, segmentation::gs().bits() as u64);
+        unsafe { vmwrite(guest::LDTR_SELECTOR, dtables::ldtr().bits() as u64) };
+        unsafe { vmwrite(guest::TR_SELECTOR, task::tr().bits() as u64) };
+        log::info!("[+] Guest Segmentation CS, SS, DS, ES, FS, GS, LDTR, and TR Selector initialized!");
+
+        let gdt = GdtStruct::sgdt();
+        let idt = sidt();
+        let gdtr_base = gdt.base.as_u64();
+        let gdtr_limit = gdt.limit as u64;
+        let idtr_base = idt.base.as_u64();
+        let idtr_limit = idt.limit as u64;
+
+        // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Base Address
+        vmwrite(guest::CS_BASE, Segment::from_selector(segmentation::cs(), &gdt).base);
+        vmwrite(guest::SS_BASE, Segment::from_selector(segmentation::ss(), &gdt).base);
+        vmwrite(guest::DS_BASE, Segment::from_selector(segmentation::ds(), &gdt).base);
+        vmwrite(guest::ES_BASE, Segment::from_selector(segmentation::es(), &gdt).base);
+        unsafe { vmwrite(guest::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE)) };
+        unsafe { vmwrite(guest::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE)) };
+        unsafe { vmwrite(guest::LDTR_BASE, Segment::from_selector(dtables::ldtr(), &gdt).base) };
+        unsafe { vmwrite(guest::TR_BASE, Segment::from_selector(task::tr(), &gdt).base) };
+        log::info!("[+] Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Base Address initialized!");
+
+        // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Limit
+        vmwrite(guest::CS_LIMIT, segment_limit(segmentation::cs().bits()) as u64);
+        vmwrite(guest::SS_LIMIT, segment_limit(segmentation::ss().bits()) as u64);
+        vmwrite(guest::DS_LIMIT, segment_limit(segmentation::ds().bits()) as u64);
+        vmwrite(guest::ES_LIMIT, segment_limit(segmentation::es().bits()) as u64);
+        vmwrite(guest::FS_LIMIT, segment_limit(segmentation::fs().bits()) as u64);
+        vmwrite(guest::GS_LIMIT, segment_limit(segmentation::gs().bits()) as u64);
+        unsafe { vmwrite(guest::LDTR_LIMIT, segment_limit(dtables::ldtr().bits()) as u64) };
+        unsafe { vmwrite(guest::TR_LIMIT, segment_limit(task::tr().bits()) as u64) };
+        log::info!("[+] Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Limit initialized!");
+
+        // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Access Rights
+        vmwrite(guest::CS_ACCESS_RIGHTS, Segment::from_selector(segmentation::cs(), &gdt).access_rights.bits() as u64);
+        vmwrite(guest::SS_ACCESS_RIGHTS, Segment::from_selector(segmentation::ss(), &gdt).access_rights.bits() as u64);
+        vmwrite(guest::DS_ACCESS_RIGHTS, Segment::from_selector(segmentation::ds(), &gdt).access_rights.bits() as u64);
+        vmwrite(guest::ES_ACCESS_RIGHTS, Segment::from_selector(segmentation::es(), &gdt).access_rights.bits() as u64);
+        vmwrite(guest::FS_ACCESS_RIGHTS, Segment::from_selector(segmentation::fs(), &gdt).access_rights.bits() as u64);
+        vmwrite(guest::GS_ACCESS_RIGHTS, Segment::from_selector(segmentation::gs(), &gdt).access_rights.bits() as u64);
+        unsafe { vmwrite(guest::LDTR_ACCESS_RIGHTS, Segment::from_selector(dtables::ldtr(), &gdt).access_rights.bits() as u64) };
+        unsafe { vmwrite(guest::TR_ACCESS_RIGHTS, Segment::from_selector(task::tr(), &gdt).access_rights.bits() as u64) };
+        log::info!("[+] Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Access Rights initialized!");
+
+        // Guest Segment GDTR and LDTR Base Address 
+        vmwrite(guest::GDTR_BASE, gdtr_base);
+        vmwrite(guest::IDTR_BASE, idtr_base);
+        log::info!("[+] Guest GDTR and LDTR Base Address initialized!");
+
+        // Guest Segment GDTR and LDTR Limit
+        vmwrite(guest::GDTR_LIMIT, gdtr_limit);
+        vmwrite(guest::IDTR_LIMIT, idtr_limit);
+        log::info!("[+] Guest GDTR and LDTR Limit initialized!");
+
+        // Guest MSRs IA32_DEBUGCTL, IA32_SYSENTER_CS, IA32_SYSENTER_ESP, IA32_SYSENTER_EIP and LINK_PTR_FULL
+        unsafe {
+            //vmwrite(guest::IA32_DEBUGCTL_FULL, msr::rdmsr(msr::IA32_DEBUGCTL & 0xFFFFFFFF));
+            //vmwrite(guest::IA32_DEBUGCTL_HIGH, msr::rdmsr(msr::IA32_DEBUGCTL >> 32));
+            vmwrite(guest::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS));
+            vmwrite(guest::IA32_SYSENTER_ESP, msr::rdmsr(msr::IA32_SYSENTER_ESP));
+            vmwrite(guest::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP));
+            vmwrite(guest::IA32_EFER_FULL, msr::rdmsr(msr::IA32_EFER));
+            vmwrite(guest::LINK_PTR_FULL, u64::MAX);
+            //vmwrite(guest::LINK_PTR_HIGH, u64::MAX);
+
+            log::info!("[+] Guest IA32_DEBUGCTL, IA32_SYSENTER_CS, IA32_SYSENTER_ESP, IA32_SYSENTER_EIP and LINK_PTR_FULL MSRs initialized!");
+        }
+
+        // Guest General Purpose Registers
+        self.registers.rax = rax();
+        self.registers.rbx = rbx();
+        self.registers.rcx = rcx();
+        self.registers.rdx = rdx();
+        self.registers.rdi = rdi();
+        self.registers.rsi = rsi();
+        self.registers.rbp = rbp();
+        self.registers.r8 = r8();
+        self.registers.r9 = r9();
+        self.registers.r10 = r10();
+        self.registers.r11 = r11();
+        self.registers.r12 = r12();
+        self.registers.r13 = r13();
+        self.registers.r14 = r14();
+        self.registers.r15 = r15();
+        log::info!("[+] Guest General Purpose Registers initialized!");
+
+        log::info!("[+] Guest initialized!");
+    }
+
+    /// Initialize the host state for the currently loaded VMCS.
+    /// # Host state
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA
+    /// * CR0, CR3, and CR4
+    /// * RSP and RIP
+    /// * Selector Fields: CS, SS, DS, ES, FS, GS, and TR
+    /// * Base Address: FS, GS, TR, GDTR, and IDTR
+    /// * MSR's:
+    ///     * IA32_SYSENTER_CS
+    ///     * IA32_SYSENTER_ESP
+    ///     * IA32_SYSENTER_EIP
+    #[rustfmt::skip]
+    fn init_host_register_state(&mut self) {
+        log::info!("[+] Host Register State");
+
+        let gdt = sgdt();
+        let idt = sidt();
+        let gdtr_base = gdt.base.as_u64();
+        let idtr_base = idt.base.as_u64();
+
+        // Host Control Registers
+        unsafe { vmwrite(host::CR0, controlregs::cr0().bits() as u64) };
+        unsafe { vmwrite(host::CR3, controlregs::cr3()) };
+        unsafe { vmwrite(host::CR4, controlregs::cr4().bits() as u64) };
+        log::info!("[+] Host Control Registers initialized!");
+
+        // Host Segment CS, SS, DS, ES, FS, GS, and TR Selector
+        const SELECTOR_MASK: u16 = 0xF8;
+        vmwrite(host::CS_SELECTOR, (segmentation::cs().bits() & SELECTOR_MASK) as u64);
+        vmwrite(host::SS_SELECTOR, (segmentation::ss().bits() & SELECTOR_MASK) as u64);
+        vmwrite(host::DS_SELECTOR, (segmentation::ds().bits() & SELECTOR_MASK) as u64);
+        vmwrite(host::ES_SELECTOR, (segmentation::es().bits() & SELECTOR_MASK) as u64);
+        vmwrite(host::FS_SELECTOR, (segmentation::fs().bits() & SELECTOR_MASK) as u64);
+        vmwrite(host::GS_SELECTOR, (segmentation::gs().bits() & SELECTOR_MASK) as u64);
+        unsafe { vmwrite(host::TR_SELECTOR, (task::tr().bits() & SELECTOR_MASK) as u64) };
+        log::info!("[+] Host Segment CS, SS, DS, ES, FS, GS, and TR Selector initialized!");
+
+        // Host Segment FS, GS, TR, GDTR, and IDTR Base Address
+        unsafe { vmwrite(host::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE)) };
+        unsafe { vmwrite(host::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE)) };
+        unsafe { vmwrite(host::TR_BASE, Segment::from_selector(task::tr(), &gdt).base) };
+        vmwrite(host::GDTR_BASE, gdtr_base);
+        vmwrite(host::IDTR_BASE, idtr_base);
+        log::info!("[+] Host TR, GDTR and LDTR initialized!");
+
+        // Host MSRs IA32_SYSENTER_CS, IA32_SYSENTER_ESP, IA32_SYSENTER_EIP
+        unsafe {
+            vmwrite(host::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS));
+            vmwrite(host::IA32_SYSENTER_ESP, msr::rdmsr(msr::IA32_SYSENTER_ESP));
+            vmwrite(host::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP));
+            log::info!("[+] Host IA32_SYSENTER_CS, IA32_SYSENTER_ESP and IA32_SYSENTER_EIP MSRs initialized!");
+        }
+
+        log::info!("[+] Host initialized!");
+    }
+
+    /// Initialize the VMCS control values for the currently loaded VMCS.
+    /// # VMX controls
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual:
+    /// * 25.6 VM-EXECUTION CONTROL FIELDS
+    /// * 25.7 VM-EXIT CONTROL FIELDS
+    /// * 25.8 VM-ENTRY CONTROL FIELDS
+    /// * 25.6 VM-EXECUTION CONTROL FIELDS
     #[rustfmt::skip]
     fn init_vmcs_control_values(&mut self) {
         const PRIMARY_CTL: u64 = (PrimaryControls::HLT_EXITING.bits() | /*PrimaryControls::USE_MSR_BITMAPS.bits() |*/ PrimaryControls::SECONDARY_CONTROLS.bits()) as u64;
@@ -194,19 +387,10 @@ impl Vmx {
         const EXIT_CTL: u64 = ExitControls::HOST_ADDRESS_SPACE_SIZE.bits() as u64; //| ExitControls::ACK_INTERRUPT_ON_EXIT.bits()) as u64;
         const PINBASED_CTL: u64 = 0;
 
-        // PrimaryControls (x86::msr::IA32_VMX_PROCBASED_CTLS)
         vmwrite(vmx::vmcs::control::PRIMARY_PROCBASED_EXEC_CONTROLS, adjust_vmx_controls(VmxControl::ProcessorBased, PRIMARY_CTL));
-
-        // SecondaryControls (x86::msr::IA32_VMX_PROCBASED_CTLS2)
         vmwrite(vmx::vmcs::control::SECONDARY_PROCBASED_EXEC_CONTROLS, adjust_vmx_controls(VmxControl::ProcessorBased2, SECONDARY_CTL));
-
-        // EntryControls (x86::msr::IA32_VMX_ENTRY_CTLS)
         vmwrite(vmx::vmcs::control::VMENTRY_CONTROLS,adjust_vmx_controls(VmxControl::VmEntry, ENTRY_CTL));
-
-        // ExitControls (x86::msr::IA32_VMX_EXIT_CTLS)
         vmwrite(vmx::vmcs::control::VMEXIT_CONTROLS, adjust_vmx_controls(VmxControl::VmExit, EXIT_CTL));
-
-        // PinbasedControls (x86::msr::IA32_VMX_PINBASED_CTLS)
         vmwrite(vmx::vmcs::control::PINBASED_EXEC_CONTROLS, adjust_vmx_controls(VmxControl::PinBased, PINBASED_CTL));
 
         log::info!("[+] VMCS Primary, Secondary, Entry, Exit and Pinbased, Controls initialized!");
@@ -247,178 +431,6 @@ impl Vmx {
         vmwrite(vmx::vmcs::control::VMENTRY_MSR_LOAD_COUNT, 0u64);
 
         log::info!("[+] VMCS Controls initialized!");
-    }
-
-    /// Initialize the guest state for the currently loaded vmcs.
-    #[rustfmt::skip]
-    fn init_guest_register_state(&mut self) {
-        log::info!("[+] Guest Register State");
-
-        // Guest Control Registers
-        unsafe { vmwrite(guest::CR0, controlregs::cr0().bits() as u64) };
-        unsafe { vmwrite(guest::CR3, controlregs::cr3()) };
-        unsafe { vmwrite(guest::CR4, controlregs::cr4().bits() as u64) };
-        log::info!("[+] Guest Control Registers initialized!");
-
-        // Guest Debug Register
-        unsafe { vmwrite(guest::DR7, debugregs::dr7().0 as u64) };
-        log::info!("[+] Guest Debug Registers initialized!");
-
-        // Guest RSP and RIP
-        vmwrite(guest::RSP, bits64::registers::rsp());
-        vmwrite(guest::RIP, bits64::registers::rip());
-        log::info!("[+] Guest RSP and RIP initialized!");
-
-        // Guest RFLAGS
-        vmwrite(guest::RFLAGS, bits64::rflags::read().bits());
-        log::info!("[+] Guest RFLAGS Registers initialized!");
-
-        // Guest Segment Selector
-        vmwrite(guest::CS_SELECTOR, segmentation::cs().bits() as u64);
-        vmwrite(guest::SS_SELECTOR, segmentation::ss().bits() as u64);
-        vmwrite(guest::DS_SELECTOR, segmentation::ds().bits() as u64);
-        vmwrite(guest::ES_SELECTOR, segmentation::es().bits() as u64);
-        vmwrite(guest::FS_SELECTOR, segmentation::fs().bits() as u64);
-        vmwrite(guest::GS_SELECTOR, segmentation::gs().bits() as u64);
-        unsafe { vmwrite(guest::LDTR_SELECTOR, dtables::ldtr().bits() as u64) };
-        unsafe { vmwrite(guest::TR_SELECTOR, task::tr().bits() as u64) };
-        log::info!("[+] Guest Segmentation Selector initialized!");
-
-        // Guest Segment Limit
-        vmwrite(guest::CS_LIMIT, segment_limit(segmentation::cs().bits()) as u32);
-        vmwrite(guest::SS_LIMIT, segment_limit(segmentation::ss().bits()) as u32);
-        vmwrite(guest::DS_LIMIT, segment_limit(segmentation::ds().bits()) as u32);
-        vmwrite(guest::ES_LIMIT, segment_limit(segmentation::es().bits()) as u32);
-        vmwrite(guest::FS_LIMIT, segment_limit(segmentation::fs().bits()) as u32);
-        vmwrite(guest::GS_LIMIT, segment_limit(segmentation::gs().bits()) as u32);
-        unsafe { vmwrite(guest::LDTR_LIMIT, segment_limit(dtables::ldtr().bits()) as u32) };
-        unsafe { vmwrite(guest::TR_LIMIT, segment_limit(task::tr().bits()) as u32) };
-        log::info!("[+] Guest Segment Limit initialized!");
-
-        // GDTR and IDTR Limit/Base
-        let gdt = GdtStruct::sgdt();
-        let idt = sidt();
-
-        let gdtr_base = gdt.base.as_u64();
-        let gdtr_limit = gdt.limit as u64;
-
-        let idtr_base = idt.base.as_u64();
-        let idtr_limit = idt.limit as u64;
-
-        // Guest Segment Access Writes RIGHTS
-        vmwrite(guest::CS_ACCESS_RIGHTS, Segment::from_selector(segmentation::cs(), &gdt).access_rights.bits());
-        vmwrite(guest::SS_ACCESS_RIGHTS, Segment::from_selector(segmentation::ss(), &gdt).access_rights.bits());
-        vmwrite(guest::DS_ACCESS_RIGHTS, Segment::from_selector(segmentation::ds(), &gdt).access_rights.bits());
-        vmwrite(guest::ES_ACCESS_RIGHTS, Segment::from_selector(segmentation::es(), &gdt).access_rights.bits());
-        vmwrite(guest::FS_ACCESS_RIGHTS, Segment::from_selector(segmentation::fs(), &gdt).access_rights.bits());
-        vmwrite(guest::GS_ACCESS_RIGHTS, Segment::from_selector(segmentation::gs(), &gdt).access_rights.bits());
-        unsafe { vmwrite(guest::LDTR_ACCESS_RIGHTS, Segment::from_selector(dtables::ldtr(), &gdt).access_rights.bits()) };
-        unsafe { vmwrite(guest::TR_ACCESS_RIGHTS, Segment::from_selector(task::tr(), &gdt).access_rights.bits()) };
-
-        log::info!("[+] Guest Segment Access Writes initialized!");
-
-        // Guest Segment GDTR and LDTR
-        vmwrite(guest::GDTR_LIMIT, gdtr_limit);
-        vmwrite(guest::IDTR_LIMIT, idtr_limit);
-        vmwrite(guest::GDTR_BASE, gdtr_base);
-        vmwrite(guest::IDTR_BASE, idtr_base);
-        log::info!("[+] Guest GDTR and LDTR Limit and Base initialized!");
-
-        // Guest Segment, CS, SS, DS, ES ??????????????????????????????????????????????? BASE
-        vmwrite(guest::CS_BASE, Segment::from_selector(segmentation::cs(), &gdt).base);
-        vmwrite(guest::SS_BASE, Segment::from_selector(segmentation::ss(), &gdt).base);
-        vmwrite(guest::DS_BASE, Segment::from_selector(segmentation::ds(), &gdt).base);
-        vmwrite(guest::ES_BASE, Segment::from_selector(segmentation::es(), &gdt).base);
-        unsafe { vmwrite(guest::LDTR_BASE, Segment::from_selector(dtables::ldtr(), &gdt).base) };
-        unsafe { vmwrite(guest::TR_BASE, Segment::from_selector(task::tr(), &gdt).base) };
-
-        log::info!("[+] Guest Segment, CS, SS, DS, ES, LDTR and TR initialized!");
-
-        // Guest MSR's
-        unsafe {
-            vmwrite(guest::IA32_DEBUGCTL_FULL, msr::rdmsr(msr::IA32_DEBUGCTL));
-            vmwrite(guest::IA32_DEBUGCTL_HIGH, msr::rdmsr(msr::IA32_DEBUGCTL));
-            vmwrite(guest::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS));
-            vmwrite(guest::IA32_SYSENTER_ESP, msr::rdmsr(msr::IA32_SYSENTER_ESP));
-            vmwrite(guest::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP));
-            vmwrite(guest::LINK_PTR_FULL, u64::MAX);
-            vmwrite(guest::LINK_PTR_HIGH, u64::MAX);
-
-            vmwrite(guest::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE));
-            vmwrite(guest::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE));
-            log::info!("[+] Guest MSRs initialized!");
-        }
-
-        log::info!("[+] Guest initialized!");
-
-        self.registers.rax = rax();
-        self.registers.rbx = rbx();
-        self.registers.rcx = rcx();
-        self.registers.rdx = rdx();
-        self.registers.rdi = rdi();
-        self.registers.rsi = rsi();
-        self.registers.rbp = rbp();
-        self.registers.r8 = r8();
-        self.registers.r9 = r9();
-        self.registers.r10 = r10();
-        self.registers.r11 = r11();
-        self.registers.r12 = r12();
-        self.registers.r13 = r13();
-        self.registers.r14 = r14();
-        self.registers.r15 = r15();
-    }
-
-    /// Initialize the host state for the currently loaded vmcs.
-    #[rustfmt::skip]
-    fn init_host_register_state(&mut self) {
-        log::info!("[+] Host Register State");
-
-        // Host Control Registers
-        unsafe { vmwrite(host::CR0, controlregs::cr0().bits() as u64) };
-        unsafe { vmwrite(host::CR3, controlregs::cr3()) };
-        unsafe { vmwrite(host::CR4, controlregs::cr4().bits() as u64) };
-        log::info!("[+] Host Control Registers initialized!");
-
-        // Host Segment Selector
-        const SELECTOR_MASK: u16 = 0xF8;
-        vmwrite(host::CS_SELECTOR, (segmentation::cs().bits() & SELECTOR_MASK) as u64);
-        vmwrite(host::SS_SELECTOR, (segmentation::ss().bits() & SELECTOR_MASK) as u64);
-        vmwrite(host::DS_SELECTOR, (segmentation::ds().bits() & SELECTOR_MASK) as u64);
-        vmwrite(host::ES_SELECTOR, (segmentation::es().bits() & SELECTOR_MASK) as u64);
-        vmwrite(host::FS_SELECTOR, (segmentation::fs().bits() & SELECTOR_MASK) as u64);
-        vmwrite(host::GS_SELECTOR, (segmentation::gs().bits() & SELECTOR_MASK) as u64);
-        unsafe { vmwrite(host::TR_SELECTOR, (task::tr().bits() & SELECTOR_MASK) as u64) };
-        log::info!("[+] Host Segmentation Registers initialized!");
-
-        // GDTR and IDTR Limit/Base
-        let gdt = sgdt();
-        let idt = sidt();
-
-        let gdtr_base = gdt.base.as_u64();
-        //let gdtr_limit = gdt.limit as u64;
-
-        let idtr_base = idt.base.as_u64();
-        //let idtr_limit = idt.limit as u64;
-
-        // Host Segment TR, GDTR and LDTR  BASE?
-        unsafe { vmwrite(host::TR_BASE, Segment::from_selector(task::tr(), &gdt).base) };
-        vmwrite(host::GDTR_BASE, gdtr_base);
-        vmwrite(host::IDTR_BASE, idtr_base);
-        log::info!("[+] Host TR, GDTR and LDTR initialized!");
-
-        // Host MSR's
-        unsafe {
-            vmwrite(host::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS));
-            vmwrite(host::IA32_SYSENTER_ESP, msr::rdmsr(msr::IA32_SYSENTER_ESP));
-            vmwrite(host::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP));
-
-            vmwrite(host::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE));
-            vmwrite(host::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE));
-
-            log::info!("[+] Host MSRs initialized!");
-        }
-
-        log::info!("[+] Host initialized!");
     }
 
     /// Check to see if CPU is Intel (“GenuineIntel”).
@@ -560,7 +572,6 @@ where
 {
     unsafe { x86::bits64::vmx::vmwrite(field, u64::from(val)) }.unwrap();
 }
-
 /// Checks that the latest VMX instruction succeeded.
 fn vm_succeed(flags: RFlags) -> Result<(), String> {
     if flags.contains(RFlags::FLAGS_ZF) {
