@@ -245,11 +245,3 @@ pub fn r15() -> u64 {
     }
     r15
 }
-
-pub fn segment_limit(selector: u16) -> u32 {
-    let limit: u32;
-    unsafe {
-        asm!("lsl {0:e}, {1:x}", out(reg) limit, in(reg) selector, options(nostack, nomem));
-    }
-    limit
-}

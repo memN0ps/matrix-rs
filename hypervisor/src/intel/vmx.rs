@@ -1,13 +1,10 @@
+use super::{registers::GuestRegisters, vmcs::Vmcs, vmxon::Vmxon};
 use crate::{
     error::HypervisorError,
-    intel::{
-        controls::{adjust_vmx_controls, VmxControl},
-        launch::launch_vm,
-        segmentation::{GdtStruct, Segment},
-    },
+    intel::launch::launch_vm,
     nt::MmGetPhysicalAddress,
     utils::x86_instructions::{
-        r10, r11, r12, r13, r14, r15, r8, r9, rax, rbp, rbx, rcx, rdi, rdx, rsi, segment_limit,
+        r10, r11, r12, r13, r14, r15, r8, r9, rax, rbp, rbx, rcx, rdi, rdx, rsi,
     },
 };
 use alloc::{
@@ -34,9 +31,6 @@ use x86::{
         },
     },
 };
-use x86_64::instructions::tables::{sgdt, sidt};
-
-use super::{registers::GuestRegisters, vmcs::Vmcs, vmxon::Vmxon};
 
 pub struct Vmx {
     /// The virtual and physical address of the Vmxon naturally aligned 4-KByte region of memory
@@ -231,66 +225,67 @@ impl Vmx {
         unsafe { vmwrite(guest::TR_SELECTOR, task::tr().bits() as u64) };
         log::info!("[+] Guest Segmentation CS, SS, DS, ES, FS, GS, LDTR, and TR Selector initialized!");
 
-        let gdt = GdtStruct::sgdt();
-        let idt = sidt();
-        let gdtr_base = gdt.base.as_u64();
-        let gdtr_limit = gdt.limit as u64;
-        let idtr_base = idt.base.as_u64();
-        let idtr_limit = idt.limit as u64;
+        let gdt = get_current_gdt();
 
         // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Base Address
-        vmwrite(guest::CS_BASE, Segment::from_selector(segmentation::cs(), &gdt).base);
-        vmwrite(guest::SS_BASE, Segment::from_selector(segmentation::ss(), &gdt).base);
-        vmwrite(guest::DS_BASE, Segment::from_selector(segmentation::ds(), &gdt).base);
-        vmwrite(guest::ES_BASE, Segment::from_selector(segmentation::es(), &gdt).base);
+        //vmwrite(guest::CS_BASE, unpack_gdt_entry(gdt, segmentation::cs().bits()).base);
+        //vmwrite(guest::SS_BASE, unpack_gdt_entry(gdt, segmentation::ss().bits()).base);
+        //vmwrite(guest::DS_BASE, unpack_gdt_entry(gdt, segmentation::ds().bits()).base);
+        //vmwrite(guest::ES_BASE, unpack_gdt_entry(gdt, segmentation::es().bits()).base);
         unsafe { vmwrite(guest::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE)) };
         unsafe { vmwrite(guest::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE)) };
-        unsafe { vmwrite(guest::LDTR_BASE, Segment::from_selector(dtables::ldtr(), &gdt).base) };
-        unsafe { vmwrite(guest::TR_BASE, Segment::from_selector(task::tr(), &gdt).base) };
+        unsafe { vmwrite(guest::LDTR_BASE, unpack_gdt_entry(gdt, x86::dtables::ldtr().bits()).base) };
+        unsafe { vmwrite(guest::TR_BASE, unpack_gdt_entry(gdt,  x86::task::tr().bits()).base) };
         log::info!("[+] Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Base Address initialized!");
 
         // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Limit
-        vmwrite(guest::CS_LIMIT, segment_limit(segmentation::cs().bits()) as u64);
-        vmwrite(guest::SS_LIMIT, segment_limit(segmentation::ss().bits()) as u64);
-        vmwrite(guest::DS_LIMIT, segment_limit(segmentation::ds().bits()) as u64);
-        vmwrite(guest::ES_LIMIT, segment_limit(segmentation::es().bits()) as u64);
-        vmwrite(guest::FS_LIMIT, segment_limit(segmentation::fs().bits()) as u64);
-        vmwrite(guest::GS_LIMIT, segment_limit(segmentation::gs().bits()) as u64);
-        unsafe { vmwrite(guest::LDTR_LIMIT, segment_limit(dtables::ldtr().bits()) as u64) };
-        unsafe { vmwrite(guest::TR_LIMIT, segment_limit(task::tr().bits()) as u64) };
+        vmwrite(guest::CS_LIMIT, unpack_gdt_entry(gdt, segmentation::cs().bits()).limit);
+        vmwrite(guest::SS_LIMIT, unpack_gdt_entry(gdt, segmentation::ss().bits()).limit);
+        vmwrite(guest::DS_LIMIT, unpack_gdt_entry(gdt, segmentation::ds().bits()).limit);
+        vmwrite(guest::ES_LIMIT, unpack_gdt_entry(gdt, segmentation::es().bits()).limit);
+        vmwrite(guest::FS_LIMIT, unpack_gdt_entry(gdt, segmentation::fs().bits()).limit);
+        vmwrite(guest::GS_LIMIT, unpack_gdt_entry(gdt, segmentation::gs().bits()).limit);
+        unsafe { vmwrite(guest::LDTR_LIMIT, unpack_gdt_entry(gdt, dtables::ldtr().bits()).limit) };
+        unsafe { vmwrite(guest::TR_LIMIT, unpack_gdt_entry(gdt, task::tr().bits()).limit) };
         log::info!("[+] Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Limit initialized!");
 
         // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Access Rights
-        vmwrite(guest::CS_ACCESS_RIGHTS, Segment::from_selector(segmentation::cs(), &gdt).access_rights.bits() as u64);
-        vmwrite(guest::SS_ACCESS_RIGHTS, Segment::from_selector(segmentation::ss(), &gdt).access_rights.bits() as u64);
-        vmwrite(guest::DS_ACCESS_RIGHTS, Segment::from_selector(segmentation::ds(), &gdt).access_rights.bits() as u64);
-        vmwrite(guest::ES_ACCESS_RIGHTS, Segment::from_selector(segmentation::es(), &gdt).access_rights.bits() as u64);
-        vmwrite(guest::FS_ACCESS_RIGHTS, Segment::from_selector(segmentation::fs(), &gdt).access_rights.bits() as u64);
-        vmwrite(guest::GS_ACCESS_RIGHTS, Segment::from_selector(segmentation::gs(), &gdt).access_rights.bits() as u64);
-        unsafe { vmwrite(guest::LDTR_ACCESS_RIGHTS, Segment::from_selector(dtables::ldtr(), &gdt).access_rights.bits() as u64) };
-        unsafe { vmwrite(guest::TR_ACCESS_RIGHTS, Segment::from_selector(task::tr(), &gdt).access_rights.bits() as u64) };
+        vmwrite(guest::CS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, segmentation::cs().bits()).base);
+        vmwrite(guest::SS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, segmentation::ss().bits()).base);
+        vmwrite(guest::DS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, segmentation::ds().bits()).base);
+        vmwrite(guest::ES_ACCESS_RIGHTS, unpack_gdt_entry(gdt, segmentation::es().bits()).base);
+        vmwrite(guest::FS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, segmentation::fs().bits()).base);
+        vmwrite(guest::GS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, segmentation::gs().bits()).base);
+        unsafe { vmwrite(guest::LDTR_ACCESS_RIGHTS, unpack_gdt_entry(gdt, dtables::ldtr().bits()).base) };
+        unsafe { vmwrite(guest::TR_ACCESS_RIGHTS, unpack_gdt_entry(gdt, task::tr().bits()).base) };
         log::info!("[+] Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Access Rights initialized!");
 
+        let mut guest_gdtr: dtables::DescriptorTablePointer<u64> = Default::default();
+        unsafe { dtables::sgdt(&mut guest_gdtr); }
+
+        let mut guest_idtr: dtables::DescriptorTablePointer<u64> = Default::default();
+        unsafe { dtables::sidt(&mut guest_idtr); }
+
         // Guest Segment GDTR and LDTR Base Address 
-        vmwrite(guest::GDTR_BASE, gdtr_base);
-        vmwrite(guest::IDTR_BASE, idtr_base);
+        vmwrite(guest::GDTR_BASE, guest_gdtr.base as u64);
+        vmwrite(guest::IDTR_BASE, guest_idtr.base as u64);
         log::info!("[+] Guest GDTR and LDTR Base Address initialized!");
 
         // Guest Segment GDTR and LDTR Limit
-        vmwrite(guest::GDTR_LIMIT, gdtr_limit);
-        vmwrite(guest::IDTR_LIMIT, idtr_limit);
+        vmwrite(guest::GDTR_LIMIT, guest_gdtr.limit);
+        vmwrite(guest::IDTR_LIMIT, guest_idtr.limit);
         log::info!("[+] Guest GDTR and LDTR Limit initialized!");
 
         // Guest MSRs IA32_DEBUGCTL, IA32_SYSENTER_CS, IA32_SYSENTER_ESP, IA32_SYSENTER_EIP and LINK_PTR_FULL
         unsafe {
-            //vmwrite(guest::IA32_DEBUGCTL_FULL, msr::rdmsr(msr::IA32_DEBUGCTL & 0xFFFFFFFF));
+            vmwrite(guest::IA32_DEBUGCTL_FULL, msr::rdmsr(msr::IA32_DEBUGCTL & 0xFFFFFFFF));
             //vmwrite(guest::IA32_DEBUGCTL_HIGH, msr::rdmsr(msr::IA32_DEBUGCTL >> 32));
             vmwrite(guest::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS));
             vmwrite(guest::IA32_SYSENTER_ESP, msr::rdmsr(msr::IA32_SYSENTER_ESP));
             vmwrite(guest::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP));
             vmwrite(guest::IA32_EFER_FULL, msr::rdmsr(msr::IA32_EFER));
             vmwrite(guest::LINK_PTR_FULL, u64::MAX);
-            //vmwrite(guest::LINK_PTR_HIGH, u64::MAX);
+            vmwrite(guest::LINK_PTR_HIGH, u64::MAX);
 
             log::info!("[+] Guest IA32_DEBUGCTL, IA32_SYSENTER_CS, IA32_SYSENTER_ESP, IA32_SYSENTER_EIP and LINK_PTR_FULL MSRs initialized!");
         }
@@ -331,10 +326,11 @@ impl Vmx {
     fn init_host_register_state(&mut self) {
         log::info!("[+] Host Register State");
 
-        let gdt = sgdt();
-        let idt = sidt();
-        let gdtr_base = gdt.base.as_u64();
-        let idtr_base = idt.base.as_u64();
+        let mut guest_gdtr: dtables::DescriptorTablePointer<u64> = Default::default();
+        unsafe { dtables::sgdt(&mut guest_gdtr); }
+
+        let mut guest_idtr: dtables::DescriptorTablePointer<u64> = Default::default();
+        unsafe { dtables::sidt(&mut guest_idtr); }
 
         // Host Control Registers
         unsafe { vmwrite(host::CR0, controlregs::cr0().bits() as u64) };
@@ -353,12 +349,14 @@ impl Vmx {
         unsafe { vmwrite(host::TR_SELECTOR, (task::tr().bits() & SELECTOR_MASK) as u64) };
         log::info!("[+] Host Segment CS, SS, DS, ES, FS, GS, and TR Selector initialized!");
 
+        let gdt = get_current_gdt();
+
         // Host Segment FS, GS, TR, GDTR, and IDTR Base Address
         unsafe { vmwrite(host::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE)) };
         unsafe { vmwrite(host::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE)) };
-        unsafe { vmwrite(host::TR_BASE, Segment::from_selector(task::tr(), &gdt).base) };
-        vmwrite(host::GDTR_BASE, gdtr_base);
-        vmwrite(host::IDTR_BASE, idtr_base);
+        unsafe { vmwrite(host::TR_BASE, unpack_gdt_entry(gdt,  x86::task::tr().bits()).base) };
+        vmwrite(host::GDTR_BASE, guest_gdtr.base as u64);
+        vmwrite(host::IDTR_BASE, guest_idtr.base as u64);
         log::info!("[+] Host TR, GDTR and LDTR initialized!");
 
         // Host MSRs IA32_SYSENTER_CS, IA32_SYSENTER_ESP, IA32_SYSENTER_EIP
@@ -589,4 +587,143 @@ fn vm_succeed(flags: RFlags) -> Result<(), String> {
 
 fn virtual_to_physical_address(va: u64) -> u64 {
     unsafe { *MmGetPhysicalAddress(va as _).QuadPart() as u64 }
+}
+
+// I found this part to be the hardest so I've reused the code and will reimplement at a later stage
+// Full Credits: https://github.com/iankronquist/rustyvisor/blob/master/hypervisor/src/vmcs.rs
+const GDT_ENTRY_ACCESS_PRESENT: u8 = 1 << 7;
+
+// See Intel manual Table 24-2 ch 24-4 vol 3c
+const VMX_INFO_SEGMENT_UNUSABLE: u32 = 1 << 16;
+
+/// Given a global descriptor table, and a selector which indexes into the
+/// table, unpack the corresponding GDT entry into an UnpackedGdtEntry.
+pub fn unpack_gdt_entry(gdt: &[GdtEntry], selector: u16) -> UnpackedGdtEntry {
+    let mut unpacked: UnpackedGdtEntry = Default::default();
+
+    let index: usize = usize::from(selector) / core::mem::size_of::<GdtEntry>();
+    if index == 0 {
+        unpacked.access_rights |= VMX_INFO_SEGMENT_UNUSABLE;
+        //trace!("Unpacked {:x?}", unpacked);
+        return unpacked;
+    }
+
+    unpacked.selector = selector;
+    unpacked.limit =
+        u64::from(gdt[index].limit_low) | ((u64::from(gdt[index].granularity) & 0x0f) << 16);
+    unpacked.base = u64::from(gdt[index].base_low);
+    unpacked.base = (u64::from(gdt[index].base_high) << 24)
+        | (u64::from(gdt[index].base_middle) << 16)
+        | u64::from(gdt[index].base_low);
+
+    unpacked.access_rights = u32::from(gdt[index].access);
+    unpacked.access_rights |= u32::from((gdt[index].granularity) & 0xf0) << 8;
+    unpacked.access_rights &= 0xf0ff;
+    if (gdt[index].access & GDT_ENTRY_ACCESS_PRESENT) == 0 {
+        unpacked.access_rights |= VMX_INFO_SEGMENT_UNUSABLE;
+    }
+
+    //trace!("Gdt entry {:x?}", gdt[index]);
+    //trace!("Gdt entry unpacked {:x?}", unpacked);
+    unpacked
+}
+
+// 32 bit GDT entry.
+/// The layout of this structure is determined by hardware.
+/// For more information see the Intel manual, Volume 3, Chapter 5
+/// ("Protection"), Section 5.2 "Fields and Flags Used for Segment-Level and
+/// Page-Level Protection".
+/// See also the OS Dev wiki page on the [GDT](https://wiki.osdev.org/GDT) and
+/// the accompanying [tutorial](https://wiki.osdev.org/GDT_Tutorial).
+#[derive(Debug, Clone, Copy)]
+#[allow(unused)]
+#[repr(packed)]
+pub struct GdtEntry {
+    /// Low 16 bits of the segment limit.
+    pub limit_low: u16,
+    /// Low 16 bits of the segment base.
+    pub base_low: u16,
+    /// Middle 8 bits of the segment base.
+    pub base_middle: u8,
+    /// Various flags used to set segment type and access rights.
+    pub access: u8,
+    /// The low 4 bits are part of the limit. The high 4 bits are the
+    /// granularity of the segment and the size.
+    pub granularity: u8,
+    /// High 8 bits of the segment base.
+    pub base_high: u8,
+}
+
+/// GDT entries are packed in a complicated way meant to be backwards
+/// compatible since the days of the i286. This represents the component parts
+///of a GDT entry unpacked into a format we can feed into various host and
+/// guest VMCS entries.
+#[derive(Default, Debug)]
+pub struct UnpackedGdtEntry {
+    /// The base of the segment.
+    pub base: u64,
+    /// The limit of the segment.
+    pub limit: u64,
+    /// The access rights of the segment.
+    pub access_rights: u32,
+    /// The segment selector.
+    pub selector: u16,
+}
+/// Get a reference to the processor's current GDT.
+/// Note that we can't
+pub fn get_current_gdt() -> &'static [GdtEntry] {
+    let mut gdtr: x86::dtables::DescriptorTablePointer<u64> = Default::default();
+    unsafe {
+        x86::dtables::sgdt(&mut gdtr);
+    }
+    //trace!("Gdtr is {:x?}", gdtr);
+    let bytes = usize::from(gdtr.limit) + 1;
+    unsafe {
+        core::slice::from_raw_parts(
+            gdtr.base as *const GdtEntry,
+            bytes / core::mem::size_of::<GdtEntry>(),
+        )
+    }
+}
+
+// I did not know how to do this part so I took the help of Satoshi Tanda's code but I will reimplement in this in future after understanding it fully
+// Full Credits to tandasat for this complicated part: https://github.com/tandasat/Hypervisor-101-in-Rust/blob/main/hypervisor/src/hardware_vt/vmx.rs#L617
+
+/// The types of the control field.
+#[derive(Clone, Copy)]
+pub enum VmxControl {
+    PinBased,
+    ProcessorBased,
+    ProcessorBased2,
+    VmExit,
+    VmEntry,
+}
+
+pub fn adjust_vmx_controls(control: VmxControl, requested_value: u64) -> u64 {
+    const IA32_VMX_BASIC_VMX_CONTROLS_FLAG: u64 = 1 << 55;
+
+    let vmx_basic = unsafe { x86::msr::rdmsr(x86::msr::IA32_VMX_BASIC) };
+    let true_cap_msr_supported = (vmx_basic & IA32_VMX_BASIC_VMX_CONTROLS_FLAG) != 0;
+
+    let cap_msr = match (control, true_cap_msr_supported) {
+        (VmxControl::PinBased, true) => x86::msr::IA32_VMX_TRUE_PINBASED_CTLS,
+        (VmxControl::PinBased, false) => x86::msr::IA32_VMX_PINBASED_CTLS,
+        (VmxControl::ProcessorBased, true) => x86::msr::IA32_VMX_TRUE_PROCBASED_CTLS,
+        (VmxControl::ProcessorBased, false) => x86::msr::IA32_VMX_PROCBASED_CTLS,
+        (VmxControl::VmExit, true) => x86::msr::IA32_VMX_TRUE_EXIT_CTLS,
+        (VmxControl::VmExit, false) => x86::msr::IA32_VMX_EXIT_CTLS,
+        (VmxControl::VmEntry, true) => x86::msr::IA32_VMX_TRUE_ENTRY_CTLS,
+        (VmxControl::VmEntry, false) => x86::msr::IA32_VMX_ENTRY_CTLS,
+        // There is no TRUE MSR for IA32_VMX_PROCBASED_CTLS2. Just use
+        // IA32_VMX_PROCBASED_CTLS2 unconditionally.
+        (VmxControl::ProcessorBased2, _) => x86::msr::IA32_VMX_PROCBASED_CTLS2,
+    };
+
+    let capabilities = unsafe { x86::msr::rdmsr(cap_msr) };
+    let allowed0 = capabilities as u32;
+    let allowed1 = (capabilities >> 32) as u32;
+    let mut effective_value = u32::try_from(requested_value).unwrap();
+    effective_value |= allowed0;
+    effective_value &= allowed1;
+    u64::from(effective_value)
 }

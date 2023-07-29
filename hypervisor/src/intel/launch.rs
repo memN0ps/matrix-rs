@@ -57,7 +57,6 @@ global_asm!(
 ;// extern \"C\" fn launch_vm(registers: &mut GuestRegisters, launched: u64) -> u64;
 .global launch_vm
 launch_vm:
-    int3
     xchg    bx, bx
 
     ;// Save current (host) general purpose registers onto stack.
