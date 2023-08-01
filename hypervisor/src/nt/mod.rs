@@ -7,7 +7,12 @@ use winapi::{
     shared::ntdef::{
         NTSTATUS, PGROUP_AFFINITY, PHYSICAL_ADDRESS, PPROCESSOR_NUMBER, PVOID, UNICODE_STRING,
     },
+    um::winnt::PCONTEXT,
 };
+
+extern "system" {
+    pub static KdDebuggerNotPresent: *mut bool;
+}
 
 #[link(name = "ntoskrnl")]
 extern "system" {
@@ -60,9 +65,15 @@ extern "system" {
     ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-rtlclearallbits
     pub fn RtlClearAllBits(BitMapHeader: PRTL_BITMAP);
 
-    // https://learn.microsoft.com/en-us/windows/win32/api/winnt/nf-winnt-rtlcapturecontext
-    //pub fn RtlCaptureContext(ContextRecord: *mut CONTEXT);
+    ///https://learn.microsoft.com/en-us/windows/win32/api/winnt/nf-winnt-rtlcapturecontext
+    pub fn RtlCaptureContext(ContextRecord: PCONTEXT);
+
+    ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-kebugcheck
+    pub fn KeBugCheck(BugCheckCode: u32) -> !;
 }
+
+// See: https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2#bug-check-codes
+pub const MANUALLY_INITIATED_CRASH: u32 = 0x000000E2;
 
 /// Passive release level
 pub const PASSIVE_LEVEL: KIRQL = 0;

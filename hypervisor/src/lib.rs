@@ -6,6 +6,7 @@
 #![feature(naked_functions)]
 #![feature(asm_const)]
 #![feature(once_cell_try)]
+#![feature(decl_macro)]
 
 extern crate alloc;
 use alloc::vec::Vec;
