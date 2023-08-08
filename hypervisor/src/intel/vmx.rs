@@ -1,4 +1,4 @@
-use super::{registers::GuestRegisters, vmcs::Vmcs, vmxon::Vmxon};
+use super::{registers::GuestRegisters, vmcs::Vmcs, vmxon::Vmxon, msr_bitmap::MsrBitmap};
 use crate::{
     error::HypervisorError,
     intel::{
@@ -54,6 +54,9 @@ pub struct Vmx {
     /// The host stack layout
     pub host_rsp: Box<HostStackLayout, PhysicalAllocator>,
 
+    /// The MSR Bitmap
+    pub msr_bitmap: Box<MsrBitmap, PhysicalAllocator>,
+
     /// The context of the hypervisor
     pub context: Context,
 }
@@ -63,6 +66,7 @@ impl Vmx {
         let vmxon_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let vmcs_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let host_rsp = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
+        let msr_bitmap = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
 
         Ok(Self {
             vmxon_region: vmxon_region,
@@ -71,6 +75,7 @@ impl Vmx {
             vmcs_region_physical_address: 0,
             registers: GuestRegisters::default(),
             host_rsp: host_rsp,
+            msr_bitmap: msr_bitmap,
             context,
         })
     }
@@ -369,6 +374,11 @@ impl Vmx {
             vmwrite(x86::vmx::vmcs::control::CR4_READ_SHADOW, controlregs::cr4().bits() as u64);
             log::info!("[+] VMCS Controls Shadow Registers initialized!");
         };
+
+        let msr_physical_addy = virtual_to_physical_address(self.msr_bitmap.as_ref() as *const _ as u64);
+
+        // MSRBitmap
+        vmwrite(x86::vmx::vmcs::control::MSR_BITMAPS_ADDR_FULL, msr_physical_addy);
     }
 
     /// Check to see if CPU is Intel (“GenuineIntel”).

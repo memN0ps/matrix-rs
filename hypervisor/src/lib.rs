@@ -64,7 +64,7 @@ impl Hypervisor {
             let context = Context::capture();
 
             if processor.is_virtualized() {
-                return Ok(());
+                continue;
             }
 
             let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {

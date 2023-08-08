@@ -6,3 +6,4 @@ pub mod vmcs;
 pub mod vmexit;
 pub mod vmx;
 pub mod vmxon;
+pub mod msr_bitmap;
