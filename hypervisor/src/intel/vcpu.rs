@@ -26,11 +26,8 @@ impl Vcpu {
     }
 
     /// Virtualize the CPU by capturing the context, enabling VMX operation, adjusting control registers, calling VMXON, VMPTRLD and VMLAUNCH
-    pub fn virtualize_cpu(&mut self) -> Result<(), HypervisorError> {
+    pub fn virtualize_cpu(&mut self, context: Context) -> Result<(), HypervisorError> {
         log::info!("[+] Virtualizing processor {}", self.index);
-
-        log::info!("[+] Capturing context");
-        let context = Context::capture();
 
         if !self.is_virtualized {
             self.is_virtualized = true;
@@ -44,7 +41,7 @@ impl Vcpu {
             log::info!("[+] Running the guest until VM-exit occurs.");
 
             // Run the VM until the VM-exit occurs.
-            unsafe { launch_vm(&mut vmx.registers) };
+            unsafe { launch_vm() };
         }
 
         Ok(())
@@ -53,5 +50,9 @@ impl Vcpu {
     /// Gets the index of the current logical/virtual processor
     pub fn id(&self) -> u32 {
         self.index
+    }
+
+    pub fn is_virtualized(&self) -> bool {
+        self.is_virtualized
     }
 }

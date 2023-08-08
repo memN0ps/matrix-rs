@@ -14,7 +14,10 @@ use error::HypervisorError;
 
 use crate::{
     intel::{vcpu::Vcpu, vmx::Vmx},
-    utils::processor::{processor_count, ProcessorExecutor},
+    utils::{
+        context::Context,
+        processor::{processor_count, ProcessorExecutor},
+    },
 };
 mod error;
 mod intel;
@@ -57,11 +60,18 @@ impl Hypervisor {
         log::info!("[+] Virtualizing processors");
 
         for processor in self.processors.iter_mut() {
+            log::info!("[+] Capturing context");
+            let context = Context::capture();
+
+            if processor.is_virtualized() {
+                return Ok(());
+            }
+
             let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
                 return Err(HypervisorError::ProcessorSwitchFailed);
             };
 
-            processor.virtualize_cpu()?;
+            processor.virtualize_cpu(context)?;
 
             core::mem::drop(executor);
         }

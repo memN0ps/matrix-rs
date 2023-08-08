@@ -54,38 +54,19 @@ macro_rules! restore_general_purpose_registers_from_stack {
 }
 
 /// Runs the guest until VM-exit occurs.
-pub unsafe extern "C" fn launch_vm(registers: &mut GuestRegisters) -> ! {
+pub unsafe extern "C" fn launch_vm() -> ! {
     core::arch::asm!(
         "nop",
 
         // Save current (host) general purpose registers onto stack
         save_general_purpose_registers_to_stack!(),
 
-        // Push Guest Registers to stack for vmwrite to VMCS_HOST_RSP
-        "push       {0}",
-
-        // Move VMCS_HOST_RSP to r14 and vmwrite the Guest Registers to VMCS_HOST_RSP
-        "mov        r14, 0x6C14",
-        "vmwrite    r14, rsp",
-
-        // Load the address of RIP + vmexit_stub and vmwrite vmexit_stub to VMCS_HOST_RIP for when a vmexit occurs
-        "lea        r13, [rip + {1}]",
-        "mov        r14, 0x6C16",
-
-        // Restore r13 and r14 as they were used for vmwrite VMCS_HOST_RSP and VMCS_HOST_RIP before calling vmlaunch
-        "mov     r13, {2}",
-        "mov     r14, {3}",
-
         // Launch the VM until a VM-exit occurs
         "vmlaunch",
 
         // call vmlaunch_failed as we should never execution here
-        "call   {4}",
+        "call   {0}",
 
-        in(reg) registers as *mut _ as *mut u64,
-        sym vmexit_stub,
-        in(reg) registers.r13,
-        in(reg) registers.r14,
         sym vmlaunch_failed,
         options(noreturn),
     );

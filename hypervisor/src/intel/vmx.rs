@@ -1,7 +1,10 @@
 use super::{registers::GuestRegisters, vmcs::Vmcs, vmxon::Vmxon};
 use crate::{
     error::HypervisorError,
-    intel::support::{virtual_to_physical_address, vmclear, vmptrld, vmwrite, vmxon},
+    intel::{
+        support::{virtual_to_physical_address, vmclear, vmptrld, vmwrite, vmxon},
+        vmexit::vmexit_stub,
+    },
     utils::context::Context,
 };
 use alloc::boxed::Box;
@@ -22,6 +25,20 @@ use x86::{
     },
 };
 
+pub const KERNEL_STACK_SIZE: usize = 0x8000;
+
+// 0x8000 - (PADDING and RESERVED) 16 = 0x7FEA
+pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - (core::mem::size_of::<*mut u64>() * 2);
+
+#[repr(C, align(4096))]
+pub struct HostStackLayout {
+    pub stack_contents: [u8; STACK_CONTENTS_SIZE],
+
+    // To keep HostRsp 16 bytes aligned
+    pub padding_1: u64,
+    pub reserved_1: u64,
+}
+
 pub struct Vmx {
     /// The virtual and physical address of the Vmxon naturally aligned 4-KByte region of memory
     pub vmxon_region: Box<Vmxon, PhysicalAllocator>,
@@ -31,8 +48,11 @@ pub struct Vmx {
     pub vmcs_region: Box<Vmcs, PhysicalAllocator>,
     pub vmcs_region_physical_address: u64,
 
-    /// The guest registers
+    /// Save guest general registers for handling VM exits.
     pub registers: GuestRegisters,
+
+    /// The host stack layout
+    pub host_rsp: Box<HostStackLayout, PhysicalAllocator>,
 
     /// The context of the hypervisor
     pub context: Context,
@@ -42,6 +62,7 @@ impl Vmx {
     pub fn new(context: Context) -> Result<Self, HypervisorError> {
         let vmxon_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let vmcs_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
+        let host_rsp = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
 
         Ok(Self {
             vmxon_region: vmxon_region,
@@ -49,6 +70,7 @@ impl Vmx {
             vmcs_region: vmcs_region,
             vmcs_region_physical_address: 0,
             registers: GuestRegisters::default(),
+            host_rsp: host_rsp,
             context,
         })
     }
@@ -284,6 +306,11 @@ impl Vmx {
         unsafe { vmwrite(host::CR0, controlregs::cr0().bits() as u64) };
         unsafe { vmwrite(host::CR3, controlregs::cr3()) };
         unsafe { vmwrite(host::CR4, controlregs::cr4().bits() as u64) };
+
+        // Host RIP and RSP
+        let host_rsp = self.host_rsp.as_ref() as *const _ as u64;
+        vmwrite(host::RIP, vmexit_stub as u64);
+        vmwrite(host::RSP, host_rsp + STACK_CONTENTS_SIZE as u64);
 
         // Host Segment CS, SS, DS, ES, FS, GS, and TR Selector
         const SELECTOR_MASK: u16 = 0xF8;
