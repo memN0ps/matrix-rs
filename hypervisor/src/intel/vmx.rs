@@ -1,32 +1,21 @@
 use super::{registers::GuestRegisters, vmcs::Vmcs, vmxon::Vmxon};
 use crate::{
     error::HypervisorError,
-    intel::launch::launch_vm,
-    nt::MmGetPhysicalAddress,
-    utils::{context::Context, x86_instructions::sgdt},
+    intel::support::{virtual_to_physical_address, vmclear, vmptrld, vmwrite, vmxon},
+    utils::context::Context,
 };
-use alloc::{
-    boxed::Box,
-    format,
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::boxed::Box;
 use bitfield::BitMut;
 use kernel_alloc::PhysicalAllocator;
 use x86::{
     controlregs,
     cpuid::CpuId,
-    current::rflags::RFlags,
-    dtables::{self, DescriptorTablePointer},
+    dtables::{self},
     msr::{self, rdmsr},
-    segmentation::{
-        BuildDescriptor, Descriptor, DescriptorBuilder, GateDescriptorBuilder, SegmentSelector,
-    },
     task,
     vmx::{
         self,
         vmcs::{
-            self,
             control::{EntryControls, ExitControls, PrimaryControls, SecondaryControls},
             guest, host,
         },
@@ -45,12 +34,6 @@ pub struct Vmx {
     /// The guest registers
     pub registers: GuestRegisters,
 
-    /// The launched state.
-    pub launched: bool,
-
-    /// The host gdt
-    host_gdt: HostGdt,
-
     /// The context of the hypervisor
     pub context: Context,
 }
@@ -66,13 +49,11 @@ impl Vmx {
             vmcs_region: vmcs_region,
             vmcs_region_physical_address: 0,
             registers: GuestRegisters::default(),
-            launched: false,
-            host_gdt: HostGdt::default(),
             context,
         })
     }
 
-    pub fn run(&mut self) -> Result<(), HypervisorError> {
+    pub fn init(&mut self) -> Result<(), HypervisorError> {
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
         log::info!("[+] Enabling Virtual Machine Extensions (VMX)");
         self.enable_vmx_operation()?;
@@ -97,31 +78,6 @@ impl Vmx {
         /* - 25.6 VM-EXECUTION CONTROL FIELDS */
         log::info!("[+] init_vmcs_control_values");
         self.init_vmcs_control_values();
-
-        //log::info!("[*] Dumping VMCS");
-
-        log::info!("[+] Running the guest until VM-exit occurs.");
-        // Run the VM until the VM-exit occurs.
-        let flags = unsafe { launch_vm(&mut self.registers, u64::from(self.launched)) };
-        vm_succeed(RFlags::from_raw(flags)).expect("[-] VM failed to launch");
-        self.launched = true;
-        log::info!("[+] VM launched successfully!");
-
-        // VM-exit occurred. Copy the guest register values from VMCS so that
-        // `self.registers` is complete and up to date.
-        self.registers.rip = vmread(vmcs::guest::RIP);
-        self.registers.rsp = vmread(vmcs::guest::RSP);
-        self.registers.rflags = vmread(vmcs::guest::RFLAGS);
-
-        /* TODO */
-        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.9 VM-EXIT INFORMATION FIELDS */
-        /* APPENDIX C VMX BASIC EXIT REASONS */
-        /* Table C-1. Basic Exit Reasons */
-        let exit_reason = vmread(vmcs::ro::EXIT_REASON);
-        log::info!("[!] VM-exit occurred: reason = {}", exit_reason);
-        log::info!("[*] vmcs::guest::RIP: {:#x}", self.registers.rip);
-        log::info!("[*] vmcs::guest::RSP: {:#x}", self.registers.rsp);
-        log::info!("[*] vmcs::guest::RFLAGS: {:#x}", self.registers.rflags);
 
         Ok(())
     }
@@ -318,10 +274,11 @@ impl Vmx {
     fn init_host_register_state(&mut self) {
         log::info!("[+] Host Register State");
 
-        self.host_gdt.initialize_from_current();
+        let mut host_gdtr: dtables::DescriptorTablePointer<u64> = Default::default();
+        unsafe { dtables::sgdt(&mut host_gdtr); }
 
-        let mut idtr: dtables::DescriptorTablePointer<u64> = Default::default();
-        unsafe { dtables::sidt(&mut idtr); }
+        let mut host_idtr: dtables::DescriptorTablePointer<u64> = Default::default();
+        unsafe { dtables::sidt(&mut host_idtr); }
 
         // Host Control Registers
         unsafe { vmwrite(host::CR0, controlregs::cr0().bits() as u64) };
@@ -330,20 +287,21 @@ impl Vmx {
 
         // Host Segment CS, SS, DS, ES, FS, GS, and TR Selector
         const SELECTOR_MASK: u16 = 0xF8;
-        vmwrite(host::CS_SELECTOR, self.host_gdt.cs.bits() & SELECTOR_MASK);
-        vmwrite(host::SS_SELECTOR, self.host_gdt.ss.bits() & SELECTOR_MASK);
-        vmwrite(host::DS_SELECTOR, self.host_gdt.ds.bits() & SELECTOR_MASK);
-        vmwrite(host::ES_SELECTOR, self.host_gdt.es.bits() & SELECTOR_MASK);
-        vmwrite(host::FS_SELECTOR, self.host_gdt.fs.bits() & SELECTOR_MASK);
-        vmwrite(host::GS_SELECTOR, self.host_gdt.gs.bits() & SELECTOR_MASK);
-        vmwrite(host::TR_SELECTOR, self.host_gdt.tr.bits() & SELECTOR_MASK);
+        vmwrite(host::CS_SELECTOR, self.context.seg_cs & SELECTOR_MASK);
+        vmwrite(host::SS_SELECTOR, self.context.seg_ss & SELECTOR_MASK);
+        vmwrite(host::DS_SELECTOR, self.context.seg_ds & SELECTOR_MASK);
+        vmwrite(host::ES_SELECTOR, self.context.seg_es & SELECTOR_MASK);
+        vmwrite(host::FS_SELECTOR, self.context.seg_fs & SELECTOR_MASK);
+        vmwrite(host::GS_SELECTOR, self.context.seg_gs & SELECTOR_MASK);
+        unsafe { vmwrite(host::TR_SELECTOR, task::tr().bits() & SELECTOR_MASK) };
 
+        let gdt = get_current_gdt();
         // Host Segment FS, GS, TR, GDTR, and IDTR Base Address
         unsafe { vmwrite(host::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE)) };
         unsafe { vmwrite(host::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE)) };
-        vmwrite(host::TR_BASE, self.host_gdt.tss.0.as_ptr() as u64);
-        vmwrite(host::GDTR_BASE, self.host_gdt.gdtr.base as u64);
-        vmwrite(host::IDTR_BASE, idtr.base as u64);
+        unsafe { vmwrite(host::TR_BASE, unpack_gdt_entry(gdt,  x86::task::tr().bits()).base) };
+        vmwrite(host::GDTR_BASE, host_gdtr.base as u64);
+        vmwrite(host::IDTR_BASE, host_idtr.base as u64);
 
         // Host MSRs IA32_SYSENTER_CS, IA32_SYSENTER_ESP, IA32_SYSENTER_EIP
         unsafe {
@@ -492,58 +450,6 @@ impl Vmx {
     }
 }
 
-/// Enable VMX operation.
-fn vmxon(vmxon_region: u64) {
-    unsafe { x86::bits64::vmx::vmxon(vmxon_region).unwrap() };
-}
-
-/// Clear VMCS.
-fn vmclear(vmcs_region: u64) {
-    unsafe { x86::bits64::vmx::vmclear(vmcs_region).unwrap() };
-}
-
-/// Load current VMCS pointer.
-fn vmptrld(vmcs_region: u64) {
-    unsafe { x86::bits64::vmx::vmptrld(vmcs_region).unwrap() }
-}
-
-#[allow(dead_code)]
-/// Return current VMCS pointer.
-fn vmptrst() -> *const Vmcs {
-    unsafe { x86::bits64::vmx::vmptrst().unwrap() as *const Vmcs }
-}
-
-/// Read a specified field from a VMCS.
-fn vmread(field: u32) -> u64 {
-    unsafe { x86::bits64::vmx::vmread(field) }.unwrap_or(0)
-}
-
-/// Write to a specified field in a VMCS.
-fn vmwrite<T: Into<u64>>(field: u32, val: T)
-where
-    u64: From<T>,
-{
-    unsafe { x86::bits64::vmx::vmwrite(field, u64::from(val)) }.unwrap();
-}
-/// Checks that the latest VMX instruction succeeded.
-fn vm_succeed(flags: RFlags) -> Result<(), String> {
-    if flags.contains(RFlags::FLAGS_ZF) {
-        // See: 31.4 VM INSTRUCTION ERROR NUMBERS
-        Err(format!(
-            "VmFailValid with {}",
-            vmread(vmcs::ro::VM_INSTRUCTION_ERROR)
-        ))
-    } else if flags.contains(RFlags::FLAGS_CF) {
-        Err("VmFailInvalid".to_string())
-    } else {
-        Ok(())
-    }
-}
-
-fn virtual_to_physical_address(va: u64) -> u64 {
-    unsafe { *MmGetPhysicalAddress(va as _).QuadPart() as u64 }
-}
-
 // I found this part to be the hardest so I've reused the code and will reimplement at a later stage
 // Full Credits: https://github.com/iankronquist/rustyvisor/blob/master/hypervisor/src/vmcs.rs
 const GDT_ENTRY_ACCESS_PRESENT: u8 = 1 << 7;
@@ -578,8 +484,6 @@ pub fn unpack_gdt_entry(gdt: &[GdtEntry], selector: u16) -> UnpackedGdtEntry {
         unpacked.access_rights |= VMX_INFO_SEGMENT_UNUSABLE;
     }
 
-    //trace!("Gdt entry {:x?}", gdt[index]);
-    //trace!("Gdt entry unpacked {:x?}", unpacked);
     unpacked
 }
 
@@ -631,7 +535,7 @@ pub fn get_current_gdt() -> &'static [GdtEntry] {
     unsafe {
         x86::dtables::sgdt(&mut gdtr);
     }
-    //trace!("Gdtr is {:x?}", gdtr);
+
     let bytes = usize::from(gdtr.limit) + 1;
     unsafe {
         core::slice::from_raw_parts(
@@ -640,9 +544,6 @@ pub fn get_current_gdt() -> &'static [GdtEntry] {
         )
     }
 }
-
-// I did not know how to do this part so I took the help of Satoshi Tanda's code but I will reimplement in this in future after understanding it fully
-// Full Credits to tandasat for this complicated part: https://github.com/tandasat/Hypervisor-101-in-Rust/blob/main/hypervisor/src/hardware_vt/vmx.rs#L617
 
 /// The types of the control field.
 #[derive(Clone, Copy)]
@@ -654,6 +555,8 @@ pub enum VmxControl {
     VmEntry,
 }
 
+// I did not know how to do this part so I took the help of Satoshi Tanda's code but I will reimplement in this in future after understanding it fully
+// Full Credits to tandasat for this complicated part: https://github.com/tandasat/Hypervisor-101-in-Rust/blob/main/hypervisor/src/hardware_vt/vmx.rs#L617
 pub fn adjust_vmx_controls(control: VmxControl, requested_value: u64) -> u64 {
     const IA32_VMX_BASIC_VMX_CONTROLS_FLAG: u64 = 1 << 55;
 
@@ -681,97 +584,4 @@ pub fn adjust_vmx_controls(control: VmxControl, requested_value: u64) -> u64 {
     effective_value |= allowed0;
     effective_value &= allowed1;
     u64::from(effective_value)
-}
-
-/// The collection of GDT related data needed to manage the host GDT.
-#[repr(C, align(16))]
-struct HostGdt {
-    gdt: Vec<u64>,
-    gdtr: DescriptorTablePointer<u64>,
-    tss: TaskStateSegment,
-    cs: SegmentSelector,
-    ss: SegmentSelector,
-    ds: SegmentSelector,
-    es: SegmentSelector,
-    fs: SegmentSelector,
-    gs: SegmentSelector,
-    tr: SegmentSelector,
-}
-const _: () = assert!((core::mem::size_of::<HostGdt>() % 0x10) == 0);
-
-impl HostGdt {
-    /// Initializes the host GDT from the current GDT.
-    ///
-    /// This function exists because, on the UEFI DXE phase, the Task Register
-    /// (TR) is zero which does not satisfy requirements as host state. To
-    /// workaround this, this function makes a clone of the current GDT,
-    /// adds TSS, and initializes TR and GDTR with the clone to be used for as
-    /// host state.
-    ///
-    /// "The selector fields for CS and TR cannot be 0000H."
-    /// See: 27.2.3 Checks on Host Segment and Descriptor-Table Registers
-    fn initialize_from_current(&mut self) {
-        // Clone the current GDT first.
-        let mut current_gdtr = DescriptorTablePointer::<u64>::default();
-        sgdt(&mut current_gdtr);
-        let current_gdt = unsafe {
-            core::slice::from_raw_parts(
-                current_gdtr.base.cast::<u64>(),
-                usize::from(current_gdtr.limit + 1) / 8,
-            )
-        };
-        self.gdt = current_gdt.to_vec();
-
-        // Then, append one more entry for the task state segment.
-        self.gdt.push(task_segment_descriptor(&self.tss));
-
-        // Fill in the GDTR according to the new GDT.
-        self.gdtr.base = self.gdt.as_ptr();
-        self.gdtr.limit = u16::try_from(self.gdt.len() * 8 - 1).unwrap();
-
-        // Finally, compute an index (TR) that point to the last entry in the GDT.
-        let tr_index = self.gdt.len() as u16 - 1;
-        self.tr = SegmentSelector::new(tr_index, x86::Ring::Ring0);
-        self.cs = x86::segmentation::cs();
-        self.ss = x86::segmentation::ss();
-        self.ds = x86::segmentation::ds();
-        self.es = x86::segmentation::es();
-        self.fs = x86::segmentation::fs();
-        self.gs = x86::segmentation::gs();
-    }
-}
-
-impl Default for HostGdt {
-    fn default() -> Self {
-        Self {
-            gdt: Vec::new(),
-            gdtr: DescriptorTablePointer::<u64>::default(),
-            tss: TaskStateSegment([0; 104]),
-            cs: SegmentSelector::from_raw(0),
-            ss: SegmentSelector::from_raw(0),
-            ds: SegmentSelector::from_raw(0),
-            es: SegmentSelector::from_raw(0),
-            fs: SegmentSelector::from_raw(0),
-            gs: SegmentSelector::from_raw(0),
-            tr: SegmentSelector::from_raw(0),
-        }
-    }
-}
-
-/// See: Figure 8-11. 64-Bit TSS Format
-struct TaskStateSegment([u8; 104]);
-
-// Builds a segment descriptor from the task state segment.
-fn task_segment_descriptor(tss: &TaskStateSegment) -> u64 {
-    let tss_size = core::mem::size_of::<TaskStateSegment>() as u64;
-    let tss_base = tss as *const TaskStateSegment as u64;
-    let tss_descriptor = <DescriptorBuilder as GateDescriptorBuilder<u32>>::tss_descriptor(
-        tss_base,
-        tss_size - 1,
-        true,
-    )
-    .present()
-    .dpl(x86::Ring::Ring0)
-    .finish();
-    unsafe { core::mem::transmute::<Descriptor, u64>(tss_descriptor) }
 }
