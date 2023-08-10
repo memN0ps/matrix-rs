@@ -46,4 +46,7 @@ pub enum HypervisorError {
 
     #[error("Failed to access VCPU table")]
     VcpuIsNone,
+
+    #[error("Unknown VM exit basic reason")]
+    UnknownVMExitReason,
 }

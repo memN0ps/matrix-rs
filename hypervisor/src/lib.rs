@@ -60,9 +60,11 @@ impl Hypervisor {
         log::info!("[+] Virtualizing processors");
 
         for processor in self.processors.iter_mut() {
+            // The Guest will start running from here as we capture and vmwrite the context to the guest state per vcpu
             log::info!("[+] Capturing context");
             let context = Context::capture();
 
+            // Must check if process is already virtualized otherwise Guest will start executing from here again
             if processor.is_virtualized() {
                 continue;
             }

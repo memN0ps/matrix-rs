@@ -1,4 +1,4 @@
-use super::{registers::GuestRegisters, vmcs::Vmcs, vmxon::Vmxon, msr_bitmap::MsrBitmap};
+use super::{msr_bitmap::MsrBitmap, registers::GuestRegisters, vmcs::Vmcs, vmxon::Vmxon};
 use crate::{
     error::HypervisorError,
     intel::{
