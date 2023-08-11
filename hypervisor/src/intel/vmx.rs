@@ -25,9 +25,9 @@ use x86::{
     },
 };
 
-pub const KERNEL_STACK_SIZE: usize = 0x8000;
+pub const KERNEL_STACK_SIZE: usize = 0x6000;
 
-// 0x8000 - (PADDING and RESERVED) 16 = 0x7FEA
+// 0x6000 - (PADDING and RESERVED) 16 = 0x5FEA
 pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - (core::mem::size_of::<*mut u64>() * 2);
 
 #[repr(C, align(4096))]
@@ -171,19 +171,19 @@ impl Vmx {
     /// Initialize the guest state for the currently loaded VMCS.
     /// # Guest state
     /// Intel® 64 and IA-32 Architectures Software Developer's Manual 25.4 GUEST-STATE AREA:
-    /// * CR0, CR3, and CR4
-    /// * DR7
-    /// * RSP, RIP, and RFLAGS
-    /// * Segment Selector, Base address, Segment limit, Access rights:
-    ///     * CS, SS, DS, ES, FS, GS, LDTR, and TR
-    /// * Base, Limit:
-    ///     * GDTR and IDTR
-    /// * MSRs:
-    ///     * IA32_DEBUGCTL
-    ///     * IA32_SYSENTER_CS
-    ///     * IA32_SYSENTER_ESP
-    ///     * IA32_SYSENTER_EIP
-    ///     * LINK_PTR_FULL
+    /// - CR0, CR3, and CR4
+    /// - DR7
+    /// - RSP, RIP, and RFLAGS
+    /// - Segment Selector, Base address, Segment limit, Access rights:
+    ///     - CS, SS, DS, ES, FS, GS, LDTR, and TR
+    /// - Base, Limit:
+    ///     - GDTR and IDTR
+    /// - MSRs:
+    ///     - IA32_DEBUGCTL
+    ///     - IA32_SYSENTER_CS
+    ///     - IA32_SYSENTER_ESP
+    ///     - IA32_SYSENTER_EIP
+    ///     - LINK_PTR_FULL
     #[rustfmt::skip]
     fn init_guest_register_state(&mut self) {
         log::info!("[+] Guest Register State");
@@ -289,14 +289,14 @@ impl Vmx {
     /// Initialize the host state for the currently loaded VMCS.
     /// # Host state
     /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA
-    /// * CR0, CR3, and CR4
-    /// * RSP and RIP
-    /// * Selector Fields: CS, SS, DS, ES, FS, GS, and TR
-    /// * Base Address: FS, GS, TR, GDTR, and IDTR
-    /// * MSR's:
-    ///     * IA32_SYSENTER_CS
-    ///     * IA32_SYSENTER_ESP
-    ///     * IA32_SYSENTER_EIP
+    /// - CR0, CR3, and CR4
+    /// - RSP and RIP
+    /// - Selector Fields: CS, SS, DS, ES, FS, GS, and TR
+    /// - Base Address: FS, GS, TR, GDTR, and IDTR
+    /// - MSR's:
+    ///     - IA32_SYSENTER_CS
+    ///     - IA32_SYSENTER_ESP
+    ///     - IA32_SYSENTER_EIP
     #[rustfmt::skip]
     fn init_host_register_state(&mut self) {
         log::info!("[+] Host Register State");
@@ -348,10 +348,10 @@ impl Vmx {
     /// Initialize the VMCS control values for the currently loaded VMCS.
     /// # VMX controls
     /// Intel® 64 and IA-32 Architectures Software Developer's Manual:
-    /// * 25.6 VM-EXECUTION CONTROL FIELDS
-    /// * 25.7 VM-EXIT CONTROL FIELDS
-    /// * 25.8 VM-ENTRY CONTROL FIELDS
-    /// * 25.6 VM-EXECUTION CONTROL FIELDS
+    /// - 25.6 VM-EXECUTION CONTROL FIELDS
+    /// - 25.7 VM-EXIT CONTROL FIELDS
+    /// - 25.8 VM-ENTRY CONTROL FIELDS
+    /// - 25.6 VM-EXECUTION CONTROL FIELDS
     #[rustfmt::skip]
     fn init_vmcs_control_values(&mut self) {
         const PRIMARY_CTL: u64 = PrimaryControls::SECONDARY_CONTROLS.bits() as u64;

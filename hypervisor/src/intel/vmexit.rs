@@ -91,6 +91,7 @@ impl VmExit {
         Self
     }
 
+    /// Handle the VM-exit
     /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.9 VM-EXIT INFORMATION FIELDS
     /// - APPENDIX C VMX BASIC EXIT REASONS
     /// - Table C-1. Basic Exit Reasons
@@ -117,9 +118,14 @@ impl VmExit {
 
         log::info!("[+] Basic Exit Reason: {}", basic_exit_reason);
 
-        // Handle the VM-exit
+        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.2 Instructions That Cause VM Exits Unconditionally */
+        /* - The following instructions cause VM exits when they are executed in VMX non-root operation: CPUID, GETSEC, INVD, and XSETBV. */
+        /* - This is also true of instructions introduced with VMX, which include: INVEPT, INVVPID, VMCALL, VMCLEAR, VMLAUNCH, VMPTRLD, VMPTRST, VMRESUME, VMXOFF, and VMXON. */
+
+        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.3 Instructions That Cause VM Exits Conditionally */
+        /* - Certain instructions cause VM exits in VMX non-root operation depending on the setting of the VM-execution controls.*/
         match basic_exit_reason {
-            VmxBasicExitReason::Cpuid => self.handle_cpuid(),
+            VmxBasicExitReason::Cpuid => self.handle_cpuid(registers),
             _ => breakpoint_to_bugcheck(),
         }
 
@@ -130,8 +136,42 @@ impl VmExit {
         return Ok(basic_exit_reason);
     }
 
-    /// TODO: Implement CPUID handling
-    fn handle_cpuid(&self) {}
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 7.3.16.3 Processor Identification Instruction
+    /// The CPUID (processor identification) instruction returns information about the processor on which the instruction is executed.
+    ///
+    fn handle_cpuid(&self, registers: &mut GuestRegisters) {
+        log::info!("[+] Handling CPUID...");
+
+        // More leaf's here if needed: https://docs.rs/raw-cpuid/10.6.0/src/raw_cpuid/lib.rs.html#289
+        const EAX_FEATURE_INFO: u32 = 0x1;
+        const EAX_HYPERVISOR_INFO: u32 = 0x4000_0000;
+
+        let leaf = registers.rax as u32;
+        let sub_leaf = registers.rcx as u32;
+
+        // Macro which queries cpuid directly.
+        // First parameter is cpuid leaf (EAX register value), second optional parameter is the subleaf (ECX register value).
+        let mut cpuid_result = x86::cpuid::cpuid!(leaf, sub_leaf);
+
+        // Change vendor info if required
+        if leaf == EAX_HYPERVISOR_INFO {
+            let interface_identifier: [u8; 4] = *b"BEEF";
+            cpuid_result.eax = u32::from_le_bytes(interface_identifier);
+        } else if leaf == EAX_FEATURE_INFO {
+            // Clearing VT-x Support: If the leaf value is 1 (which corresponds to the standard CPUID function that returns feature information),
+            // We clear bit 5 in the ECX register, which is used to indicate support for VT-x (Virtualization Technology),
+            // to prevent the guest from recognizing VT-x support and attempting to use it.
+            cpuid_result.ecx &= !(1 << 5);
+        }
+
+        // Update the Guest registers with cpuid result
+        registers.rax = cpuid_result.eax as u64;
+        registers.rbx = cpuid_result.ebx as u64;
+        registers.rcx = cpuid_result.ecx as u64;
+        registers.rdx = cpuid_result.edx as u64;
+
+        log::info!("[+] CPUID handled!");
+    }
 
     fn advance_guest_rip(&self) {
         let mut rip = vmread(guest::RIP);

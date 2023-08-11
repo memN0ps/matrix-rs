@@ -1,5 +1,5 @@
 /// The collection of the guest general purpose register values.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 #[repr(C)]
 pub struct GuestRegisters {
     pub rax: u64,
