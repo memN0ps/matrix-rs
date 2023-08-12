@@ -1,6 +1,6 @@
 use core::fmt;
 
-use super::registers::GuestRegisters;
+use super::{events::EventInjection, registers::GuestRegisters};
 use crate::{
     error::HypervisorError,
     intel::support::{vmread, vmwrite},
@@ -52,6 +52,8 @@ impl VmExit {
         /* - Certain instructions cause VM exits in VMX non-root operation depending on the setting of the VM-execution controls.*/
         match basic_exit_reason {
             VmxBasicExitReason::Cpuid => self.handle_cpuid(registers),
+            VmxBasicExitReason::Rdmsr => self.handle_msr_access(registers, false),
+            VmxBasicExitReason::Wrmsr => self.handle_msr_access(registers, true),
             _ => breakpoint_to_bugcheck(),
         }
 
@@ -62,12 +64,13 @@ impl VmExit {
         return Ok(basic_exit_reason);
     }
 
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 7.3.16.3 Processor Identification Instruction
     /// The CPUID (processor identification) instruction returns information about the processor on which the instruction is executed.
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table C-1. Basic Exit Reasons 10
+    /// CPUID. Guest software attempted to execute CPUID.
     fn handle_cpuid(&self, registers: &mut GuestRegisters) {
         log::info!("[+] Handling CPUID...");
 
-        // More leaf's here if needed: https://docs.rs/raw-cpuid/10.6.0/src/raw_cpuid/lib.rs.html#289
+        // More leafs here if needed: https://docs.rs/raw-cpuid/10.6.0/src/raw_cpuid/lib.rs.html#289
         const EAX_HYPERVISOR_PRESENT: u32 = 0x1;
         const EAX_HYPERVISOR_INTERFACE: u32 = 0x4000_0000;
 
@@ -96,6 +99,76 @@ impl VmExit {
         registers.rdx = cpuid_result.edx as u64;
 
         log::info!("[+] CPUID handled!");
+    }
+
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table C-1. Basic Exit Reasons 31 and 32
+    /// RDMSR. Guest software attempted to execute RDMSR and either:
+    /// 1: The “use MSR bitmaps” VM-execution control was 0.
+    /// 2: The value of RCX is neither in the range 00000000H – 00001FFFH nor in the range C0000000H – C0001FFFH.
+    /// 3: The value of RCX was in the range 00000000H – 00001FFFH and the nth bit in read bitmap for low MSRs is 1, where n was the value of RCX
+    /// 4: The value of RCX is in the range C0000000H – C0001FFFH and the nth bit in read bitmap for high MSRs is 1, where n is the value of RCX & 00001FFFH
+    ///
+    /// WRMSR. Guest software attempted to execute WRMSR and either:
+    /// 1: The “use MSR bitmaps” VM-execution control was 0.
+    /// 2: The value of RCX is neither in the range 00000000H – 00001FFFH nor in the range C0000000H – C0001FFFH
+    /// 3: The value of RCX was in the range 00000000H – 00001FFFH and the nth bit in write bitmap for low MSRs is 1, where n was the value of RCX.
+    /// 4: The value of RCX is in the range C0000000H – C0001FFFH and the nth bit in write bitmap for high MSRs is 1, where n is the value of RCX & 00001FFFH.
+    fn handle_msr_access(&self, registers: &mut GuestRegisters, access_type: bool) {
+        log::info!("[+] Handling Rdmsr/Wrmsr access...");
+
+        const MSR_MASK_LOW: u64 = u32::MAX as u64;
+        const RESERVED_MSR_RANGE_LOW: u64 = 0x40000000;
+        const RESERVED_MSR_RANGE_HI: u64 = 0x400000FF;
+        const MSR_READ: bool = true;
+        const MSR_WRITE: bool = false;
+
+        let msr_id = registers.rcx;
+
+        // RESERVED_MSR_RANGE_LOW is the lower bound on a range of MSR IDs reserved for Hyper-V, they're referred to as Synthetic MSRs
+        // Synthetic MSRs are not hardware MSRs, regardless of access type we're going to inject #GP into the guest.
+        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: RDMSR—Read From Model Specific Register and WRMSR—Write to Model Specific Register*/
+        /*      - Protected Mode Exceptions */
+        /*          - #GP(0) If the current privilege level is not 0. */
+        /*          - If the value in ECX specifies a reserved or unimplemented MSR address */
+        if msr_id >= RESERVED_MSR_RANGE_LOW && msr_id <= RESERVED_MSR_RANGE_HI {
+            log::error!(
+                "[!] Attempted to access Hyper-V reserved MSR: {:#x}",
+                msr_id
+            );
+            self.vmentry_inject_gp(0);
+            return;
+        }
+
+        if access_type == MSR_READ {
+            let msr_value = unsafe { x86::msr::rdmsr(msr_id as _) };
+            registers.rdx = msr_value >> 32;
+            registers.rax = msr_value & MSR_MASK_LOW;
+        } else if access_type == MSR_WRITE {
+            let mut msr_value = registers.rdx << 32;
+            msr_value |= (registers.rax) & MSR_MASK_LOW;
+            unsafe { x86::msr::wrmsr(msr_id as _, msr_value) };
+        }
+    }
+
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual:
+    /// # Event Injection
+    /// - 25.8.3 VM-Entry Controls for Event Injection
+    /// - Table 25-17. Format of the VM-Entry Interruption-Information Field
+    fn vmentry_inject_gp(&self, error_code: u32) {
+        let gp_exception = EventInjection::general_protection();
+
+        vmwrite(
+            x86::vmx::vmcs::control::VMENTRY_EXCEPTION_ERR_CODE,
+            error_code,
+        );
+        vmwrite(
+            x86::vmx::vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD,
+            gp_exception.0,
+        );
+        vmwrite(
+            x86::vmx::vmcs::control::VMENTRY_INSTRUCTION_LEN,
+            vmread(x86::vmx::vmcs::ro::VMEXIT_INSTRUCTION_LEN),
+        );
     }
 
     fn advance_guest_rip(&self) {
@@ -185,6 +258,8 @@ pub unsafe extern "C" fn vmexit_stub() -> ! {
     );
 }
 
+/// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table C-1. Basic Exit Reasons
+#[repr(u16)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum VmxBasicExitReason {
     ExceptionOrNmi = 0,
@@ -261,6 +336,7 @@ pub enum VmxBasicExitReason {
     InstructionTimeout = 75,
 }
 
+/// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table C-1. Basic Exit Reasons
 impl VmxBasicExitReason {
     /// Every VM exit writes a 32-bit exit reason to the VMCS (see Section 25.9.1). Certain VM-entry failures also do this (see Section 27.8).
     /// The low 16 bits of the exit-reason field form the basic exit reason which provides basic information about the cause of the VM exit or VM-entry failure.
@@ -344,6 +420,7 @@ impl VmxBasicExitReason {
     }
 }
 
+/// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table C-1. Basic Exit Reasons
 impl fmt::Display for VmxBasicExitReason {
     #[rustfmt::skip]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

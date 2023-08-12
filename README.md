@@ -21,8 +21,6 @@ Additionally, I have gained valuable insights and knowledge from the exploration
 
 - Type-2 Intel VT-x Hypervisor (under development): This hypervisor is being developed with a focus on Intel VT-x virtualization. The following features are currently in progress:
     - Extended Page Tables (EPT)
-    - Model Specific Register (MSR) Bitmaps
-
 - Type-2 AMD SVM Hypervisor Integration: Integration of AMD SVM hypervisor support is planned for future development.
 
 By combining these features, my goal is to create a comprehensive hypervisor solution that supports both Intel VT-x and AMD SVM virtualization technologies. I'm actively working on the Intel VT-x hypervisor and have plans to integrate the AMD SVM hypervisor in the future.
@@ -138,4 +136,6 @@ sc.exe start matrix
 
 * https://secret.club/2020/01/12/battleye-hypervisor-detection.html
 
-* Thanks [@rmccrystal](https://github.com/rmccrystal), `@jessiep_`, [@felix-rs / @joshuа](https://github.com/felix-rs) and [Christopher aka Kharosx0](https://twitter.com/Kharosx0) for helping me out with some concepts, code and errors.
+* Thanks [@not_matthias](https://twitter.com/not_matthias) [@rmccrystal](https://github.com/rmccrystal), `@jessiep_`, [@felix-rs / @joshuа](https://github.com/felix-rs), `@vmprotect` and [Christopher aka Kharosx0](https://twitter.com/Kharosx0) for helping me out with some concepts, code and errors.
+
+* https://stackoverflow.com/questions/3149175/what-is-the-difference-between-trap-and-interrupt/37558741#37558741
