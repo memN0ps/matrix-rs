@@ -26,15 +26,29 @@ use x86::{
 };
 
 pub const KERNEL_STACK_SIZE: usize = 0x6000;
-
-// 0x6000 - (PADDING and RESERVED) 16 = 0x5FEA
+// 0x6000 - 16 bytes for alignment/padding
 pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - (core::mem::size_of::<*mut u64>() * 2);
 
 #[repr(C, align(4096))]
 pub struct HostStackLayout {
     pub stack_contents: [u8; STACK_CONTENTS_SIZE],
 
-    // To keep HostRsp 16 bytes aligned
+    /// Save guest general registers for handling VM exits.
+    /// # When a Vm-Exit occurs:
+    /// - The Host RIP points to vmexit_stub
+    ///     - `vmwrite(host::RIP, vmexit_stub as u64);`
+    /// - The Host RSP points to GuestRegisters inside HostStackLayout
+    ///     - `let host_rsp = &mut self.host_rsp.registers as *mut _ as u64;`
+    ///     - `vmwrite(host::RIP, vmexit_stub as u64);`
+    /// - We call `save_general_purpose_registers_to_stack()`, which is in reverse order to `GuestRegisters`
+    /// - We save a pointer to the stack, containing `GuestRegisters`, in RCX, which is the first parameter to `vmexit_handler()`
+    /// - We call `vmexit_handler(registers: *mut GuestRegisters);` function.
+    /// - We handle whatever vmexit reason, whilst using the rest of the `HostStackLayout` for the stack.
+    /// - We call `restore_general_purpose_registers_from_stack()`, which is in reverse order to `save_general_purpose_registers_to_stack()`.
+    /// - We call `vmresume` to continue guest execution normally.
+    pub registers: GuestRegisters,
+
+    // To keep Host Rsp 16 bytes aligned
     pub padding_1: u64,
     pub reserved_1: u64,
 }
@@ -47,9 +61,6 @@ pub struct Vmx {
     /// The virtual and physical address of the Vmcs naturally aligned 4-KByte region of memory
     pub vmcs_region: Box<Vmcs, PhysicalAllocator>,
     pub vmcs_region_physical_address: u64,
-
-    /// Save guest general registers for handling VM exits.
-    pub registers: GuestRegisters,
 
     /// The host stack layout
     pub host_rsp: Box<HostStackLayout, PhysicalAllocator>,
@@ -73,7 +84,6 @@ impl Vmx {
             vmxon_region_physical_address: 0,
             vmcs_region: vmcs_region,
             vmcs_region_physical_address: 0,
-            registers: GuestRegisters::default(),
             host_rsp: host_rsp,
             msr_bitmap: msr_bitmap,
             context,
@@ -266,23 +276,6 @@ impl Vmx {
             vmwrite(guest::LINK_PTR_FULL, u64::MAX);
         }
 
-        // Guest General Purpose Registers
-        self.registers.rax = self.context.rax;
-        self.registers.rbx = self.context.rbx;
-        self.registers.rcx = self.context.rcx;
-        self.registers.rdx = self.context.rdx;
-        self.registers.rdi = self.context.rdi;
-        self.registers.rsi = self.context.rsi;
-        self.registers.rbp = self.context.rbp;
-        self.registers.r8 = self.context.r8;
-        self.registers.r9 = self.context.r9;
-        self.registers.r10 = self.context.r10;
-        self.registers.r11 = self.context.r11;
-        self.registers.r12 = self.context.r12;
-        self.registers.r13 = self.context.r13;
-        self.registers.r14 = self.context.r14;
-        self.registers.r15 = self.context.r15;
-
         log::info!("[+] Guest initialized!");
     }
 
@@ -313,9 +306,9 @@ impl Vmx {
         unsafe { vmwrite(host::CR4, controlregs::cr4().bits() as u64) };
 
         // Host RIP and RSP
-        let host_rsp = self.host_rsp.as_ref() as *const _ as u64;
+        let host_rsp = &mut self.host_rsp.registers as *mut _ as u64;
         vmwrite(host::RIP, vmexit_stub as u64);
-        vmwrite(host::RSP, host_rsp + STACK_CONTENTS_SIZE as u64);
+        vmwrite(host::RSP, host_rsp);
 
         // Host Segment CS, SS, DS, ES, FS, GS, and TR Selector
         const SELECTOR_MASK: u16 = 0xF8;

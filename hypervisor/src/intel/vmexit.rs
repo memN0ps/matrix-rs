@@ -9,6 +9,183 @@ use crate::{
 };
 use x86::vmx::vmcs::{self, guest, ro::VMEXIT_INSTRUCTION_LEN};
 
+pub struct VmExit;
+
+impl VmExit {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Handle the VM-exit
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.9 VM-EXIT INFORMATION FIELDS
+    /// - APPENDIX C VMX BASIC EXIT REASONS
+    /// - Table C-1. Basic Exit Reasons
+    pub fn handle_vmexit(
+        &self,
+        registers: &mut GuestRegisters,
+    ) -> Result<VmxBasicExitReason, HypervisorError> {
+        // A VM-exit occurred. Copy the guest register values from VMCS so that "vmx.registers" is updated.
+        //registers.rip = vmread(vmcs::guest::RIP);
+        //registers.rsp = vmread(vmcs::guest::RSP);
+        //registers.rflags = vmread(vmcs::guest::RFLAGS);
+
+        log::info!("[+] VMEXIT occurred at RIP: {:#x}", vmread(guest::RIP));
+        log::info!("[+] VMEXIT occurred at RSP: {:#x}", vmread(guest::RSP));
+
+        // Every VM exit writes a 32-bit exit reason to the VMCS (see Section 25.9.1). Certain VM-entry failures also do this (see Section 27.8).
+        // The low 16 bits of the exit-reason field form the basic exit reason which provides basic information about the cause of the VM exit or VM-entry failure.
+        let exit_reason = vmread(vmcs::ro::EXIT_REASON) as u32;
+        log::info!("[+] VMEXIT Reason: {:#x}", exit_reason);
+
+        let Some(basic_exit_reason) = VmxBasicExitReason::from_u32(exit_reason) else {
+            log::error!("[!] Unknown exit reason: {:#x}", exit_reason);
+            return Err(HypervisorError::UnknownVMExitReason);
+        };
+
+        log::info!("[+] Basic Exit Reason: {}", basic_exit_reason);
+
+        /* Handle VMEXIT */
+        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.2 Instructions That Cause VM Exits Unconditionally */
+        /* - The following instructions cause VM exits when they are executed in VMX non-root operation: CPUID, GETSEC, INVD, and XSETBV. */
+        /* - This is also true of instructions introduced with VMX, which include: INVEPT, INVVPID, VMCALL, VMCLEAR, VMLAUNCH, VMPTRLD, VMPTRST, VMRESUME, VMXOFF, and VMXON. */
+        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.3 Instructions That Cause VM Exits Conditionally */
+        /* - Certain instructions cause VM exits in VMX non-root operation depending on the setting of the VM-execution controls.*/
+        match basic_exit_reason {
+            VmxBasicExitReason::Cpuid => self.handle_cpuid(registers),
+            _ => breakpoint_to_bugcheck(),
+        }
+
+        log::info!("[+] Advancing guest RIP...");
+        self.advance_guest_rip();
+        log::info!("[+] Guest RIP advanced to: {:#x}", vmread(guest::RIP));
+
+        return Ok(basic_exit_reason);
+    }
+
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 7.3.16.3 Processor Identification Instruction
+    /// The CPUID (processor identification) instruction returns information about the processor on which the instruction is executed.
+    fn handle_cpuid(&self, registers: &mut GuestRegisters) {
+        log::info!("[+] Handling CPUID...");
+
+        // More leaf's here if needed: https://docs.rs/raw-cpuid/10.6.0/src/raw_cpuid/lib.rs.html#289
+        const EAX_HYPERVISOR_PRESENT: u32 = 0x1;
+        const EAX_HYPERVISOR_INTERFACE: u32 = 0x4000_0000;
+
+        let leaf = registers.rax as u32;
+        let sub_leaf = registers.rcx as u32;
+
+        // Macro which queries cpuid directly.
+        // First parameter is cpuid leaf (EAX register value), second optional parameter is the subleaf (ECX register value).
+        let mut cpuid_result = x86::cpuid::cpuid!(leaf, sub_leaf);
+
+        // Change vendor info if required
+        if leaf == EAX_HYPERVISOR_INTERFACE {
+            let interface_identifier: [u8; 4] = *b"BEEF";
+            cpuid_result.eax = u32::from_le_bytes(interface_identifier);
+        } else if leaf == EAX_HYPERVISOR_PRESENT {
+            // Clearing VT-x Support: If the leaf value is 1 (which corresponds to the standard CPUID function that returns feature information),
+            // We clear bit 5 in the ECX register, which is used to indicate support for VT-x (Virtualization Technology),
+            // to prevent the guest from recognizing VT-x support and attempting to use it.
+            cpuid_result.ecx &= !(1 << 5);
+        }
+
+        // Update the Guest registers with cpuid result
+        registers.rax = cpuid_result.eax as u64;
+        registers.rbx = cpuid_result.ebx as u64;
+        registers.rcx = cpuid_result.ecx as u64;
+        registers.rdx = cpuid_result.edx as u64;
+
+        log::info!("[+] CPUID handled!");
+    }
+
+    fn advance_guest_rip(&self) {
+        let mut rip = vmread(guest::RIP);
+        let len = vmread(VMEXIT_INSTRUCTION_LEN);
+        rip += len;
+        vmwrite(guest::RIP, rip);
+    }
+}
+
+/// The first parameter is a pointer to GuestRegisters that were just saved on the stack in reverse order.
+/// Reverse order because when you push something on stack the last thing you push will be at the top of the stack
+#[no_mangle]
+pub unsafe extern "C" fn vmexit_handler(registers: *mut GuestRegisters) -> u16 {
+    log::info!("[+] Called VMEXIT Handler...");
+    let registers = unsafe { &mut *registers };
+
+    let vmexit = VmExit::new();
+
+    match vmexit.handle_vmexit(registers) {
+        Ok(vmexit_basic_reason) => {
+            log::info!("[+] VMEXIT handled successfully!");
+            return vmexit_basic_reason as u16; // we return the vmexit basic reason if it's needed by the caller
+        }
+        Err(e) => {
+            panic!("[-] Failed to handle VMEXIT: {:?}", e); // panic if error could not be handled
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn vmlaunch_failed() {
+    breakpoint_to_bugcheck();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn vmresume_failed() {
+    breakpoint_to_bugcheck();
+}
+
+/// Runs the guest until VM-exit occurs.
+pub unsafe extern "C" fn launch_vm() -> ! {
+    core::arch::asm!(
+        "nop",
+
+        // Save current (host) general purpose registers onto stack
+        save_general_purpose_registers_to_stack!(),
+
+        // Launch the VM until a VM-exit occurs
+        "vmlaunch",
+
+        // call vmlaunch_failed as we should never execution here
+        "call   {0}",
+
+        sym vmlaunch_failed,
+        options(noreturn),
+    );
+}
+
+//vmwrite(host::RSP, host_rsp + STACK_CONTENTS_SIZE as u64);
+#[no_mangle]
+pub unsafe extern "C" fn vmexit_stub() -> ! {
+    core::arch::asm!(
+        "nop",
+
+        // A vmexit occurred. Save current (guest) general purpose registers onto stack
+        save_general_purpose_registers_to_stack!(),
+
+        // Save a pointer to the stack, containing Guest Registers, in RCX, which is the first parameter to vmexit_handler
+        "mov    rcx, rsp",
+
+        // call vmexit_handler with the pointer to the stack containing Guest Registers
+        "call    {0}",
+
+        // We've handled the vmexit and now we want to restore guest general-purpose registers from the stack
+        restore_general_purpose_registers_from_stack!(),
+
+        // After handling the vmexit, advancing guest RIP and restoring guest general-purpose registers from the stack, we return to the guest
+        "vmresume",
+
+        // call vmresume_failed as we should never continue the guest execution here
+        "call {1}",
+
+        sym vmexit_handler,
+        sym vmresume_failed,
+        options(noreturn),
+    );
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum VmxBasicExitReason {
     ExceptionOrNmi = 0,
     ExternalInterrupt = 1,
@@ -84,107 +261,10 @@ pub enum VmxBasicExitReason {
     InstructionTimeout = 75,
 }
 
-pub struct VmExit;
-
-impl VmExit {
-    pub fn new() -> Self {
-        Self
-    }
-
-    /// Handle the VM-exit
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.9 VM-EXIT INFORMATION FIELDS
-    /// - APPENDIX C VMX BASIC EXIT REASONS
-    /// - Table C-1. Basic Exit Reasons
-    pub fn handle_vmexit(
-        &self,
-        registers: &mut GuestRegisters,
-    ) -> Result<VmxBasicExitReason, HypervisorError> {
-        // A VM-exit occurred. Copy the guest register values from VMCS so that "vmx.registers" is updated.
-        registers.rip = vmread(vmcs::guest::RIP);
-        registers.rsp = vmread(vmcs::guest::RSP);
-        registers.rflags = vmread(vmcs::guest::RFLAGS);
-
-        log::info!("[+] RIP: {:#x}", registers.rip);
-        log::info!("[+] RSP: {:#x}", registers.rsp);
-        log::info!("[+] RFLAGS: {:#x}", registers.rflags);
-
-        // The low 16 bits of the exit-reason field form the basic exit reason
-        let exit_reason = vmread(vmcs::ro::EXIT_REASON);
-
-        let Some(basic_exit_reason) = VmxBasicExitReason::from_u64(exit_reason) else {
-            log::error!("[!] Unknown exit reason: {:#x}", exit_reason);
-            return Err(HypervisorError::UnknownVMExitReason);
-        };
-
-        log::info!("[+] Basic Exit Reason: {}", basic_exit_reason);
-
-        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.2 Instructions That Cause VM Exits Unconditionally */
-        /* - The following instructions cause VM exits when they are executed in VMX non-root operation: CPUID, GETSEC, INVD, and XSETBV. */
-        /* - This is also true of instructions introduced with VMX, which include: INVEPT, INVVPID, VMCALL, VMCLEAR, VMLAUNCH, VMPTRLD, VMPTRST, VMRESUME, VMXOFF, and VMXON. */
-
-        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.3 Instructions That Cause VM Exits Conditionally */
-        /* - Certain instructions cause VM exits in VMX non-root operation depending on the setting of the VM-execution controls.*/
-        match basic_exit_reason {
-            VmxBasicExitReason::Cpuid => self.handle_cpuid(registers),
-            _ => breakpoint_to_bugcheck(),
-        }
-
-        log::info!("[+] Advancing Guest RIP...");
-        self.advance_guest_rip();
-        log::info!("[+] Guest RIP advanced!");
-
-        return Ok(basic_exit_reason);
-    }
-
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 7.3.16.3 Processor Identification Instruction
-    /// The CPUID (processor identification) instruction returns information about the processor on which the instruction is executed.
-    ///
-    fn handle_cpuid(&self, registers: &mut GuestRegisters) {
-        log::info!("[+] Handling CPUID...");
-
-        // More leaf's here if needed: https://docs.rs/raw-cpuid/10.6.0/src/raw_cpuid/lib.rs.html#289
-        const EAX_FEATURE_INFO: u32 = 0x1;
-        const EAX_HYPERVISOR_INFO: u32 = 0x4000_0000;
-
-        let leaf = registers.rax as u32;
-        let sub_leaf = registers.rcx as u32;
-
-        // Macro which queries cpuid directly.
-        // First parameter is cpuid leaf (EAX register value), second optional parameter is the subleaf (ECX register value).
-        let mut cpuid_result = x86::cpuid::cpuid!(leaf, sub_leaf);
-
-        // Change vendor info if required
-        if leaf == EAX_HYPERVISOR_INFO {
-            let interface_identifier: [u8; 4] = *b"BEEF";
-            cpuid_result.eax = u32::from_le_bytes(interface_identifier);
-        } else if leaf == EAX_FEATURE_INFO {
-            // Clearing VT-x Support: If the leaf value is 1 (which corresponds to the standard CPUID function that returns feature information),
-            // We clear bit 5 in the ECX register, which is used to indicate support for VT-x (Virtualization Technology),
-            // to prevent the guest from recognizing VT-x support and attempting to use it.
-            cpuid_result.ecx &= !(1 << 5);
-        }
-
-        // Update the Guest registers with cpuid result
-        registers.rax = cpuid_result.eax as u64;
-        registers.rbx = cpuid_result.ebx as u64;
-        registers.rcx = cpuid_result.ecx as u64;
-        registers.rdx = cpuid_result.edx as u64;
-
-        log::info!("[+] CPUID handled!");
-    }
-
-    fn advance_guest_rip(&self) {
-        let mut rip = vmread(guest::RIP);
-        let len = vmread(VMEXIT_INSTRUCTION_LEN);
-        rip += len;
-        vmwrite(guest::RIP, rip);
-    }
-}
-
 impl VmxBasicExitReason {
     /// Every VM exit writes a 32-bit exit reason to the VMCS (see Section 25.9.1). Certain VM-entry failures also do this (see Section 27.8).
     /// The low 16 bits of the exit-reason field form the basic exit reason which provides basic information about the cause of the VM exit or VM-entry failure.
-    pub fn from_u64(value: u64) -> Option<Self> {
+    pub fn from_u32(value: u32) -> Option<Self> {
         let basic_exit_reason = (value & 0xFFFF) as u16;
         match basic_exit_reason {
             0 => Some(Self::ExceptionOrNmi),
@@ -267,154 +347,82 @@ impl VmxBasicExitReason {
 impl fmt::Display for VmxBasicExitReason {
     #[rustfmt::skip]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            VmxBasicExitReason::ExceptionOrNmi => write!(f, "Exception or non-maskable interrupt (NMI)"),
-            VmxBasicExitReason::ExternalInterrupt => write!(f, "External interrupt"),
-            VmxBasicExitReason::TripleFault => write!(f, "Triple fault"),
-            VmxBasicExitReason::InitSignal => write!(f, "INIT signal"),
-            VmxBasicExitReason::StartupIpi => write!(f, "Start-up IPI (SIPI)"),
-            VmxBasicExitReason::IoSystemManagementInterrupt => write!(f, "I/O system-management interrupt (SMI)"),
-            VmxBasicExitReason::OtherSmi => write!(f, "Other SMI"),
-            VmxBasicExitReason::InterruptWindow => write!(f, "Interrupt window"),
-            VmxBasicExitReason::NmiWindow => write!(f, "NMI window"),
-            VmxBasicExitReason::TaskSwitch => write!(f, "Task switch"),
-            VmxBasicExitReason::Cpuid => write!(f, "Guest software attempted to execute CPUID"),
-            VmxBasicExitReason::Getsec => write!(f, "Guest software attempted to execute GETSEC"),
-            VmxBasicExitReason::Hlt => write!(f, "Guest software attempted to execute HLT"),
-            VmxBasicExitReason::Invd => write!(f, "Guest software attempted to execute INVD"),
-            VmxBasicExitReason::Invlpg => write!(f, "Guest software attempted to execute INVLPG"),
-            VmxBasicExitReason::Rdpmc => write!(f, "Guest software attempted to execute RDPMC"),
-            VmxBasicExitReason::Rdtsc => write!(f, "Guest software attempted to execute RDTSC"),
-            VmxBasicExitReason::Rsm => write!(f, "Guest software attempted to execute RSM in SMM"),
-            VmxBasicExitReason::Vmcall => write!(f, "VMCALL was executed"),
-            VmxBasicExitReason::Vmclear => write!(f, "Guest software attempted to execute VMCLEAR"),
-            VmxBasicExitReason::Vmlaunch => write!(f, "Guest software attempted to execute VMLAUNCH"),
-            VmxBasicExitReason::Vmptrld => write!(f, "Guest software attempted to execute VMPTRLD"),
-            VmxBasicExitReason::Vmptrst => write!(f, "Guest software attempted to execute VMPTRST"),
-            VmxBasicExitReason::Vmread => write!(f, "Guest software attempted to execute VMREAD"),
-            VmxBasicExitReason::Vmresume => write!(f, "Guest software attempted to execute VMRESUME"),
-            VmxBasicExitReason::Vmwrite => write!(f, "Guest software attempted to execute VMWRITE"),
-            VmxBasicExitReason::Vmxoff => write!(f, "Guest software attempted to execute VMXOFF"),
-            VmxBasicExitReason::Vmxon => write!(f, "Guest software attempted to execute VMXON"),
-            VmxBasicExitReason::ControlRegisterAccesses => write!(f, "Control-register accesses"),
-            VmxBasicExitReason::MovDr => write!(f, "Guest software attempted a MOV to or from a debug register"),
-            VmxBasicExitReason::IoInstruction => write!(f, "Guest software attempted to execute an I/O instruction"),
-            VmxBasicExitReason::Rdmsr => write!(f, "Guest software attempted to execute RDMSR"),
-            VmxBasicExitReason::Wrmsr => write!(f, "Guest software attempted to execute WRMSR"),
-            VmxBasicExitReason::VmEntryFailureInvalidGuestState => write!(f, "VM-entry failure due to invalid guest state"),
-            VmxBasicExitReason::VmEntryFailureMsrLoading => write!(f, "VM-entry failure due to MSR loading"),
-            VmxBasicExitReason::Mwait => write!(f, "Guest software attempted to execute MWAIT"),
-            VmxBasicExitReason::MonitorTrapFlag => write!(f, "Monitor trap flag"),
-            VmxBasicExitReason::Monitor => write!(f, "Guest software attempted to execute MONITOR"),
-            VmxBasicExitReason::Pause => write!(f, "Either guest software attempted to execute PAUSE or the PAUSE-loop exiting VM-execution control was 1"),
-            VmxBasicExitReason::VmEntryFailureMachineCheckEvent => write!(f, "VM-entry failure due to machine-check event"),
-            VmxBasicExitReason::TprBelowThreshold => write!(f, "TPR below threshold"),
-            VmxBasicExitReason::ApicAccess => write!(f, "APIC access"),
-            VmxBasicExitReason::VirtualizedEoi => write!(f, "Virtualized EOI"),
-            VmxBasicExitReason::AccessToGdtrOrIdtr => write!(f, "Access to GDTR or IDTR"),
-            VmxBasicExitReason::AccessToLdtrOrTr => write!(f, "Access to LDTR or TR"),
-            VmxBasicExitReason::EptViolation => write!(f, "EPT violation"),
-            VmxBasicExitReason::EptMisconfiguration => write!(f, "EPT misconfiguration"),
-            VmxBasicExitReason::Invept => write!(f, "Guest software attempted to execute INVEPT"),
-            VmxBasicExitReason::Rdtscp => write!(f, "Guest software attempted to execute RDTSCP"),
-            VmxBasicExitReason::VmxPreemptionTimerExpired => write!(f, "VMX-preemption timer expired"),
-            VmxBasicExitReason::Invvpid => write!(f, "Guest software attempted to execute INVVPID"),
-            VmxBasicExitReason::WbinvdOrWbnoinvd => write!(f, "Guest software attempted to execute WBINVD or WBNOINVD"),
-            VmxBasicExitReason::Xsetbv => write!(f, "Guest software attempted to execute XSETBV"),
-            VmxBasicExitReason::ApicWrite => write!(f, "APIC write"),
-            VmxBasicExitReason::Rdrand => write!(f, "Guest software attempted to execute RDRAND"),
-            VmxBasicExitReason::Invpcid => write!(f, "Guest software attempted to execute INVPCID"),
-            VmxBasicExitReason::Vmfunc => write!(f, "Guest software invoked a VM function with the VMFUNC instruction"),
-            VmxBasicExitReason::Encls => write!(f, "Guest software attempted to execute ENCLS"),
-            VmxBasicExitReason::Rdseed => write!(f, "Guest software attempted to execute RDSEED"),
-            VmxBasicExitReason::PageModificationLogFull => write!(f, "Page-modification log full"),
-            VmxBasicExitReason::Xsaves => write!(f, "Guest software attempted to execute XSAVES"),
-            VmxBasicExitReason::Xrstors => write!(f, "Guest software attempted to execute XRSTORS"),
-            VmxBasicExitReason::Pconfig => write!(f, "Guest software attempted to execute PCONFIG"),
-            VmxBasicExitReason::SppRelatedEvent => write!(f, "SPP-related event"),
-            VmxBasicExitReason::Umwait => write!(f, "Guest software attempted to execute UMWAIT"),
-            VmxBasicExitReason::Tpause => write!(f, "Guest software attempted to execute TPAUSE"),
-            VmxBasicExitReason::Loadiwkey => write!(f, "Guest software attempted to execute LOADIWKEY"),
-            VmxBasicExitReason::Enclv => write!(f, "Guest software attempted to execute ENCLV"),
-            VmxBasicExitReason::EnqcmdPasidTranslationFailure => write!(f, "ENQCMD PASID translation failure"),
-            VmxBasicExitReason::EnqcmdsPasidTranslationFailure => write!(f, "ENQCMDS PASID translation failure"),
-            VmxBasicExitReason::BusLock => write!(f, "Bus lock"),
-            VmxBasicExitReason::InstructionTimeout => write!(f, "Instruction timeout"),
-        }
+        let description = match *self {
+            VmxBasicExitReason::ExceptionOrNmi => "Exception or non-maskable interrupt (NMI)",
+            VmxBasicExitReason::ExternalInterrupt => "External interrupt",
+            VmxBasicExitReason::TripleFault => "Triple fault",
+            VmxBasicExitReason::InitSignal => "INIT signal",
+            VmxBasicExitReason::StartupIpi => "Start-up IPI (SIPI)",
+            VmxBasicExitReason::IoSystemManagementInterrupt => "I/O system-management interrupt (SMI)",
+            VmxBasicExitReason::OtherSmi => "Other SMI",
+            VmxBasicExitReason::InterruptWindow => "Interrupt window",
+            VmxBasicExitReason::NmiWindow => "NMI window",
+            VmxBasicExitReason::TaskSwitch => "Task switch",
+            VmxBasicExitReason::Cpuid => "Guest software attempted to execute CPUID",
+            VmxBasicExitReason::Getsec => "Guest software attempted to execute GETSEC",
+            VmxBasicExitReason::Hlt => "Guest software attempted to execute HLT",
+            VmxBasicExitReason::Invd => "Guest software attempted to execute INVD",
+            VmxBasicExitReason::Invlpg => "Guest software attempted to execute INVLPG",
+            VmxBasicExitReason::Rdpmc => "Guest software attempted to execute RDPMC",
+            VmxBasicExitReason::Rdtsc => "Guest software attempted to execute RDTSC",
+            VmxBasicExitReason::Rsm => "Guest software attempted to execute RSM in SMM",
+            VmxBasicExitReason::Vmcall => "VMCALL was executed",
+            VmxBasicExitReason::Vmclear => "Guest software attempted to execute VMCLEAR",
+            VmxBasicExitReason::Vmlaunch => "Guest software attempted to execute VMLAUNCH",
+            VmxBasicExitReason::Vmptrld => "Guest software attempted to execute VMPTRLD",
+            VmxBasicExitReason::Vmptrst => "Guest software attempted to execute VMPTRST",
+            VmxBasicExitReason::Vmread => "Guest software attempted to execute VMREAD",
+            VmxBasicExitReason::Vmresume => "Guest software attempted to execute VMRESUME",
+            VmxBasicExitReason::Vmwrite => "Guest software attempted to execute VMWRITE",
+            VmxBasicExitReason::Vmxoff => "Guest software attempted to execute VMXOFF",
+            VmxBasicExitReason::Vmxon => "Guest software attempted to execute VMXON",
+            VmxBasicExitReason::ControlRegisterAccesses => "Control-register accesses",
+            VmxBasicExitReason::MovDr => "Guest software attempted a MOV to or from a debug register",
+            VmxBasicExitReason::IoInstruction => "Guest software attempted to execute an I/O instruction",
+            VmxBasicExitReason::Rdmsr => "Guest software attempted to execute RDMSR",
+            VmxBasicExitReason::Wrmsr => "Guest software attempted to execute WRMSR",
+            VmxBasicExitReason::VmEntryFailureInvalidGuestState => "VM-entry failure due to invalid guest state",
+            VmxBasicExitReason::VmEntryFailureMsrLoading => "VM-entry failure due to MSR loading",
+            VmxBasicExitReason::Mwait => "Guest software attempted to execute MWAIT",
+            VmxBasicExitReason::MonitorTrapFlag => "Monitor trap flag",
+            VmxBasicExitReason::Monitor => "Guest software attempted to execute MONITOR",
+            VmxBasicExitReason::Pause => "Either guest software attempted to execute PAUSE or the PAUSE-loop exiting VM-execution control was 1",
+            VmxBasicExitReason::VmEntryFailureMachineCheckEvent => "VM-entry failure due to machine-check event",
+            VmxBasicExitReason::TprBelowThreshold => "TPR below threshold",
+            VmxBasicExitReason::ApicAccess => "APIC access",
+            VmxBasicExitReason::VirtualizedEoi => "Virtualized EOI",
+            VmxBasicExitReason::AccessToGdtrOrIdtr => "Access to GDTR or IDTR",
+            VmxBasicExitReason::AccessToLdtrOrTr => "Access to LDTR or TR",
+            VmxBasicExitReason::EptViolation => "EPT violation",
+            VmxBasicExitReason::EptMisconfiguration => "EPT misconfiguration",
+            VmxBasicExitReason::Invept => "Guest software attempted to execute INVEPT",
+            VmxBasicExitReason::Rdtscp => "Guest software attempted to execute RDTSCP",
+            VmxBasicExitReason::VmxPreemptionTimerExpired => "VMX-preemption timer expired",
+            VmxBasicExitReason::Invvpid => "Guest software attempted to execute INVVPID",
+            VmxBasicExitReason::WbinvdOrWbnoinvd => "Guest software attempted to execute WBINVD or WBNOINVD",
+            VmxBasicExitReason::Xsetbv => "Guest software attempted to execute XSETBV",
+            VmxBasicExitReason::ApicWrite => "APIC write",
+            VmxBasicExitReason::Rdrand => "Guest software attempted to execute RDRAND",
+            VmxBasicExitReason::Invpcid => "Guest software attempted to execute INVPCID",
+            VmxBasicExitReason::Vmfunc => "Guest software invoked a VM function with the VMFUNC instruction",
+            VmxBasicExitReason::Encls => "Guest software attempted to execute ENCLS",
+            VmxBasicExitReason::Rdseed => "Guest software attempted to execute RDSEED",
+            VmxBasicExitReason::PageModificationLogFull => "Page-modification log full",
+            VmxBasicExitReason::Xsaves => "Guest software attempted to execute XSAVES",
+            VmxBasicExitReason::Xrstors => "Guest software attempted to execute XRSTORS",
+            VmxBasicExitReason::Pconfig => "Guest software attempted to execute PCONFIG",
+            VmxBasicExitReason::SppRelatedEvent => "SPP-related event",
+            VmxBasicExitReason::Umwait => "Guest software attempted to execute UMWAIT",
+            VmxBasicExitReason::Tpause => "Guest software attempted to execute TPAUSE",
+            VmxBasicExitReason::Loadiwkey => "Guest software attempted to execute LOADIWKEY",
+            VmxBasicExitReason::Enclv => "Guest software attempted to execute ENCLV",
+            VmxBasicExitReason::EnqcmdPasidTranslationFailure => "ENQCMD PASID translation failure",
+            VmxBasicExitReason::EnqcmdsPasidTranslationFailure => "ENQCMDS PASID translation failure",
+            VmxBasicExitReason::BusLock => "Bus lock",
+            VmxBasicExitReason::InstructionTimeout => "Instruction timeout",
+        };
+
+        // Write both the discriminant (as a number) and the description to the formatter.
+        write!(f, "{}: {}", *self as u16, description)
     }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn vmexit_handler(registers: &mut GuestRegisters) -> u16 {
-    log::info!("[+] Called VMEXIT Handler...");
-
-    let vmexit = VmExit::new();
-
-    match vmexit.handle_vmexit(registers) {
-        Ok(vmexit_basic_reason) => {
-            log::info!("[+] VMEXIT handled successfully!");
-            return vmexit_basic_reason as u16; // we return the vmexit basic reason if it's needed by the caller
-        }
-        Err(e) => {
-            panic!("[-] Failed to handle VMEXIT: {:?}", e); // panic if error could not be handled
-        }
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn vmlaunch_failed() {
-    breakpoint_to_bugcheck();
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn vmresume_failed() {
-    breakpoint_to_bugcheck();
-}
-
-/// Runs the guest until VM-exit occurs.
-pub unsafe extern "C" fn launch_vm() -> ! {
-    core::arch::asm!(
-        "nop",
-
-        // Save current (host) general purpose registers onto stack
-        save_general_purpose_registers_to_stack!(),
-
-        // Launch the VM until a VM-exit occurs
-        "vmlaunch",
-
-        // call vmlaunch_failed as we should never execution here
-        "call   {0}",
-
-        sym vmlaunch_failed,
-        options(noreturn),
-    );
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn vmexit_stub() -> ! {
-    core::arch::asm!(
-        "nop",
-
-        // A vmexit occurred. Save current (guest) general purpose registers onto stack
-        save_general_purpose_registers_to_stack!(),
-
-        // Save a pointer to the stack, containing Guest Registers, in RCX, which is the first parameter to vmexit_handler
-        "mov    rcx, rsp",
-
-        // call vmexit_handler with the pointer to the stack containing Guest Registers
-        "call    {0}",
-
-        // We've handled the vmexit and now we want to restore guest general-purpose registers from the stack
-        restore_general_purpose_registers_from_stack!(),
-
-        // After handling the vmexit, advancing guest RIP and restoring guest general-purpose registers from the stack, we return to the guest
-        "vmresume",
-
-        // call vmresume_failed as we should never continue the guest execution here
-        "call {1}",
-
-        sym vmexit_handler,
-        sym vmresume_failed,
-        options(noreturn),
-    );
 }
