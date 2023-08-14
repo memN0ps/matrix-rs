@@ -117,8 +117,8 @@ impl VmExit {
         log::info!("[+] Handling Rdmsr/Wrmsr access...");
 
         const MSR_MASK_LOW: u64 = u32::MAX as u64;
-        const RESERVED_MSR_RANGE_LOW: u64 = 0xC0000000;
-        const RESERVED_MSR_RANGE_HI: u64 = 0xC0001FFF;
+        const RESERVED_MSR_RANGE_LOW: u64 = 0x40000000;
+        const RESERVED_MSR_RANGE_HI: u64 = 0x400000F0;
         const MSR_READ: bool = true;
         const MSR_WRITE: bool = false;
 
