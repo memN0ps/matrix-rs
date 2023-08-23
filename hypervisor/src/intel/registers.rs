@@ -1,7 +1,16 @@
+/// The collection off XMM register values.
+#[derive(Debug, Clone, Copy, Default)]
+#[repr(C)]
+pub struct Xmm {
+    value: [u8; 16],
+}
+
 /// The collection of the guest general purpose register values.
 #[derive(Debug, Clone, Copy, Default)]
 #[repr(C)]
 pub struct GuestRegisters {
+    pub xmm: [Xmm; 6],
+    pub alignment: u64,
     pub r15: u64,
     pub r14: u64,
     pub r13: u64,

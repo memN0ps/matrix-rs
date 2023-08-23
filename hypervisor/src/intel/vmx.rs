@@ -1,4 +1,4 @@
-use super::{msr_bitmap::MsrBitmap, registers::GuestRegisters, vmcs::Vmcs, vmxon::Vmxon};
+use super::{msr_bitmap::MsrBitmap, vmcs::Vmcs, vmxon::Vmxon};
 use crate::{
     error::HypervisorError,
     intel::{
@@ -9,7 +9,7 @@ use crate::{
 };
 use alloc::boxed::Box;
 use bitfield::BitMut;
-use kernel_alloc::PhysicalAllocator;
+use kernel_alloc::{KernelAlloc, PhysicalAllocator};
 use x86::{
     controlregs,
     cpuid::CpuId,
@@ -26,28 +26,11 @@ use x86::{
 };
 
 pub const KERNEL_STACK_SIZE: usize = 0x6000;
-// 0x6000 - 16 bytes for alignment/padding
-pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - (core::mem::size_of::<*mut u64>() * 2);
+pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - (core::mem::size_of::<*mut u64>() * 2); // 0x6000 - 16 bytes for alignment/padding
 
 #[repr(C, align(4096))]
 pub struct HostStackLayout {
     pub stack_contents: [u8; STACK_CONTENTS_SIZE],
-
-    /// Save guest general registers for handling VM exits.
-    /// # When a Vm-Exit occurs:
-    /// - The Host RIP points to vmexit_stub
-    ///     - `vmwrite(host::RIP, vmexit_stub as u64);`
-    /// - The Host RSP points to GuestRegisters inside HostStackLayout
-    ///     - `let host_rsp = &mut self.host_rsp.registers as *mut _ as u64;`
-    ///     - `vmwrite(host::RIP, vmexit_stub as u64);`
-    /// - We call `save_general_purpose_registers_to_stack()`, which is in reverse order to `GuestRegisters`
-    /// - We save a pointer to the stack, containing `GuestRegisters`, in RCX, which is the first parameter to `vmexit_handler()`
-    /// - We call `vmexit_handler(registers: *mut GuestRegisters);` function.
-    /// - We handle whatever vmexit reason, whilst using the rest of the `HostStackLayout` for the stack.
-    /// - We call `restore_general_purpose_registers_from_stack()`, which is in reverse order to `save_general_purpose_registers_to_stack()`.
-    /// - We call `vmresume` to continue guest execution normally.
-    pub registers: GuestRegisters,
-
     // To keep Host Rsp 16 bytes aligned
     pub padding_1: u64,
     pub reserved_1: u64,
@@ -63,7 +46,7 @@ pub struct Vmx {
     pub vmcs_region_physical_address: u64,
 
     /// The host stack layout
-    pub host_rsp: Box<HostStackLayout, PhysicalAllocator>,
+    pub host_rsp: Box<HostStackLayout, KernelAlloc>,
 
     /// The MSR Bitmap
     pub msr_bitmap: Box<MsrBitmap, PhysicalAllocator>,
@@ -76,7 +59,7 @@ impl Vmx {
     pub fn new(context: Context) -> Result<Self, HypervisorError> {
         let vmxon_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let vmcs_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
-        let host_rsp = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
+        let host_rsp = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
         let msr_bitmap = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
 
         Ok(Self {
@@ -306,9 +289,9 @@ impl Vmx {
         unsafe { vmwrite(host::CR4, controlregs::cr4().bits() as u64) };
 
         // Host RIP and RSP
-        let host_rsp = &mut self.host_rsp.registers as *mut _ as u64;
+        let host_rsp = &mut self.host_rsp.as_ref() as *mut _ as u64;
         vmwrite(host::RIP, vmexit_stub as u64);
-        vmwrite(host::RSP, host_rsp);
+        vmwrite(host::RSP, host_rsp + STACK_CONTENTS_SIZE as u64);
 
         // Host Segment CS, SS, DS, ES, FS, GS, and TR Selector
         const SELECTOR_MASK: u16 = 0xF8;
