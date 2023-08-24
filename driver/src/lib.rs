@@ -39,9 +39,30 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
 
     driver.DriverUnload = Some(driver_unload);
 
-    if virtualize().is_none() {
-        log::error!("Failed to virtualize processors");
-        return STATUS_UNSUCCESSFUL;
+    // The Guest will start running from here as we capture and vmwrite the context to the guest state per vcpu
+    let context = Hypervisor::capture_registers();
+
+    // Check if we are running as Host (root operation) or Guest (non-root operation) by checking the vendor name in the cpuid which is set in vmexit_handler -> handle_cpuid
+    // Virtualize the system only if the hypervisor is running as Host (root operation)
+    if !Hypervisor::is_vendor_name_present() {
+        log::info!("[+] Virtualizing the system");
+
+        let hv = Hypervisor::builder();
+
+        let Ok(mut hypervisor) = hv.build(context) else {
+            log::error!("[-] Failed to build hypervisor");
+            return STATUS_UNSUCCESSFUL;
+        };
+
+        match hypervisor.virtualize() {
+            Ok(_) => log::info!("[+] VMM initialized"),
+            Err(err) => {
+                log::error!("[-] VMM initialization failed: {}", err);
+                return STATUS_UNSUCCESSFUL;
+            }
+        }
+
+        unsafe { HYPERVISOR = Some(hypervisor) };
     }
 
     STATUS_SUCCESS
@@ -59,25 +80,4 @@ pub extern "system" fn driver_unload(_driver: &mut DRIVER_OBJECT) {
 
     }
     */
-}
-
-fn virtualize() -> Option<()> {
-    let hv = Hypervisor::builder();
-
-    let Ok(mut hypervisor) = hv.build() else {
-        log::error!("[-] Failed to build hypervisor");
-        return None;
-    };
-
-    match hypervisor.virtualize() {
-        Ok(_) => log::info!("[+] VMM initialized"),
-        Err(err) => {
-            log::error!("[-] VMM initialization failed: {}", err);
-            return None;
-        }
-    }
-
-    unsafe { HYPERVISOR = Some(hypervisor) }
-
-    Some(())
 }

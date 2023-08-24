@@ -4,12 +4,14 @@ use crate::nt::RtlCaptureContext;
 
 #[allow(dead_code)]
 #[repr(C, align(16))]
+#[derive(Debug, Clone, Copy)]
 pub struct M128A {
     low: u64,
     high: u64,
 }
 
 #[repr(C, align(16))]
+#[derive(Debug, Clone, Copy)]
 pub struct XsaveFormat {
     control_word: u16,
     status_word: u16,
@@ -69,6 +71,7 @@ pub type XmmSaveArea = XsaveFormat;
 ///
 /// Size: 1232 bytes (confirmed)
 #[repr(C, align(16))]
+#[derive(Debug, Clone, Copy)]
 pub struct Context {
     //
     // Register parameter home addresses.

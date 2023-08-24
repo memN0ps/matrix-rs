@@ -15,7 +15,7 @@ dependencies = ["build-driver"]
 ignore_errors = true
 script = [
     "cd %TARGET_PATH%",
-    "rename driver.dll matrix.sys",
+    "rename matrix.dll matrix.sys",
 ]
 
 [tasks.sign]

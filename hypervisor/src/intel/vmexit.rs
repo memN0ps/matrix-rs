@@ -5,9 +5,13 @@ use crate::{
     error::HypervisorError,
     intel::support::{vmread, vmwrite},
     restore_general_purpose_registers_from_stack, save_general_purpose_registers_to_stack,
-    utils::debug::breakpoint_to_bugcheck,
 };
 use x86::vmx::vmcs::{self, guest, ro::VMEXIT_INSTRUCTION_LEN};
+
+// More leafs here if needed: https://docs.rs/raw-cpuid/10.6.0/src/raw_cpuid/lib.rs.html#289
+pub const CPUID_VENDOR_AND_MAX_FUNCTIONS: u32 = 0x4000_0000;
+pub const VENDOR_NAME: u32 = 0x5441_4c48; // "HLAT"
+pub const EAX_HYPERVISOR_PRESENT: u32 = 0x1;
 
 pub struct VmExit;
 
@@ -54,7 +58,7 @@ impl VmExit {
             VmxBasicExitReason::Cpuid => self.handle_cpuid(registers),
             VmxBasicExitReason::Rdmsr => self.handle_msr_access(registers, false),
             VmxBasicExitReason::Wrmsr => self.handle_msr_access(registers, true),
-            _ => breakpoint_to_bugcheck(),
+            _ => panic!("[-] Unhandled VMEXIT: {}", basic_exit_reason),
         }
 
         log::info!("[+] Advancing guest RIP...");
@@ -70,10 +74,6 @@ impl VmExit {
     fn handle_cpuid(&self, registers: &mut GuestRegisters) {
         log::info!("[+] Handling CPUID...");
 
-        // More leafs here if needed: https://docs.rs/raw-cpuid/10.6.0/src/raw_cpuid/lib.rs.html#289
-        const EAX_HYPERVISOR_PRESENT: u32 = 0x1;
-        const EAX_HYPERVISOR_INTERFACE: u32 = 0x4000_0000;
-
         let leaf = registers.rax as u32;
         let sub_leaf = registers.rcx as u32;
 
@@ -82,9 +82,10 @@ impl VmExit {
         let mut cpuid_result = x86::cpuid::cpuid!(leaf, sub_leaf);
 
         // Change vendor info if required
-        if leaf == EAX_HYPERVISOR_INTERFACE {
-            let interface_identifier: [u8; 4] = *b"BEEF";
-            cpuid_result.eax = u32::from_le_bytes(interface_identifier);
+        if leaf == CPUID_VENDOR_AND_MAX_FUNCTIONS {
+            cpuid_result.ebx = VENDOR_NAME;
+            cpuid_result.ecx = VENDOR_NAME;
+            cpuid_result.edx = VENDOR_NAME;
         } else if leaf == EAX_HYPERVISOR_PRESENT {
             // Clearing VT-x Support: If the leaf value is 1 (which corresponds to the standard CPUID function that returns feature information),
             // We clear bit 5 in the ECX register, which is used to indicate support for VT-x (Virtualization Technology),
@@ -201,12 +202,12 @@ pub unsafe extern "C" fn vmexit_handler(registers: *mut GuestRegisters) -> u16 {
 
 #[no_mangle]
 pub unsafe extern "C" fn vmlaunch_failed() {
-    breakpoint_to_bugcheck();
+    panic!("[-] VMLAUNCH failed!");
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn vmresume_failed() {
-    breakpoint_to_bugcheck();
+    panic!("[-] VMRESUME failed!");
 }
 
 /// Runs the guest until VM-exit occurs.
@@ -232,7 +233,6 @@ pub unsafe extern "C" fn launch_vm() -> ! {
 pub unsafe extern "C" fn vmexit_stub() -> ! {
     core::arch::asm!(
         "nop",
-        "int3",
         // A vmexit occurred. Save current (guest) general purpose registers onto stack
         save_general_purpose_registers_to_stack!(),
 

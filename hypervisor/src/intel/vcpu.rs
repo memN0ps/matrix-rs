@@ -1,5 +1,4 @@
 extern crate alloc;
-use alloc::boxed::Box;
 
 use crate::{
     error::HypervisorError,
@@ -11,36 +10,40 @@ pub struct Vcpu {
     /// The index of the processor.
     index: u32,
 
-    /// Whether the processor is virtualized or not.
+    /// Whether the processor is virtualized.
     is_virtualized: bool,
+
+    context: Context,
 }
 
 impl Vcpu {
-    pub fn new(index: u32) -> Result<Self, HypervisorError> {
-        log::debug!("Creating processor {}", index);
+    pub fn new(index: u32, context: Context) -> Result<Self, HypervisorError> {
+        log::info!("Creating processor {}", index);
 
         Ok(Self {
             index,
             is_virtualized: false,
+            context,
         })
     }
 
     /// Virtualize the CPU by capturing the context, enabling VMX operation, adjusting control registers, calling VMXON, VMPTRLD and VMLAUNCH
-    pub fn virtualize_cpu(&mut self, context: Context) -> Result<(), HypervisorError> {
+    pub fn virtualize_cpu(&mut self) -> Result<(), HypervisorError> {
         log::info!("[+] Virtualizing processor {}", self.index);
 
+        // Double check if the processor is already virtualized.
         if !self.is_virtualized {
+            log::info!("[+] Preparing for virtualization");
+
             self.is_virtualized = true;
 
             log::info!("[+] Initializing VMX");
-            let v = Vmx::new(context)?;
-            let mut vmx = Box::new(v);
+            let mut vmx = Vmx::new()?;
 
-            vmx.init()?;
-
-            log::info!("[+] Running the guest until VM-exit occurs.");
+            vmx.init(self.context)?;
 
             // Run the VM until the VM-exit occurs.
+            log::info!("[+] Running the guest until VM-exit occurs.");
             unsafe { launch_vm() };
         }
 
@@ -50,9 +53,5 @@ impl Vcpu {
     /// Gets the index of the current logical/virtual processor
     pub fn id(&self) -> u32 {
         self.index
-    }
-
-    pub fn is_virtualized(&self) -> bool {
-        self.is_virtualized
     }
 }

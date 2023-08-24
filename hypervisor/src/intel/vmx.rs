@@ -12,7 +12,6 @@ use bitfield::BitMut;
 use kernel_alloc::{KernelAlloc, PhysicalAllocator};
 use x86::{
     controlregs,
-    cpuid::CpuId,
     dtables::{self},
     msr::{self, rdmsr},
     task,
@@ -50,13 +49,10 @@ pub struct Vmx {
 
     /// The MSR Bitmap
     pub msr_bitmap: Box<MsrBitmap, PhysicalAllocator>,
-
-    /// The context of the hypervisor
-    pub context: Context,
 }
 
 impl Vmx {
-    pub fn new(context: Context) -> Result<Self, HypervisorError> {
+    pub fn new() -> Result<Self, HypervisorError> {
         let vmxon_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let vmcs_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let host_rsp = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
@@ -69,11 +65,10 @@ impl Vmx {
             vmcs_region_physical_address: 0,
             host_rsp: host_rsp,
             msr_bitmap: msr_bitmap,
-            context,
         })
     }
 
-    pub fn init(&mut self) -> Result<(), HypervisorError> {
+    pub fn init(&mut self, context: Context) -> Result<(), HypervisorError> {
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
         log::info!("[+] Enabling Virtual Machine Extensions (VMX)");
         self.enable_vmx_operation()?;
@@ -84,11 +79,11 @@ impl Vmx {
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
         log::info!("[+] init_guest_register_state");
-        self.init_guest_register_state();
+        self.init_guest_register_state(context);
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
         log::info!("[+] init_host_register_state");
-        self.init_host_register_state();
+        self.init_host_register_state(context);
 
         /* VMX controls */
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: */
@@ -178,7 +173,7 @@ impl Vmx {
     ///     - IA32_SYSENTER_EIP
     ///     - LINK_PTR_FULL
     #[rustfmt::skip]
-    fn init_guest_register_state(&mut self) {
+    fn init_guest_register_state(&mut self, context: Context) {
         log::info!("[+] Guest Register State");
 
         // Guest Control Registers
@@ -187,52 +182,52 @@ impl Vmx {
         unsafe { vmwrite(guest::CR4, controlregs::cr4().bits() as u64) };
 
         // Guest Debug Register
-        vmwrite(guest::DR7, self.context.dr7);
+        vmwrite(guest::DR7, context.dr7);
 
         // Guest RSP, RIP and RFLAGS
-        vmwrite(guest::RSP, self.context.rsp);
-        vmwrite(guest::RIP, self.context.rip);
-        vmwrite(guest::RFLAGS, self.context.e_flags);
+        vmwrite(guest::RSP, context.rsp);
+        vmwrite(guest::RIP, context.rip);
+        vmwrite(guest::RFLAGS, context.e_flags);
 
         // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Selector
-        vmwrite(guest::CS_SELECTOR, self.context.seg_cs);
-        vmwrite(guest::SS_SELECTOR, self.context.seg_ss);
-        vmwrite(guest::DS_SELECTOR, self.context.seg_ds);
-        vmwrite(guest::ES_SELECTOR, self.context.seg_es);
-        vmwrite(guest::FS_SELECTOR, self.context.seg_fs);
-        vmwrite(guest::GS_SELECTOR, self.context.seg_gs);
+        vmwrite(guest::CS_SELECTOR, context.seg_cs);
+        vmwrite(guest::SS_SELECTOR, context.seg_ss);
+        vmwrite(guest::DS_SELECTOR, context.seg_ds);
+        vmwrite(guest::ES_SELECTOR, context.seg_es);
+        vmwrite(guest::FS_SELECTOR, context.seg_fs);
+        vmwrite(guest::GS_SELECTOR, context.seg_gs);
         unsafe { vmwrite(guest::LDTR_SELECTOR, dtables::ldtr().bits() as u64) };
         unsafe { vmwrite(guest::TR_SELECTOR, task::tr().bits() as u64) };
 
         let gdt = get_current_gdt();
 
         // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Base Address
-        vmwrite(guest::CS_BASE, unpack_gdt_entry(gdt, self.context.seg_cs).base);
-        vmwrite(guest::SS_BASE, unpack_gdt_entry(gdt, self.context.seg_ss).base);
-        vmwrite(guest::DS_BASE, unpack_gdt_entry(gdt, self.context.seg_ds).base);
-        vmwrite(guest::ES_BASE, unpack_gdt_entry(gdt, self.context.seg_es).base);
+        vmwrite(guest::CS_BASE, unpack_gdt_entry(gdt, context.seg_cs).base);
+        vmwrite(guest::SS_BASE, unpack_gdt_entry(gdt, context.seg_ss).base);
+        vmwrite(guest::DS_BASE, unpack_gdt_entry(gdt, context.seg_ds).base);
+        vmwrite(guest::ES_BASE, unpack_gdt_entry(gdt, context.seg_es).base);
         unsafe { vmwrite(guest::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE)) };
         unsafe { vmwrite(guest::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE)) };
         unsafe { vmwrite(guest::LDTR_BASE, unpack_gdt_entry(gdt, x86::dtables::ldtr().bits()).base) };
         unsafe { vmwrite(guest::TR_BASE, unpack_gdt_entry(gdt,  x86::task::tr().bits()).base) };
 
         // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Limit
-        vmwrite(guest::CS_LIMIT, unpack_gdt_entry(gdt, self.context.seg_cs).limit);
-        vmwrite(guest::SS_LIMIT, unpack_gdt_entry(gdt, self.context.seg_ss).limit);
-        vmwrite(guest::DS_LIMIT, unpack_gdt_entry(gdt, self.context.seg_ds).limit);
-        vmwrite(guest::ES_LIMIT, unpack_gdt_entry(gdt, self.context.seg_es).limit);
-        vmwrite(guest::FS_LIMIT, unpack_gdt_entry(gdt, self.context.seg_fs).limit);
-        vmwrite(guest::GS_LIMIT, unpack_gdt_entry(gdt, self.context.seg_gs).limit);
+        vmwrite(guest::CS_LIMIT, unpack_gdt_entry(gdt, context.seg_cs).limit);
+        vmwrite(guest::SS_LIMIT, unpack_gdt_entry(gdt, context.seg_ss).limit);
+        vmwrite(guest::DS_LIMIT, unpack_gdt_entry(gdt, context.seg_ds).limit);
+        vmwrite(guest::ES_LIMIT, unpack_gdt_entry(gdt, context.seg_es).limit);
+        vmwrite(guest::FS_LIMIT, unpack_gdt_entry(gdt, context.seg_fs).limit);
+        vmwrite(guest::GS_LIMIT, unpack_gdt_entry(gdt, context.seg_gs).limit);
         unsafe { vmwrite(guest::LDTR_LIMIT, unpack_gdt_entry(gdt, dtables::ldtr().bits()).limit) };
         unsafe { vmwrite(guest::TR_LIMIT, unpack_gdt_entry(gdt, task::tr().bits()).limit) };
 
         // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Access Rights
-        vmwrite(guest::CS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, self.context.seg_cs).access_rights);
-        vmwrite(guest::SS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, self.context.seg_ss).access_rights);
-        vmwrite(guest::DS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, self.context.seg_ds).access_rights);
-        vmwrite(guest::ES_ACCESS_RIGHTS, unpack_gdt_entry(gdt, self.context.seg_es).access_rights);
-        vmwrite(guest::FS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, self.context.seg_fs).access_rights);
-        vmwrite(guest::GS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, self.context.seg_gs).access_rights);
+        vmwrite(guest::CS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.seg_cs).access_rights);
+        vmwrite(guest::SS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.seg_ss).access_rights);
+        vmwrite(guest::DS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.seg_ds).access_rights);
+        vmwrite(guest::ES_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.seg_es).access_rights);
+        vmwrite(guest::FS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.seg_fs).access_rights);
+        vmwrite(guest::GS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.seg_gs).access_rights);
         unsafe { vmwrite(guest::LDTR_ACCESS_RIGHTS, unpack_gdt_entry(gdt, dtables::ldtr().bits()).access_rights) };
         unsafe { vmwrite(guest::TR_ACCESS_RIGHTS, unpack_gdt_entry(gdt, task::tr().bits()).access_rights) };
 
@@ -274,7 +269,7 @@ impl Vmx {
     ///     - IA32_SYSENTER_ESP
     ///     - IA32_SYSENTER_EIP
     #[rustfmt::skip]
-    fn init_host_register_state(&mut self) {
+    fn init_host_register_state(&mut self, context: Context) {
         log::info!("[+] Host Register State");
 
         let mut host_gdtr: dtables::DescriptorTablePointer<u64> = Default::default();
@@ -295,12 +290,12 @@ impl Vmx {
 
         // Host Segment CS, SS, DS, ES, FS, GS, and TR Selector
         const SELECTOR_MASK: u16 = 0xF8;
-        vmwrite(host::CS_SELECTOR, self.context.seg_cs & SELECTOR_MASK);
-        vmwrite(host::SS_SELECTOR, self.context.seg_ss & SELECTOR_MASK);
-        vmwrite(host::DS_SELECTOR, self.context.seg_ds & SELECTOR_MASK);
-        vmwrite(host::ES_SELECTOR, self.context.seg_es & SELECTOR_MASK);
-        vmwrite(host::FS_SELECTOR, self.context.seg_fs & SELECTOR_MASK);
-        vmwrite(host::GS_SELECTOR, self.context.seg_gs & SELECTOR_MASK);
+        vmwrite(host::CS_SELECTOR, context.seg_cs & SELECTOR_MASK);
+        vmwrite(host::SS_SELECTOR, context.seg_ss & SELECTOR_MASK);
+        vmwrite(host::DS_SELECTOR, context.seg_ds & SELECTOR_MASK);
+        vmwrite(host::ES_SELECTOR, context.seg_es & SELECTOR_MASK);
+        vmwrite(host::FS_SELECTOR, context.seg_fs & SELECTOR_MASK);
+        vmwrite(host::GS_SELECTOR, context.seg_gs & SELECTOR_MASK);
         unsafe { vmwrite(host::TR_SELECTOR, task::tr().bits() & SELECTOR_MASK) };
 
         let gdt = get_current_gdt();
@@ -355,28 +350,6 @@ impl Vmx {
 
         // MSRBitmap
         vmwrite(x86::vmx::vmcs::control::MSR_BITMAPS_ADDR_FULL, msr_physical_addy);
-    }
-
-    /// Check to see if CPU is Intel (“GenuineIntel”).
-    pub fn has_intel_cpu() -> Result<(), HypervisorError> {
-        let cpuid = CpuId::new();
-        if let Some(vi) = cpuid.get_vendor_info() {
-            if vi.as_str() == "GenuineIntel" {
-                return Ok(());
-            }
-        }
-        Err(HypervisorError::CPUUnsupported)
-    }
-
-    /// Check processor supports for Virtual Machine Extension (VMX) technology - CPUID.1:ECX.VMX\[bit 5] = 1
-    pub fn has_vmx_support() -> Result<(), HypervisorError> {
-        let cpuid = CpuId::new();
-        if let Some(fi) = cpuid.get_feature_info() {
-            if fi.has_vmx() {
-                return Ok(());
-            }
-        }
-        Err(HypervisorError::VMXUnsupported)
     }
 
     /// Enable and enter VMX operation by setting and clearing the lock bit, adjusting control registers and executing the vmxon instruction.

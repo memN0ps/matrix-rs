@@ -11,9 +11,10 @@
 extern crate alloc;
 use alloc::vec::Vec;
 use error::HypervisorError;
+use intel::vmexit::{CPUID_VENDOR_AND_MAX_FUNCTIONS, VENDOR_NAME};
 
 use crate::{
-    intel::{vcpu::Vcpu, vmx::Vmx},
+    intel::vcpu::Vcpu,
     utils::{
         context::Context,
         processor::{processor_count, ProcessorExecutor},
@@ -28,22 +29,44 @@ mod utils;
 pub struct HypervisorBuilder;
 
 impl HypervisorBuilder {
-    pub fn build(self) -> Result<Hypervisor, HypervisorError> {
+    pub fn build(self, context: Context) -> Result<Hypervisor, HypervisorError> {
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.6 DISCOVERING SUPPORT FOR VMX */
-        Vmx::has_intel_cpu()?;
+        Self::has_intel_cpu()?;
         log::info!("[+] CPU is Intel");
 
-        Vmx::has_vmx_support()?;
+        Self::has_vmx_support()?;
         log::info!("[+] Virtual Machine Extension (VMX) technology is supported");
 
         let mut processors: Vec<Vcpu> = Vec::new();
 
         for i in 0..processor_count() {
-            processors.push(Vcpu::new(i)?);
+            processors.push(Vcpu::new(i, context)?);
         }
         log::info!("[+] Found {} processors", processors.len());
 
         Ok(Hypervisor { processors })
+    }
+
+    /// Check to see if CPU is Intel (“GenuineIntel”).
+    fn has_intel_cpu() -> Result<(), HypervisorError> {
+        let cpuid = x86::cpuid::CpuId::new();
+        if let Some(vi) = cpuid.get_vendor_info() {
+            if vi.as_str() == "GenuineIntel" {
+                return Ok(());
+            }
+        }
+        Err(HypervisorError::CPUUnsupported)
+    }
+
+    /// Check processor supports for Virtual Machine Extension (VMX) technology - CPUID.1:ECX.VMX\[bit 5] = 1
+    fn has_vmx_support() -> Result<(), HypervisorError> {
+        let cpuid = x86::cpuid::CpuId::new();
+        if let Some(fi) = cpuid.get_feature_info() {
+            if fi.has_vmx() {
+                return Ok(());
+            }
+        }
+        Err(HypervisorError::VMXUnsupported)
     }
 }
 
@@ -60,24 +83,26 @@ impl Hypervisor {
         log::info!("[+] Virtualizing processors");
 
         for processor in self.processors.iter_mut() {
-            // The Guest will start running from here as we capture and vmwrite the context to the guest state per vcpu
-            log::info!("[+] Capturing context");
-            let context = Context::capture();
-
-            // Must check if process is already virtualized otherwise Guest will start executing from here again
-            if processor.is_virtualized() {
-                continue;
-            }
-
             let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
                 return Err(HypervisorError::ProcessorSwitchFailed);
             };
 
-            processor.virtualize_cpu(context)?;
+            processor.virtualize_cpu()?;
 
             core::mem::drop(executor);
         }
         Ok(())
+    }
+
+    /// Checks if this hypervisor is already installed (Thanks Satoshi Tanda :), this saved me).
+    /// Check if the hypervisor is already installed by checking the vendor name in the cpuid which is set in vmexit_handler -> handle_cpuid
+    pub fn is_vendor_name_present() -> bool {
+        let regs = x86::cpuid::cpuid!(CPUID_VENDOR_AND_MAX_FUNCTIONS);
+        (regs.ebx == regs.ecx) && (regs.ecx == regs.edx) && (regs.edx == VENDOR_NAME)
+    }
+
+    pub fn capture_registers() -> Context {
+        return Context::capture();
     }
 
     /*
