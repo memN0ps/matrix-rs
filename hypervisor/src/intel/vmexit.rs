@@ -30,11 +30,6 @@ impl VmExit {
         &self,
         registers: &mut GuestRegisters,
     ) -> Result<VmxBasicExitReason, HypervisorError> {
-        // A VM-exit occurred. Copy the guest register values from VMCS so that "vmx.registers" is updated.
-        //registers.rip = vmread(vmcs::guest::RIP);
-        //registers.rsp = vmread(vmcs::guest::RSP);
-        //registers.rflags = vmread(vmcs::guest::RFLAGS);
-
         log::info!("[+] VMEXIT occurred at RIP: {:#x}", vmread(guest::RIP));
         log::info!("[+] VMEXIT occurred at RSP: {:#x}", vmread(guest::RSP));
 
@@ -118,7 +113,7 @@ impl VmExit {
         const MSR_RANGE_LOW_END: u64 = 0x00001FFF;
         const MSR_RANGE_HIGH_START: u64 = 0xC0000000;
         const MSR_RANGE_HIGH_END: u64 = 0xC0001FFF;
-        
+
         const RESERVED_MSR_RANGE_LOW: u64 = 0x40000000;
         const RESERVED_MSR_RANGE_HI: u64 = 0x400000FF;
 
@@ -146,8 +141,9 @@ impl VmExit {
         */
 
         // Check if RCX is outside the specified ranges
-        if (msr_id < MSR_RANGE_LOW_START || msr_id > MSR_RANGE_LOW_END) && 
-           (msr_id < MSR_RANGE_HIGH_START || msr_id > MSR_RANGE_HIGH_END) {
+        if (msr_id < MSR_RANGE_LOW_START || msr_id > MSR_RANGE_LOW_END)
+            && (msr_id < MSR_RANGE_HIGH_START || msr_id > MSR_RANGE_HIGH_END)
+        {
             log::error!("[!] RCX is outside the specified MSR ranges.");
             self.vmentry_inject_gp(0);
             return;

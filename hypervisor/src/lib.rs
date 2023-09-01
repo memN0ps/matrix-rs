@@ -14,7 +14,7 @@ use error::HypervisorError;
 use intel::vmexit::{CPUID_VENDOR_AND_MAX_FUNCTIONS, VENDOR_NAME};
 
 use crate::{
-    intel::vcpu::Vcpu,
+    intel::{vcpu::Vcpu, vmexit::launch_vm},
     utils::{
         context::Context,
         processor::{processor_count, ProcessorExecutor},
@@ -87,11 +87,22 @@ impl Hypervisor {
                 return Err(HypervisorError::ProcessorSwitchFailed);
             };
 
+            if processor.is_virtualized() {
+                log::info!("[+] Processor {} is already virtualized", processor.id());
+                continue;
+            }
+
             processor.virtualize_cpu()?;
 
             core::mem::drop(executor);
         }
-        Ok(())
+
+        // Run the VM until the VM-exit occurs.
+        log::info!("[+] Running the guest until VM-exit occurs.");
+        unsafe { launch_vm() };
+
+        // unreachable code
+        //Ok(())
     }
 
     /// Checks if this hypervisor is already installed (Thanks Satoshi Tanda :), this saved me).
