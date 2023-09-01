@@ -111,7 +111,7 @@ const INVALID: u32 = 0;
 /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 27.6 EVENT INJECTION
 impl EventInjection {
     /// Inject General Protection (#GP) to the guest (Event Injection)
-    pub fn general_protection() -> Self {
+    pub fn general_protection() -> u32 {
         let mut event = EventInjection(0);
 
         event.set_vector(ExceptionInterrupt::GP as u32);
@@ -119,28 +119,28 @@ impl EventInjection {
         event.set_deliver_error_code(1);
         event.set_valid(VALID);
 
-        event
+        event.0
     }
 
     /// Inject Breakpoint (#BP) to the guest (Event Injection)
-    pub fn breakpoint() -> Self {
+    pub fn breakpoint() -> u32 {
         let mut event = EventInjection(0);
 
         event.set_vector(ExceptionInterrupt::BP as u32);
         event.set_type(InterruptionType::HardwareException as u32);
         event.set_valid(VALID);
 
-        event
+        event.0
     }
 
     /// Inject Page Fault (#PF) to the guest (Event Injection)
-    pub fn page_fault() -> Self {
+    pub fn page_fault() -> u32 {
         let mut event = EventInjection(0);
 
         event.set_vector(ExceptionInterrupt::PF as u32);
         event.set_type(InterruptionType::HardwareException as u32);
         event.set_valid(VALID);
 
-        event
+        event.0
     }
 }

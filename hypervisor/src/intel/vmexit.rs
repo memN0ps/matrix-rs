@@ -12,6 +12,8 @@ use x86::vmx::vmcs::{self, guest, ro::VMEXIT_INSTRUCTION_LEN};
 pub const CPUID_VENDOR_AND_MAX_FUNCTIONS: u32 = 0x4000_0000;
 pub const VENDOR_NAME: u32 = 0x5441_4c48; // "HLAT"
 pub const EAX_HYPERVISOR_PRESENT: u32 = 0x1;
+pub const MSR_READ: bool = true;
+pub const MSR_WRITE: bool = false;
 
 pub struct VmExit;
 
@@ -56,8 +58,8 @@ impl VmExit {
         /* - Certain instructions cause VM exits in VMX non-root operation depending on the setting of the VM-execution controls.*/
         match basic_exit_reason {
             VmxBasicExitReason::Cpuid => self.handle_cpuid(registers),
-            VmxBasicExitReason::Rdmsr => self.handle_msr_read(registers),
-            VmxBasicExitReason::Wrmsr => self.handle_msr_write(registers),
+            VmxBasicExitReason::Rdmsr => self.handle_msr_access(registers, MSR_READ),
+            VmxBasicExitReason::Wrmsr => self.handle_msr_access(registers, MSR_WRITE),
             _ => panic!("[-] Unhandled VMEXIT: {}", basic_exit_reason),
         }
 
@@ -102,96 +104,81 @@ impl VmExit {
         log::info!("[+] CPUID handled!");
     }
 
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table C-1. Basic Exit Reasons 31
-    /// RDMSR. Guest software attempted to execute RDMSR and either:
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table C-1. Basic Exit Reasons 31 and 32
+    /// RDMSR. Guest software attempted to execute RDMSR and either / WRMSR. Guest software attempted to execute WRMSR and either:
     /// 1: The “use MSR bitmaps” VM-execution control was 0.
     /// 2: The value of RCX is neither in the range 00000000H – 00001FFFH nor in the range C0000000H – C0001FFFH.
     /// 3: The value of RCX was in the range 00000000H – 00001FFFH and the nth bit in read bitmap for low MSRs is 1, where n was the value of RCX
     /// 4: The value of RCX is in the range C0000000H – C0001FFFH and the nth bit in read bitmap for high MSRs is 1, where n is the value of RCX & 00001FFFH
-    fn handle_msr_read(&self, registers: &mut GuestRegisters) {
-        log::info!("[+] Handling rdmsr access...");
+    fn handle_msr_access(&self, registers: &mut GuestRegisters, access_type: bool) {
+        log::info!("[+] Handling rdmsr/wrmsr access...");
 
+        const MSR_MASK_LOW: u64 = u32::MAX as u64;
+        const MSR_RANGE_LOW_START: u64 = 0x00000000;
+        const MSR_RANGE_LOW_END: u64 = 0x00001FFF;
+        const MSR_RANGE_HIGH_START: u64 = 0xC0000000;
+        const MSR_RANGE_HIGH_END: u64 = 0xC0001FFF;
+        
         const RESERVED_MSR_RANGE_LOW: u64 = 0x40000000;
-        const RESERVED_MSR_RANGE_HI: u64 = 0x400000F0;
+        const RESERVED_MSR_RANGE_HI: u64 = 0x400000FF;
 
-        // Initialize the MSR content to 0
-        let mut msr_content: u64 = 0;
+        let msr_id = registers.rcx;
 
-        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: RDMSR—Read From Model Specific Register and WRMSR—Write to Model Specific Register */
-        /* - Protected Mode Exceptions */
-        /* - #GP(0) If the current privilege level is not 0 */
-        /*
-        /* - If the value in ECX specifies a reserved or unimplemented MSR address */
-        if registers.rcx >= RESERVED_MSR_RANGE_LOW && registers.rcx <= RESERVED_MSR_RANGE_HI {
-            log::error!(
-                "[!] Attempted to access Hyper-V reserved MSR: {:#x}",
-                registers.rcx
-            );
+        // Intel® 64 and IA-32 Architectures Software Developer's Manual: RDMSR—Read From Model Specific Register / WRMSR—Write to Model Specific Register
+        // - Protected Mode Exceptions
+        // - #GP(0) If the current privilege level is not 0
+        // - If the value in ECX specifies a reserved or unimplemented MSR address
+
+        // Check for reserved or unimplemented MSR address
+        if msr_id >= RESERVED_MSR_RANGE_LOW && msr_id <= RESERVED_MSR_RANGE_HI {
+            log::error!("[!] Attempted to access reserved MSR: {:#x}", msr_id);
+            self.vmentry_inject_gp(0);
+            return;
+        }
+
+        /* (Unhandled check)
+        // Check if “use MSR bitmaps” VM-execution control is 0
+        if !self.use_msr_bitmaps_control() {
+            log::error!("[!] MSR bitmaps control is not set.");
             self.vmentry_inject_gp(0);
             return;
         }
         */
 
-        // Check if the MSR being read is within the allowed ranges
-        if (registers.rcx <= 0x00001FFF)
-            || ((0xC0000000 <= registers.rcx) && (registers.rcx <= 0xC0001FFF))
-            || (registers.rcx >= RESERVED_MSR_RANGE_LOW && registers.rcx <= RESERVED_MSR_RANGE_HI)
-        {
-            // Read the MSR value into msr_content
-            msr_content = unsafe { x86::msr::rdmsr(registers.rcx as _) };
+        // Check if RCX is outside the specified ranges
+        if (msr_id < MSR_RANGE_LOW_START || msr_id > MSR_RANGE_LOW_END) && 
+           (msr_id < MSR_RANGE_HIGH_START || msr_id > MSR_RANGE_HIGH_END) {
+            log::error!("[!] RCX is outside the specified MSR ranges.");
+            self.vmentry_inject_gp(0);
+            return;
         }
 
-        // Extract the lower 32 bits of the MSR value
-        registers.rax = msr_content & 0xFFFFFFFF;
-
-        // Extract the upper 32 bits of the MSR value
-        registers.rdx = msr_content >> 32;
-
-        log::info!("[+] rdmsr handled!");
-    }
-
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table C-1. Basic Exit Reasons 32
-    /// WRMSR. Guest software attempted to execute WRMSR and either:
-    /// 1: The “use MSR bitmaps” VM-execution control was 0.
-    /// 2: The value of RCX is neither in the range 00000000H – 00001FFFH nor in the range C0000000H – C0001FFFH
-    /// 3: The value of RCX was in the range 00000000H – 00001FFFH and the nth bit in write bitmap for low MSRs is 1, where n was the value of RCX.
-    /// 4: The value of RCX is in the range C0000000H – C0001FFFH and the nth bit in write bitmap for high MSRs is 1, where n is the value of RCX & 00001FFFH.
-    fn handle_msr_write(&self, registers: &mut GuestRegisters) {
-        log::info!("[+] Handling wrmsr access...");
-
-        const RESERVED_MSR_RANGE_LOW: u64 = 0x40000000;
-        const RESERVED_MSR_RANGE_HI: u64 = 0x400000F0;
-
-        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: RDMSR—Read From Model Specific Register and WRMSR—Write to Model Specific Register */
-        /* - Protected Mode Exceptions */
-        /* - #GP(0) If the current privilege level is not 0 */
-        /*
-        /* - If the value in ECX specifies a reserved or unimplemented MSR address */
-        if registers.rcx >= RESERVED_MSR_RANGE_LOW && registers.rcx <= RESERVED_MSR_RANGE_HI {
-            log::error!(
-                "[!] Attempted to access Hyper-V reserved MSR: {:#x}",
-                registers.rcx
-            );
+        /* (Unhandled check)
+        // Check the bitmaps for the given MSR
+        if msr_id <= MSR_RANGE_LOW_END && self.read_bitmap_low_msr(msr_id) {
+            log::error!("[!] The nth bit in read bitmap for low MSRs is 1.");
+            self.vmentry_inject_gp(0);
+            return;
+        }
+        if msr_id >= MSR_RANGE_HIGH_START && self.read_bitmap_high_msr(msr_id & MSR_RANGE_LOW_END) {
+            log::error!("[!] The nth bit in read bitmap for high MSRs is 1.");
             self.vmentry_inject_gp(0);
             return;
         }
         */
 
-        // Construct the 64-bit MSR value:
-        // - The upper 32 bits are taken from registers.rdx
-        // - The lower 32 bits are taken from registers.rax
-        let msr_content: u64 = ((registers.rdx as u64) << 32) | (registers.rax as u64 & 0xFFFFFFFF);
-
-        // Check if the MSR being written to is within the allowed ranges
-        if (registers.rcx <= 0x00001FFF)
-            || ((0xC0000000 <= registers.rcx) && (registers.rcx <= 0xC0001FFF))
-            || (registers.rcx >= RESERVED_MSR_RANGE_LOW && registers.rcx <= RESERVED_MSR_RANGE_HI)
-        {
-            // Write the constructed msr_content value to the MSR
-            unsafe { x86::msr::wrmsr(registers.rcx as _, msr_content) };
+        // Handle the MSR access
+        if access_type == MSR_READ {
+            let msr_value = unsafe { x86::msr::rdmsr(msr_id as _) };
+            registers.rdx = msr_value >> 32;
+            registers.rax = msr_value & MSR_MASK_LOW;
+        } else {
+            let mut msr_value = registers.rdx << 32;
+            msr_value |= registers.rax & MSR_MASK_LOW;
+            unsafe { x86::msr::wrmsr(msr_id as _, msr_value) };
         }
 
-        log::info!("[+] wrmsr handled!");
+        log::info!("[+] rdmsr/wrmsr handled!");
     }
 
     /// Intel® 64 and IA-32 Architectures Software Developer's Manual:
@@ -199,15 +186,13 @@ impl VmExit {
     /// - 25.8.3 VM-Entry Controls for Event Injection
     /// - Table 25-17. Format of the VM-Entry Interruption-Information Field
     fn vmentry_inject_gp(&self, error_code: u32) {
-        let gp_exception = EventInjection::general_protection();
-
         vmwrite(
             x86::vmx::vmcs::control::VMENTRY_EXCEPTION_ERR_CODE,
             error_code,
         );
         vmwrite(
             x86::vmx::vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD,
-            gp_exception.0,
+            EventInjection::general_protection(),
         );
         vmwrite(
             x86::vmx::vmcs::control::VMENTRY_INSTRUCTION_LEN,
