@@ -1,6 +1,6 @@
 extern crate alloc;
 
-use crate::{error::HypervisorError, intel::vmx::Vmx, utils::context::Context};
+use crate::{error::HypervisorError, intel::vmx::Vmx, nt::Context};
 
 pub struct Vcpu {
     /// The index of the processor.
@@ -31,7 +31,7 @@ impl Vcpu {
         let mut vmx = Vmx::new()?;
         vmx.init(self.context)?;
 
-        log::info!("[+] Virtualization complete {}", self.index);
+        log::info!("[+] Virtualization complete for processor {}", self.index);
         self.is_virtualized = true;
 
         Ok(())

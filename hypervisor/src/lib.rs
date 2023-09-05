@@ -9,27 +9,25 @@
 #![feature(decl_macro)]
 
 extern crate alloc;
+use crate::{
+    intel::{vcpu::Vcpu, vmexit::launch_vm},
+    utils::processor::{processor_count, ProcessorExecutor},
+};
 use alloc::vec::Vec;
 use error::HypervisorError;
 use intel::vmexit::{CPUID_VENDOR_AND_MAX_FUNCTIONS, VENDOR_NAME};
-
-use crate::{
-    intel::{vcpu::Vcpu, vmexit::launch_vm},
-    utils::{
-        context::Context,
-        processor::{processor_count, ProcessorExecutor},
-    },
-};
+use nt::{Context, RtlCaptureContext};
 mod error;
 mod intel;
 mod nt;
 mod utils;
 
-#[derive(Default)]
-pub struct HypervisorBuilder;
+pub struct Hypervisor {
+    processors: Vec<Vcpu>,
+}
 
-impl HypervisorBuilder {
-    pub fn build(self, context: Context) -> Result<Hypervisor, HypervisorError> {
+impl Hypervisor {
+    pub fn new(context: Context) -> Result<Self, HypervisorError> {
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.6 DISCOVERING SUPPORT FOR VMX */
         Self::has_intel_cpu()?;
         log::info!("[+] CPU is Intel");
@@ -45,6 +43,55 @@ impl HypervisorBuilder {
         log::info!("[+] Found {} processors", processors.len());
 
         Ok(Hypervisor { processors })
+    }
+
+    pub fn virtualize_system(&mut self) -> Result<(), HypervisorError> {
+        log::info!("[+] Virtualizing processors");
+
+        for processor in self.processors.iter_mut() {
+            let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
+                return Err(HypervisorError::ProcessorSwitchFailed);
+            };
+
+            if processor.is_virtualized() {
+                log::info!("[+] Processor {} is already virtualized", processor.id());
+                continue;
+            }
+
+            processor.virtualize_cpu()?;
+
+            core::mem::drop(executor);
+        }
+
+        Ok(())
+    }
+
+    pub fn start_vm() {
+        // Run the VM until the VM-exit occurs.
+        log::info!("[+] Running the guest until VM-exit occurs.");
+        unsafe { launch_vm() };
+    }
+
+    pub fn capture_registers() -> Context {
+        // Contains processor-specific register data. The system uses CONTEXT structures to perform various internal operations.
+        // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-context
+        let mut context = unsafe { core::mem::zeroed::<Context>() };
+
+        // The Guest will start running from here as we capture and vmwrite the context to the guest state per vcpu
+        unsafe { RtlCaptureContext(&mut context) };
+
+        return context;
+    }
+
+    /// Check if the hypervisor is already installed by checking the vendor name in the cpuid which is set in vmexit_handler -> handle_cpuid
+    pub fn is_vendor_name_present() -> bool {
+        let regs = x86::cpuid::cpuid!(CPUID_VENDOR_AND_MAX_FUNCTIONS);
+
+        if (regs.ebx == VENDOR_NAME) && (regs.ecx == VENDOR_NAME) && (regs.edx == VENDOR_NAME) {
+            return true;
+        }
+
+        return false;
     }
 
     /// Check to see if CPU is Intel (“GenuineIntel”).
@@ -67,53 +114,6 @@ impl HypervisorBuilder {
             }
         }
         Err(HypervisorError::VMXUnsupported)
-    }
-}
-
-pub struct Hypervisor {
-    processors: Vec<Vcpu>,
-}
-
-impl Hypervisor {
-    pub fn builder() -> HypervisorBuilder {
-        HypervisorBuilder::default()
-    }
-
-    pub fn virtualize(&mut self) -> Result<(), HypervisorError> {
-        log::info!("[+] Virtualizing processors");
-
-        for processor in self.processors.iter_mut() {
-            let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
-                return Err(HypervisorError::ProcessorSwitchFailed);
-            };
-
-            if processor.is_virtualized() {
-                log::info!("[+] Processor {} is already virtualized", processor.id());
-                continue;
-            }
-
-            processor.virtualize_cpu()?;
-
-            core::mem::drop(executor);
-        }
-
-        // Run the VM until the VM-exit occurs.
-        log::info!("[+] Running the guest until VM-exit occurs.");
-        unsafe { launch_vm() };
-
-        // unreachable code
-        //Ok(())
-    }
-
-    /// Checks if this hypervisor is already installed (Thanks Satoshi Tanda :), this saved me).
-    /// Check if the hypervisor is already installed by checking the vendor name in the cpuid which is set in vmexit_handler -> handle_cpuid
-    pub fn is_vendor_name_present() -> bool {
-        let regs = x86::cpuid::cpuid!(CPUID_VENDOR_AND_MAX_FUNCTIONS);
-        (regs.ebx == regs.ecx) && (regs.ecx == regs.edx) && (regs.edx == VENDOR_NAME)
-    }
-
-    pub fn capture_registers() -> Context {
-        return Context::capture();
     }
 
     /*

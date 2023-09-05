@@ -1,12 +1,16 @@
 use core::fmt;
 
-use super::{events::EventInjection, registers::GuestRegisters};
+use self::registers::GuestRegisters;
+
+use super::events::EventInjection;
 use crate::{
     error::HypervisorError,
     intel::support::{vmread, vmwrite},
     restore_general_purpose_registers_from_stack, save_general_purpose_registers_to_stack,
 };
 use x86::vmx::vmcs::{self, guest, ro::VMEXIT_INSTRUCTION_LEN};
+
+pub mod registers;
 
 // More leafs here if needed: https://docs.rs/raw-cpuid/10.6.0/src/raw_cpuid/lib.rs.html#289
 pub const CPUID_VENDOR_AND_MAX_FUNCTIONS: u32 = 0x4000_0000;
@@ -118,6 +122,7 @@ impl VmExit {
         const RESERVED_MSR_RANGE_HI: u64 = 0x400000FF;
 
         let msr_id = registers.rcx;
+        log::info!("[*] MSR ID: {:#x}", msr_id);
 
         // Intel® 64 and IA-32 Architectures Software Developer's Manual: RDMSR—Read From Model Specific Register / WRMSR—Write to Model Specific Register
         // - Protected Mode Exceptions
@@ -168,10 +173,12 @@ impl VmExit {
             let msr_value = unsafe { x86::msr::rdmsr(msr_id as _) };
             registers.rdx = msr_value >> 32;
             registers.rax = msr_value & MSR_MASK_LOW;
+            log::info!("[*] MSR_READ value: {:#x}", msr_value);
         } else {
             let mut msr_value = registers.rdx << 32;
             msr_value |= registers.rax & MSR_MASK_LOW;
             unsafe { x86::msr::wrmsr(msr_id as _, msr_value) };
+            log::info!("[*] MSR_WRITE value: {:#x}", msr_value);
         }
 
         log::info!("[+] rdmsr/wrmsr handled!");

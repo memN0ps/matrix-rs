@@ -30,7 +30,7 @@ fn panic(_info: &PanicInfo) -> ! {
     loop {}
 }
 
-static mut HYPERVISOR: Option<Hypervisor> = None;
+//static mut HYPERVISOR: Option<Hypervisor> = None;
 
 #[no_mangle]
 pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRING) -> NTSTATUS {
@@ -39,7 +39,7 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
 
     driver.DriverUnload = Some(driver_unload);
 
-    // The Guest will start running from here as we capture and vmwrite the context to the guest state per vcpu
+    // Capture the context of the current processor. The Guest will start running from here as we capture and vmwrite the context to the guest state per vcpu
     let context = Hypervisor::capture_registers();
 
     // Check if we are running as Host (root operation) or Guest (non-root operation) by checking the vendor name in the cpuid which is set in vmexit_handler -> handle_cpuid
@@ -47,14 +47,12 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
     if !Hypervisor::is_vendor_name_present() {
         log::info!("[+] Virtualizing the system");
 
-        let hv = Hypervisor::builder();
-
-        let Ok(mut hypervisor) = hv.build(context) else {
+        let Ok(mut hypervisor) = Hypervisor::new(context) else {
             log::error!("[-] Failed to build hypervisor");
             return STATUS_UNSUCCESSFUL;
         };
 
-        match hypervisor.virtualize() {
+        match hypervisor.virtualize_system() {
             Ok(_) => log::info!("[+] VMM initialized"),
             Err(err) => {
                 log::error!("[-] VMM initialization failed: {}", err);
@@ -62,7 +60,9 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
             }
         }
 
-        unsafe { HYPERVISOR = Some(hypervisor) };
+        Hypervisor::start_vm();
+
+        // unreachable code: we should not be here
     }
 
     STATUS_SUCCESS

@@ -7,8 +7,8 @@ use winapi::{
     shared::ntdef::{
         NTSTATUS, PGROUP_AFFINITY, PHYSICAL_ADDRESS, PPROCESSOR_NUMBER, PVOID, UNICODE_STRING,
     },
-    um::winnt::PCONTEXT,
 };
+use windows_sys::Win32::System::Diagnostics::Debug::CONTEXT;
 
 extern "system" {
     pub static KdDebuggerNotPresent: *mut bool;
@@ -66,10 +66,28 @@ extern "system" {
     pub fn RtlClearAllBits(BitMapHeader: PRTL_BITMAP);
 
     ///https://learn.microsoft.com/en-us/windows/win32/api/winnt/nf-winnt-rtlcapturecontext
-    pub fn RtlCaptureContext(ContextRecord: PCONTEXT);
+    pub fn RtlCaptureContext(ContextRecord: *mut Context);
 
     ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-kebugcheck
     pub fn KeBugCheck(BugCheckCode: u32) -> !;
+}
+
+// There is a bug in windows-rs/windows-sys and WINAPI: https://github.com/microsoft/win32metadata/issues/1044. Otherwise this is not needed.
+#[derive(Clone, Copy)]
+#[repr(C, align(16))]
+pub struct Context(pub CONTEXT);
+
+impl core::ops::Deref for Context {
+    type Target = CONTEXT;
+    fn deref(&self) -> &CONTEXT {
+        &self.0
+    }
+}
+
+impl core::ops::DerefMut for Context {
+    fn deref_mut(&mut self) -> &mut CONTEXT {
+        &mut self.0
+    }
 }
 
 // See: https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2#bug-check-codes

@@ -1,5 +1,3 @@
-use crate::nt::MmGetPhysicalAddress;
-
 use super::vmcs::Vmcs;
 
 /// Enable VMX operation.
@@ -34,8 +32,4 @@ where
     u64: From<T>,
 {
     unsafe { x86::bits64::vmx::vmwrite(field, u64::from(val)) }.unwrap();
-}
-
-pub fn virtual_to_physical_address(va: u64) -> u64 {
-    unsafe { *MmGetPhysicalAddress(va as _).QuadPart() as u64 }
 }

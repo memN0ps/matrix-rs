@@ -1,19 +1,18 @@
-use super::{msr_bitmap::MsrBitmap, vmcs::Vmcs, vmxon::Vmxon};
+use super::{bitmap::MsrBitmap, host::Host, vmcs::Vmcs, vmxon::Vmxon};
 use crate::{
     error::HypervisorError,
     intel::{
-        support::{virtual_to_physical_address, vmclear, vmptrld, vmwrite, vmxon},
+        addresses::PhysicalAddress, host::STACK_CONTENTS_SIZE, support::vmwrite,
         vmexit::vmexit_stub,
     },
-    utils::context::Context,
+    nt::Context,
 };
 use alloc::boxed::Box;
-use bitfield::BitMut;
 use kernel_alloc::{KernelAlloc, PhysicalAllocator};
 use x86::{
     controlregs,
     dtables::{self},
-    msr::{self, rdmsr},
+    msr::{self},
     task,
     vmx::{
         self,
@@ -24,59 +23,39 @@ use x86::{
     },
 };
 
-pub const KERNEL_STACK_SIZE: usize = 0x6000;
-pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - (core::mem::size_of::<*mut u64>() * 2); // 0x6000 - 16 bytes for alignment/padding
-
-#[repr(C, align(4096))]
-pub struct HostStackLayout {
-    pub stack_contents: [u8; STACK_CONTENTS_SIZE],
-    // To keep Host Rsp 16 bytes aligned
-    pub padding_1: u64,
-    pub reserved_1: u64,
-}
-
+/// Custom memory allocator Boxed pointers for the Vmxon, Vmcs, MsrBitmap and HostRsp structures are stored in the Vmx struct to ensure they are not dropped.
 pub struct Vmx {
-    /// The virtual and physical address of the Vmxon naturally aligned 4-KByte region of memory
+    /// The virtual address of the Vmxon naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode)
     pub vmxon_region: Box<Vmxon, PhysicalAllocator>,
-    pub vmxon_region_physical_address: u64,
 
-    /// The virtual and physical address of the Vmcs naturally aligned 4-KByte region of memory
+    /// The virtual address of the Vmcs naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode)
     pub vmcs_region: Box<Vmcs, PhysicalAllocator>,
-    pub vmcs_region_physical_address: u64,
 
-    /// The host stack layout
-    pub host_rsp: Box<HostStackLayout, KernelAlloc>,
+    // The virtual address of the MSR Bitmap naturally aligned 4-KByte region of memory (ExAllocatePool / ExAllocatePoolWithTag)
+    pub msr_bitmap: Box<MsrBitmap, KernelAlloc>,
 
-    /// The MSR Bitmap
-    pub msr_bitmap: Box<MsrBitmap, PhysicalAllocator>,
+    /// The virtual address of the VMCS_HOST_RSP naturally aligned 4-KByte region of memory (ExAllocatePool / ExAllocatePoolWithTag)
+    pub host_rsp: Box<Host, KernelAlloc>,
 }
 
 impl Vmx {
     pub fn new() -> Result<Self, HypervisorError> {
-        let vmxon_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
-        let vmcs_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
-        let host_rsp = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
-        let msr_bitmap = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
+        log::info!("[*] Setting up VMX");
+
+        let vmxon_region = Vmxon::new()?;
+        let vmcs_region = Vmcs::new()?;
+        let msr_bitmap = MsrBitmap::new()?;
+        let host_rsp = Host::new()?;
 
         Ok(Self {
-            vmxon_region: vmxon_region,
-            vmxon_region_physical_address: 0,
-            vmcs_region: vmcs_region,
-            vmcs_region_physical_address: 0,
-            host_rsp: host_rsp,
-            msr_bitmap: msr_bitmap,
+            vmxon_region,
+            vmcs_region,
+            msr_bitmap,
+            host_rsp,
         })
     }
 
     pub fn init(&mut self, context: Context) -> Result<(), HypervisorError> {
-        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
-        log::info!("[+] Enabling Virtual Machine Extensions (VMX)");
-        self.enable_vmx_operation()?;
-
-        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.2 FORMAT OF THE VMCS REGION */
-        log::info!("[+] init_vmcs_region");
-        self.init_vmcs_region()?;
-
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
         log::info!("[+] init_guest_register_state");
         self.init_guest_register_state(context);
@@ -85,73 +64,15 @@ impl Vmx {
         log::info!("[+] init_host_register_state");
         self.init_host_register_state(context);
 
-        /* VMX controls */
-        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: */
-        /* - 25.6 VM-EXECUTION CONTROL FIELDS */
-        /* - 25.7 VM-EXIT CONTROL FIELDS      */
-        /* - 25.8 VM-ENTRY CONTROL FIELDS     */
-        /* - 25.6 VM-EXECUTION CONTROL FIELDS */
+        /*
+         * VMX controls:
+         * Intel® 64 and IA-32 Architectures Software Developer's Manual references:
+         * - 25.6 VM-EXECUTION CONTROL FIELDS
+         * - 25.7 VM-EXIT CONTROL FIELDS
+         * - 25.8 VM-ENTRY CONTROL FIELDS
+         */
         log::info!("[+] init_vmcs_control_values");
         self.init_vmcs_control_values();
-
-        Ok(())
-    }
-
-    /// Execute vmxon instruction to enable vmx operation.
-    /// # VMXON Region
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.2 FORMAT OF THE VMCS REGION
-    fn init_vmxon_region(&mut self) -> Result<(), HypervisorError> {
-        self.vmxon_region_physical_address =
-            virtual_to_physical_address(self.vmxon_region.as_ref() as *const _ as _);
-
-        if self.vmxon_region_physical_address == 0 {
-            return Err(HypervisorError::VirtualToPhysicalAddressFailed);
-        }
-
-        log::info!("[+] VMXON Region Virtual Address: {:p}", self.vmxon_region);
-        log::info!(
-            "[+] VMXON Region Physical Addresss: 0x{:x}",
-            self.vmxon_region_physical_address
-        );
-
-        self.vmxon_region.revision_id = self.get_vmcs_revision_id();
-        self.vmxon_region.as_mut().revision_id.set_bit(31, false);
-
-        vmxon(self.vmxon_region_physical_address);
-        log::info!("[+] VMXON successful!");
-
-        Ok(())
-    }
-
-    /// Clear the VMCS region and load the VMCS pointer
-    /// # VMCS Region
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.2 FORMAT OF THE VMCS REGION
-    fn init_vmcs_region(&mut self) -> Result<(), HypervisorError> {
-        self.vmcs_region_physical_address =
-            virtual_to_physical_address(self.vmcs_region.as_ref() as *const _ as _);
-
-        if self.vmcs_region_physical_address == 0 {
-            return Err(HypervisorError::VirtualToPhysicalAddressFailed);
-        }
-
-        log::info!("[+] VMCS Region Virtual Address: {:p}", self.vmcs_region);
-        log::info!(
-            "[+] VMCS Region Physical Addresss: 0x{:x}",
-            self.vmcs_region_physical_address
-        );
-
-        self.vmcs_region.revision_id = self.get_vmcs_revision_id();
-        self.vmcs_region.as_mut().revision_id.set_bit(31, false);
-
-        log::info!("[+] VMCS successful!");
-
-        // Clear the VMCS region.
-        vmclear(self.vmcs_region_physical_address);
-        log::info!("[+] VMCLEAR successful!");
-
-        // Load current VMCS pointer.
-        vmptrld(self.vmcs_region_physical_address);
-        log::info!("[+] VMPTRLD successful!");
 
         Ok(())
     }
@@ -182,52 +103,52 @@ impl Vmx {
         unsafe { vmwrite(guest::CR4, controlregs::cr4().bits() as u64) };
 
         // Guest Debug Register
-        vmwrite(guest::DR7, context.dr7);
+        vmwrite(guest::DR7, context.Dr7);
 
         // Guest RSP, RIP and RFLAGS
-        vmwrite(guest::RSP, context.rsp);
-        vmwrite(guest::RIP, context.rip);
-        vmwrite(guest::RFLAGS, context.e_flags);
+        vmwrite(guest::RSP, context.Rsp);
+        vmwrite(guest::RIP, context.Rip);
+        vmwrite(guest::RFLAGS, context.EFlags);
 
         // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Selector
-        vmwrite(guest::CS_SELECTOR, context.seg_cs);
-        vmwrite(guest::SS_SELECTOR, context.seg_ss);
-        vmwrite(guest::DS_SELECTOR, context.seg_ds);
-        vmwrite(guest::ES_SELECTOR, context.seg_es);
-        vmwrite(guest::FS_SELECTOR, context.seg_fs);
-        vmwrite(guest::GS_SELECTOR, context.seg_gs);
+        vmwrite(guest::CS_SELECTOR, context.SegCs);
+        vmwrite(guest::SS_SELECTOR, context.SegSs);
+        vmwrite(guest::DS_SELECTOR, context.SegDs);
+        vmwrite(guest::ES_SELECTOR, context.SegEs);
+        vmwrite(guest::FS_SELECTOR, context.SegFs);
+        vmwrite(guest::GS_SELECTOR, context.SegGs);
         unsafe { vmwrite(guest::LDTR_SELECTOR, dtables::ldtr().bits() as u64) };
         unsafe { vmwrite(guest::TR_SELECTOR, task::tr().bits() as u64) };
 
         let gdt = get_current_gdt();
 
         // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Base Address
-        vmwrite(guest::CS_BASE, unpack_gdt_entry(gdt, context.seg_cs).base);
-        vmwrite(guest::SS_BASE, unpack_gdt_entry(gdt, context.seg_ss).base);
-        vmwrite(guest::DS_BASE, unpack_gdt_entry(gdt, context.seg_ds).base);
-        vmwrite(guest::ES_BASE, unpack_gdt_entry(gdt, context.seg_es).base);
+        vmwrite(guest::CS_BASE, unpack_gdt_entry(gdt, context.SegCs).base);
+        vmwrite(guest::SS_BASE, unpack_gdt_entry(gdt, context.SegSs).base);
+        vmwrite(guest::DS_BASE, unpack_gdt_entry(gdt, context.SegDs).base);
+        vmwrite(guest::ES_BASE, unpack_gdt_entry(gdt, context.SegEs).base);
         unsafe { vmwrite(guest::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE)) };
         unsafe { vmwrite(guest::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE)) };
         unsafe { vmwrite(guest::LDTR_BASE, unpack_gdt_entry(gdt, x86::dtables::ldtr().bits()).base) };
         unsafe { vmwrite(guest::TR_BASE, unpack_gdt_entry(gdt,  x86::task::tr().bits()).base) };
 
         // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Limit
-        vmwrite(guest::CS_LIMIT, unpack_gdt_entry(gdt, context.seg_cs).limit);
-        vmwrite(guest::SS_LIMIT, unpack_gdt_entry(gdt, context.seg_ss).limit);
-        vmwrite(guest::DS_LIMIT, unpack_gdt_entry(gdt, context.seg_ds).limit);
-        vmwrite(guest::ES_LIMIT, unpack_gdt_entry(gdt, context.seg_es).limit);
-        vmwrite(guest::FS_LIMIT, unpack_gdt_entry(gdt, context.seg_fs).limit);
-        vmwrite(guest::GS_LIMIT, unpack_gdt_entry(gdt, context.seg_gs).limit);
+        vmwrite(guest::CS_LIMIT, unpack_gdt_entry(gdt, context.SegCs).limit);
+        vmwrite(guest::SS_LIMIT, unpack_gdt_entry(gdt, context.SegSs).limit);
+        vmwrite(guest::DS_LIMIT, unpack_gdt_entry(gdt, context.SegDs).limit);
+        vmwrite(guest::ES_LIMIT, unpack_gdt_entry(gdt, context.SegEs).limit);
+        vmwrite(guest::FS_LIMIT, unpack_gdt_entry(gdt, context.SegFs).limit);
+        vmwrite(guest::GS_LIMIT, unpack_gdt_entry(gdt, context.SegGs).limit);
         unsafe { vmwrite(guest::LDTR_LIMIT, unpack_gdt_entry(gdt, dtables::ldtr().bits()).limit) };
         unsafe { vmwrite(guest::TR_LIMIT, unpack_gdt_entry(gdt, task::tr().bits()).limit) };
 
         // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Access Rights
-        vmwrite(guest::CS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.seg_cs).access_rights);
-        vmwrite(guest::SS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.seg_ss).access_rights);
-        vmwrite(guest::DS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.seg_ds).access_rights);
-        vmwrite(guest::ES_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.seg_es).access_rights);
-        vmwrite(guest::FS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.seg_fs).access_rights);
-        vmwrite(guest::GS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.seg_gs).access_rights);
+        vmwrite(guest::CS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.SegCs).access_rights);
+        vmwrite(guest::SS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.SegSs).access_rights);
+        vmwrite(guest::DS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.SegDs).access_rights);
+        vmwrite(guest::ES_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.SegEs).access_rights);
+        vmwrite(guest::FS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.SegFs).access_rights);
+        vmwrite(guest::GS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.SegGs).access_rights);
         unsafe { vmwrite(guest::LDTR_ACCESS_RIGHTS, unpack_gdt_entry(gdt, dtables::ldtr().bits()).access_rights) };
         unsafe { vmwrite(guest::TR_ACCESS_RIGHTS, unpack_gdt_entry(gdt, task::tr().bits()).access_rights) };
 
@@ -290,12 +211,12 @@ impl Vmx {
 
         // Host Segment CS, SS, DS, ES, FS, GS, and TR Selector
         const SELECTOR_MASK: u16 = 0xF8;
-        vmwrite(host::CS_SELECTOR, context.seg_cs & SELECTOR_MASK);
-        vmwrite(host::SS_SELECTOR, context.seg_ss & SELECTOR_MASK);
-        vmwrite(host::DS_SELECTOR, context.seg_ds & SELECTOR_MASK);
-        vmwrite(host::ES_SELECTOR, context.seg_es & SELECTOR_MASK);
-        vmwrite(host::FS_SELECTOR, context.seg_fs & SELECTOR_MASK);
-        vmwrite(host::GS_SELECTOR, context.seg_gs & SELECTOR_MASK);
+        vmwrite(host::CS_SELECTOR, context.SegCs & SELECTOR_MASK);
+        vmwrite(host::SS_SELECTOR, context.SegSs & SELECTOR_MASK);
+        vmwrite(host::DS_SELECTOR, context.SegDs & SELECTOR_MASK);
+        vmwrite(host::ES_SELECTOR, context.SegEs & SELECTOR_MASK);
+        vmwrite(host::FS_SELECTOR, context.SegFs & SELECTOR_MASK);
+        vmwrite(host::GS_SELECTOR, context.SegGs & SELECTOR_MASK);
         unsafe { vmwrite(host::TR_SELECTOR, task::tr().bits() & SELECTOR_MASK) };
 
         let gdt = get_current_gdt();
@@ -346,93 +267,14 @@ impl Vmx {
             log::info!("[+] VMCS Controls Shadow Registers initialized!");
         };
 
-        let msr_physical_addy = virtual_to_physical_address(self.msr_bitmap.as_ref() as *const _ as u64);
+        let msr_bitmap_physical_address = PhysicalAddress::pa_from_va(self.msr_bitmap.as_ref() as *const _ as _);
 
-        // MSRBitmap
-        vmwrite(x86::vmx::vmcs::control::MSR_BITMAPS_ADDR_FULL, msr_physical_addy);
-    }
-
-    /// Enable and enter VMX operation by setting and clearing the lock bit, adjusting control registers and executing the vmxon instruction.
-    fn enable_vmx_operation(&mut self) -> Result<(), HypervisorError> {
-        let mut cr4 = unsafe { controlregs::cr4() };
-        cr4.set(controlregs::Cr4::CR4_ENABLE_VMX, true);
-        unsafe { controlregs::cr4_write(cr4) };
-
-        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
-        self.set_lock_bit()?;
-        log::info!("[+] Lock bit set via IA32_FEATURE_CONTROL");
-
-        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.8 RESTRICTIONS ON VMX OPERATION */
-        log::info!("[+] Adjusting Control Registers");
-        self.adjust_control_registers();
-
-        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
-        /* - 25.11.5 VMXON Region */
-        log::info!("[+] init_vmxon_region");
-        self.init_vmxon_region()?;
-
-        Ok(())
-    }
-
-    /// Check if we need to set bits in IA32_FEATURE_CONTROL
-    fn set_lock_bit(&self) -> Result<(), HypervisorError> {
-        const VMX_LOCK_BIT: u64 = 1 << 0;
-        const VMXON_OUTSIDE_SMX: u64 = 1 << 2;
-
-        let ia32_feature_control = unsafe { rdmsr(msr::IA32_FEATURE_CONTROL) };
-
-        if (ia32_feature_control & VMX_LOCK_BIT) == 0 {
-            unsafe {
-                msr::wrmsr(
-                    msr::IA32_FEATURE_CONTROL,
-                    VMXON_OUTSIDE_SMX | VMX_LOCK_BIT | ia32_feature_control,
-                )
-            };
-        } else if (ia32_feature_control & VMXON_OUTSIDE_SMX) == 0 {
-            return Err(HypervisorError::VMXBIOSLock);
+        if msr_bitmap_physical_address == 0 {
+            panic!("Failed to get physical address of MSR Bitmap");
         }
 
-        Ok(())
-    }
-
-    /// Adjust set and clear the mandatory bits in CR0 and CR4
-    fn adjust_control_registers(&self) {
-        self.set_cr0_bits();
-        log::info!("[+] Mandatory bits in CR0 set/cleared");
-
-        self.set_cr4_bits();
-        log::info!("[+] Mandatory bits in CR4 set/cleared");
-    }
-
-    /// Set the mandatory bits in CR0 and clear bits that are mandatory zero
-    fn set_cr0_bits(&self) {
-        let ia32_vmx_cr0_fixed0 = unsafe { msr::rdmsr(msr::IA32_VMX_CR0_FIXED0) };
-        let ia32_vmx_cr0_fixed1 = unsafe { msr::rdmsr(msr::IA32_VMX_CR0_FIXED1) };
-
-        let mut cr0 = unsafe { controlregs::cr0() };
-
-        cr0 |= controlregs::Cr0::from_bits_truncate(ia32_vmx_cr0_fixed0 as usize);
-        cr0 &= controlregs::Cr0::from_bits_truncate(ia32_vmx_cr0_fixed1 as usize);
-
-        unsafe { controlregs::cr0_write(cr0) };
-    }
-
-    /// Set the mandatory bits in CR4 and clear bits that are mandatory zero
-    fn set_cr4_bits(&self) {
-        let ia32_vmx_cr4_fixed0 = unsafe { msr::rdmsr(msr::IA32_VMX_CR4_FIXED0) };
-        let ia32_vmx_cr4_fixed1 = unsafe { msr::rdmsr(msr::IA32_VMX_CR4_FIXED1) };
-
-        let mut cr4 = unsafe { controlregs::cr4() };
-
-        cr4 |= controlregs::Cr4::from_bits_truncate(ia32_vmx_cr4_fixed0 as usize);
-        cr4 &= controlregs::Cr4::from_bits_truncate(ia32_vmx_cr4_fixed1 as usize);
-
-        unsafe { controlregs::cr4_write(cr4) };
-    }
-
-    /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID)
-    fn get_vmcs_revision_id(&self) -> u32 {
-        unsafe { (msr::rdmsr(msr::IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
+        // MSRBitmap
+        vmwrite(x86::vmx::vmcs::control::MSR_BITMAPS_ADDR_FULL, msr_bitmap_physical_address);
     }
 }
 
