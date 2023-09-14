@@ -1,6 +1,5 @@
 use crate::error::HypervisorError;
-use alloc::boxed::Box;
-use kernel_alloc::KernelAlloc;
+use {alloc::boxed::Box, kernel_alloc::KernelAlloc};
 
 /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.6.9 MSR-Bitmap Address
 /// On processors that support the 1-setting of the “use MSR bitmaps” VM-execution control, the VM-execution control

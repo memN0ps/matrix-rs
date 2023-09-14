@@ -8,17 +8,15 @@
 #![feature(once_cell_try)]
 #![feature(decl_macro)]
 
-extern crate alloc;
-use crate::{
-    intel::vcpu::Vcpu,
-    utils::processor::{processor_count, ProcessorExecutor},
-};
 use alloc::vec::Vec;
 use error::HypervisorError;
-mod error;
-mod intel;
-mod nt;
-mod utils;
+use x86_64::intel::vcpu::Vcpu;
+
+use crate::x86_64::utils::processor::{processor_count, ProcessorExecutor};
+extern crate alloc;
+
+pub mod error;
+pub mod x86_64;
 
 pub struct Hypervisor {
     processors: Vec<Vcpu>,

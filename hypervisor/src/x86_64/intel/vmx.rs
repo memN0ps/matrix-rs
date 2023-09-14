@@ -1,27 +1,30 @@
-use super::{bitmap::MsrBitmap, host::Host, vmcs::Vmcs, vmxon::Vmxon};
-use crate::{
-    error::HypervisorError,
-    intel::{
-        addresses::PhysicalAddress, host::STACK_CONTENTS_SIZE, support::vmwrite,
-        vmexit::vmexit_stub,
-    },
-    nt::Context,
-};
-use alloc::boxed::Box;
-use kernel_alloc::{KernelAlloc, PhysicalAllocator};
-use x86::{
-    controlregs,
-    dtables::{self},
-    msr::{self},
-    task,
-    vmx::{
-        self,
-        vmcs::{
-            control::{EntryControls, ExitControls, PrimaryControls, SecondaryControls},
-            guest, host,
+use {
+    alloc::boxed::Box,
+    kernel_alloc::{KernelAlloc, PhysicalAllocator},
+    x86::{
+        controlregs,
+        dtables::{self},
+        msr::{self},
+        task,
+        vmx::{
+            self,
+            vmcs::{
+                control::{EntryControls, ExitControls, PrimaryControls, SecondaryControls},
+                guest, host,
+            },
         },
     },
 };
+
+use crate::{
+    error::HypervisorError,
+    x86_64::{
+        intel::{host::STACK_CONTENTS_SIZE, support::vmwrite, vmexit::vmexit_stub},
+        utils::{addresses::PhysicalAddress, nt::Context},
+    },
+};
+
+use super::{bitmap::MsrBitmap, host::Host, vmcs::Vmcs, vmxon::Vmxon};
 
 /// Custom memory allocator Boxed pointers for the Vmxon, Vmcs, MsrBitmap and HostRsp structures are stored in the Vmx struct to ensure they are not dropped.
 pub struct Vmx {

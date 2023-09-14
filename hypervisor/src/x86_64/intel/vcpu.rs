@@ -1,13 +1,18 @@
+use {alloc::boxed::Box, core::cell::OnceCell};
 extern crate alloc;
 
-use super::vmexit::{CPUID_VENDOR_AND_MAX_FUNCTIONS, VENDOR_NAME};
+use super::{
+    vmexit::{CPUID_VENDOR_AND_MAX_FUNCTIONS, VENDOR_NAME},
+    vmx::Vmx,
+};
+
 use crate::{
     error::HypervisorError,
-    intel::{vmexit::launch_vm, vmx::Vmx},
-    nt::{Context, RtlCaptureContext},
+    x86_64::{
+        intel::launch::launch_vm,
+        utils::nt::{Context, RtlCaptureContext},
+    },
 };
-use alloc::boxed::Box;
-use core::cell::OnceCell;
 
 pub struct Vcpu {
     /// The index of the processor.

@@ -1,8 +1,8 @@
-pub mod addresses;
 pub mod bitmap;
 pub mod ept;
 pub mod events;
 pub mod host;
+pub mod launch;
 pub mod support;
 pub mod vcpu;
 pub mod vmcs;

@@ -1,12 +1,12 @@
 use crate::{
     error::HypervisorError,
-    intel::support::{vmclear, vmptrld},
+    x86_64::{
+        intel::support::{vmclear, vmptrld},
+        utils::addresses::PhysicalAddress,
+    },
 };
-use alloc::boxed::Box;
-use bitfield::BitMut;
-use kernel_alloc::PhysicalAllocator;
 
-use super::addresses::PhysicalAddress;
+use {alloc::boxed::Box, bitfield::BitMut, kernel_alloc::PhysicalAllocator};
 
 pub const PAGE_SIZE: usize = 0x1000;
 

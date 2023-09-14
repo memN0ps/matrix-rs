@@ -1,9 +1,11 @@
 #![allow(dead_code)]
-use core::ops::{Deref, DerefMut};
-use winapi::shared::ntdef::PHYSICAL_ADDRESS;
-use x86::bits64::paging::{PAddr, BASE_PAGE_SHIFT};
+use super::nt::{MmGetPhysicalAddress, MmGetVirtualForPhysical};
 
-use crate::nt::{MmGetPhysicalAddress, MmGetVirtualForPhysical};
+use {
+    core::ops::{Deref, DerefMut},
+    winapi::shared::ntdef::PHYSICAL_ADDRESS,
+    x86::bits64::paging::{PAddr, BASE_PAGE_SHIFT},
+};
 
 pub struct PhysicalAddress(PAddr);
 

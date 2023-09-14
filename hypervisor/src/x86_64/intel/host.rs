@@ -1,5 +1,4 @@
-use alloc::boxed::Box;
-use kernel_alloc::KernelAlloc;
+use {alloc::boxed::Box, kernel_alloc::KernelAlloc};
 
 use crate::error::HypervisorError;
 

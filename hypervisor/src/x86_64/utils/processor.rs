@@ -1,10 +1,9 @@
 // This part is easy and can be used as a crate once uploaded to crates.io so there was no point in rewriting it.
 // Full credits not-matthias: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/utils/processor.rs
 use core::mem::MaybeUninit;
-
 use winapi::shared::ntdef::{ALL_PROCESSOR_GROUPS, GROUP_AFFINITY, NT_SUCCESS, PROCESSOR_NUMBER};
 
-use crate::nt::{
+use super::nt::{
     KeGetCurrentProcessorNumberEx, KeGetProcessorNumberFromIndex, KeQueryActiveProcessorCountEx,
     KeRevertToUserGroupAffinityThread, KeSetSystemGroupAffinityThread, ZwYieldExecution,
 };

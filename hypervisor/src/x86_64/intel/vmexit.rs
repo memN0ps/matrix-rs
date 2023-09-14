@@ -1,16 +1,17 @@
-use core::fmt;
-
-use self::registers::GuestRegisters;
-
-use super::events::EventInjection;
-use crate::{
-    error::HypervisorError,
-    intel::support::{vmread, vmwrite},
-    restore_general_purpose_registers_from_stack, save_general_purpose_registers_to_stack,
+use {
+    core::fmt,
+    x86::vmx::vmcs::{self, guest, ro::VMEXIT_INSTRUCTION_LEN},
 };
-use x86::vmx::vmcs::{self, guest, ro::VMEXIT_INSTRUCTION_LEN};
 
-pub mod registers;
+use super::{events::EventInjection, support::vmwrite};
+
+use crate::{
+    restore_general_purpose_registers_from_stack, save_general_purpose_registers_to_stack,
+    {
+        error::HypervisorError,
+        x86_64::{intel::support::vmread, utils::registers::GuestRegisters},
+    },
+};
 
 // More leafs here if needed: https://docs.rs/raw-cpuid/10.6.0/src/raw_cpuid/lib.rs.html#289
 pub const CPUID_VENDOR_AND_MAX_FUNCTIONS: u32 = 0x4000_0000;
@@ -239,24 +240,6 @@ pub unsafe extern "C" fn vmlaunch_failed() {
 #[no_mangle]
 pub unsafe extern "C" fn vmresume_failed() {
     panic!("[-] VMRESUME failed!");
-}
-
-/// Runs the guest until VM-exit occurs.
-pub unsafe extern "C" fn launch_vm() -> ! {
-    core::arch::asm!(
-        "nop",
-        // Save current (host) general purpose registers onto stack
-        //save_general_purpose_registers_to_stack!(),
-
-        // Launch the VM until a VM-exit occurs
-        "vmlaunch",
-
-        // call vmlaunch_failed as we should never execution here
-        "call   {0}",
-
-        sym vmlaunch_failed,
-        options(noreturn),
-    );
 }
 
 //vmwrite(host::RSP, host_rsp + STACK_CONTENTS_SIZE as u64);
