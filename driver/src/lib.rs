@@ -39,30 +39,17 @@ pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRI
 
     driver.DriverUnload = Some(driver_unload);
 
-    // Capture the context of the current processor. The Guest will start running from here as we capture and vmwrite the context to the guest state per vcpu
-    let context = Hypervisor::capture_registers();
+    let Ok(mut hypervisor) = Hypervisor::new() else {
+        log::error!("[-] Failed to build hypervisor");
+        return STATUS_UNSUCCESSFUL;
+    };
 
-    // Check if we are running as Host (root operation) or Guest (non-root operation) by checking the vendor name in the cpuid which is set in vmexit_handler -> handle_cpuid
-    // Virtualize the system only if the hypervisor is running as Host (root operation)
-    if !Hypervisor::is_vendor_name_present() {
-        log::info!("[+] Virtualizing the system");
-
-        let Ok(mut hypervisor) = Hypervisor::new(context) else {
-            log::error!("[-] Failed to build hypervisor");
+    match hypervisor.virtualize_system() {
+        Ok(_) => log::info!("[+] Successfully virtualized system!"),
+        Err(err) => {
+            log::error!("[-] Failed to virtualize system: {}", err);
             return STATUS_UNSUCCESSFUL;
-        };
-
-        match hypervisor.virtualize_system() {
-            Ok(_) => log::info!("[+] VMM initialized"),
-            Err(err) => {
-                log::error!("[-] VMM initialization failed: {}", err);
-                return STATUS_UNSUCCESSFUL;
-            }
         }
-
-        Hypervisor::start_vm();
-
-        // unreachable code: we should not be here
     }
 
     STATUS_SUCCESS

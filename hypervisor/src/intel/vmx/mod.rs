@@ -39,7 +39,7 @@ pub struct Vmx {
 }
 
 impl Vmx {
-    pub fn new() -> Result<Self, HypervisorError> {
+    pub fn new(context: Context) -> Result<Box<Self>, HypervisorError> {
         log::info!("[*] Setting up VMX");
 
         let vmxon_region = Vmxon::new()?;
@@ -47,22 +47,22 @@ impl Vmx {
         let msr_bitmap = MsrBitmap::new()?;
         let host_rsp = Host::new()?;
 
-        Ok(Self {
+        let instance = Self {
             vmxon_region,
             vmcs_region,
             msr_bitmap,
             host_rsp,
-        })
-    }
+        };
 
-    pub fn init(&mut self, context: Context) -> Result<(), HypervisorError> {
+        let mut instance = Box::new(instance);
+
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
         log::info!("[+] init_guest_register_state");
-        self.init_guest_register_state(context);
+        instance.init_guest_register_state(context);
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
         log::info!("[+] init_host_register_state");
-        self.init_host_register_state(context);
+        instance.init_host_register_state(context);
 
         /*
          * VMX controls:
@@ -72,9 +72,9 @@ impl Vmx {
          * - 25.8 VM-ENTRY CONTROL FIELDS
          */
         log::info!("[+] init_vmcs_control_values");
-        self.init_vmcs_control_values();
+        instance.init_vmcs_control_values();
 
-        Ok(())
+        Ok(instance)
     }
 
     /// Initialize the guest state for the currently loaded VMCS.

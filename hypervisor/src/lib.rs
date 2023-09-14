@@ -10,13 +10,11 @@
 
 extern crate alloc;
 use crate::{
-    intel::{vcpu::Vcpu, vmexit::launch_vm},
+    intel::vcpu::Vcpu,
     utils::processor::{processor_count, ProcessorExecutor},
 };
 use alloc::vec::Vec;
 use error::HypervisorError;
-use intel::vmexit::{CPUID_VENDOR_AND_MAX_FUNCTIONS, VENDOR_NAME};
-use nt::{Context, RtlCaptureContext};
 mod error;
 mod intel;
 mod nt;
@@ -27,7 +25,7 @@ pub struct Hypervisor {
 }
 
 impl Hypervisor {
-    pub fn new(context: Context) -> Result<Self, HypervisorError> {
+    pub fn new() -> Result<Self, HypervisorError> {
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.6 DISCOVERING SUPPORT FOR VMX */
         Self::has_intel_cpu()?;
         log::info!("[+] CPU is Intel");
@@ -38,7 +36,7 @@ impl Hypervisor {
         let mut processors: Vec<Vcpu> = Vec::new();
 
         for i in 0..processor_count() {
-            processors.push(Vcpu::new(i, context)?);
+            processors.push(Vcpu::new(i)?);
         }
         log::info!("[+] Found {} processors", processors.len());
 
@@ -53,45 +51,12 @@ impl Hypervisor {
                 return Err(HypervisorError::ProcessorSwitchFailed);
             };
 
-            if processor.is_virtualized() {
-                log::info!("[+] Processor {} is already virtualized", processor.id());
-                continue;
-            }
-
             processor.virtualize_cpu()?;
 
             core::mem::drop(executor);
         }
 
         Ok(())
-    }
-
-    pub fn start_vm() {
-        // Run the VM until the VM-exit occurs.
-        log::info!("[+] Running the guest until VM-exit occurs.");
-        unsafe { launch_vm() };
-    }
-
-    pub fn capture_registers() -> Context {
-        // Contains processor-specific register data. The system uses CONTEXT structures to perform various internal operations.
-        // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-context
-        let mut context = unsafe { core::mem::zeroed::<Context>() };
-
-        // The Guest will start running from here as we capture and vmwrite the context to the guest state per vcpu
-        unsafe { RtlCaptureContext(&mut context) };
-
-        return context;
-    }
-
-    /// Check if the hypervisor is already installed by checking the vendor name in the cpuid which is set in vmexit_handler -> handle_cpuid
-    pub fn is_vendor_name_present() -> bool {
-        let regs = x86::cpuid::cpuid!(CPUID_VENDOR_AND_MAX_FUNCTIONS);
-
-        if (regs.ebx == VENDOR_NAME) && (regs.ecx == VENDOR_NAME) && (regs.edx == VENDOR_NAME) {
-            return true;
-        }
-
-        return false;
     }
 
     /// Check to see if CPU is Intel (“GenuineIntel”).
