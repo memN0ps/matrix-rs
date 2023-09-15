@@ -19,10 +19,10 @@ impl Vmxon {
     /// # VMXON Region
     /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.2 FORMAT OF THE VMCS REGION
     pub fn new() -> Result<Box<Self, PhysicalAllocator>, HypervisorError> {
-        log::info!("[*] Setting up VMXON region");
+        log::info!("Setting up VMXON region");
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
-        log::info!("[+] Enabling Virtual Machine Extensions (VMX)");
+        log::info!("Enabling Virtual Machine Extensions (VMX)");
         Self::enable_vmx_operation()?;
 
         let mut vmxon_region: Box<Vmxon, PhysicalAllocator> =
@@ -35,9 +35,9 @@ impl Vmxon {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
-        log::info!("[+] VMXON Region Virtual Address: {:p}", vmxon_region);
+        log::info!("VMXON Region Virtual Address: {:p}", vmxon_region);
         log::info!(
-            "[+] VMXON Region Physical Addresss: 0x{:x}",
+            "VMXON Region Physical Addresss: 0x{:x}",
             vmxon_region_physical_address
         );
 
@@ -46,7 +46,7 @@ impl Vmxon {
 
         // Enable VMX operation.
         vmxon(vmxon_region_physical_address);
-        log::info!("[+] VMXON successful!");
+        log::info!("VMXON successful!");
 
         Ok(vmxon_region)
     }
@@ -58,11 +58,11 @@ impl Vmxon {
         unsafe { x86::controlregs::cr4_write(cr4) };
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
+        log::info!("Setting Lock Bit set via IA32_FEATURE_CONTROL");
         Self::set_lock_bit()?;
-        log::info!("[+] Lock bit set via IA32_FEATURE_CONTROL");
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.8 RESTRICTIONS ON VMX OPERATION */
-        log::info!("[+] Adjusting Control Registers");
+        log::info!("Adjusting Control Registers");
         Self::adjust_control_registers();
 
         Ok(())
@@ -92,10 +92,7 @@ impl Vmxon {
     /// Adjust set and clear the mandatory bits in CR0 and CR4
     fn adjust_control_registers() {
         Self::set_cr0_bits();
-        log::info!("[+] Mandatory bits in CR0 set/cleared");
-
         Self::set_cr4_bits();
-        log::info!("[+] Mandatory bits in CR4 set/cleared");
     }
 
     /// Set the mandatory bits in CR0 and clear bits that are mandatory zero

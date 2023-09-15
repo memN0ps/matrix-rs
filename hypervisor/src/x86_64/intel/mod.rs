@@ -1,7 +1,7 @@
 pub mod bitmap;
 pub mod ept;
 pub mod events;
-pub mod host;
+pub mod hostrsp;
 pub mod launch;
 pub mod support;
 pub mod vcpu;

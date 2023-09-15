@@ -36,8 +36,13 @@ pub struct MsrBitmap {
 
 impl MsrBitmap {
     pub fn new() -> Result<Box<Self, KernelAlloc>, HypervisorError> {
+        log::info!("Setting up MSR-Bitmap");
         let msr_bitmap: Box<MsrBitmap, KernelAlloc> =
             unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
+
+        log::info!("MSR-Bitmap Virtual Address: {:p}", msr_bitmap);
+
+        log::info!("MSR-Bitmap successful!");
 
         Ok(msr_bitmap)
     }

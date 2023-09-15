@@ -14,11 +14,12 @@ use crate::{
 };
 
 // More leafs here if needed: https://docs.rs/raw-cpuid/10.6.0/src/raw_cpuid/lib.rs.html#289
-pub const CPUID_VENDOR_AND_MAX_FUNCTIONS: u32 = 0x4000_0000;
-pub const VENDOR_NAME: u32 = 0x5441_4c48; // "HLAT"
 pub const EAX_HYPERVISOR_PRESENT: u32 = 0x1;
-pub const MSR_READ: bool = true;
-pub const MSR_WRITE: bool = false;
+
+pub enum MsrAccessType {
+    Read,
+    Write,
+}
 
 pub struct VmExit;
 
@@ -35,20 +36,20 @@ impl VmExit {
         &self,
         registers: &mut GuestRegisters,
     ) -> Result<VmxBasicExitReason, HypervisorError> {
-        log::info!("[+] VMEXIT occurred at RIP: {:#x}", vmread(guest::RIP));
-        log::info!("[+] VMEXIT occurred at RSP: {:#x}", vmread(guest::RSP));
+        log::info!("VMEXIT occurred at RIP: {:#x}", vmread(guest::RIP));
+        log::info!("VMEXIT occurred at RSP: {:#x}", vmread(guest::RSP));
 
         // Every VM exit writes a 32-bit exit reason to the VMCS (see Section 25.9.1). Certain VM-entry failures also do this (see Section 27.8).
         // The low 16 bits of the exit-reason field form the basic exit reason which provides basic information about the cause of the VM exit or VM-entry failure.
         let exit_reason = vmread(vmcs::ro::EXIT_REASON) as u32;
-        log::info!("[+] VMEXIT Reason: {:#x}", exit_reason);
+        log::info!("VMEXIT Reason: {:#x}", exit_reason);
 
         let Some(basic_exit_reason) = VmxBasicExitReason::from_u32(exit_reason) else {
             log::error!("[!] Unknown exit reason: {:#x}", exit_reason);
             return Err(HypervisorError::UnknownVMExitReason);
         };
 
-        log::info!("[+] Basic Exit Reason: {}", basic_exit_reason);
+        log::info!("Basic Exit Reason: {}", basic_exit_reason);
 
         /* Handle VMEXIT */
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.2 Instructions That Cause VM Exits Unconditionally */
@@ -58,14 +59,14 @@ impl VmExit {
         /* - Certain instructions cause VM exits in VMX non-root operation depending on the setting of the VM-execution controls.*/
         match basic_exit_reason {
             VmxBasicExitReason::Cpuid => self.handle_cpuid(registers),
-            VmxBasicExitReason::Rdmsr => self.handle_msr_access(registers, MSR_READ),
-            VmxBasicExitReason::Wrmsr => self.handle_msr_access(registers, MSR_WRITE),
-            _ => panic!("[-] Unhandled VMEXIT: {}", basic_exit_reason),
+            VmxBasicExitReason::Rdmsr => self.handle_msr_access(registers, MsrAccessType::Read),
+            VmxBasicExitReason::Wrmsr => self.handle_msr_access(registers, MsrAccessType::Write),
+            _ => panic!("Unhandled VMEXIT: {}", basic_exit_reason),
         }
 
-        log::info!("[+] Advancing guest RIP...");
+        log::info!("Advancing guest RIP...");
         self.advance_guest_rip();
-        log::info!("[+] Guest RIP advanced to: {:#x}", vmread(guest::RIP));
+        log::info!("Guest RIP advanced to: {:#x}", vmread(guest::RIP));
 
         return Ok(basic_exit_reason);
     }
@@ -74,21 +75,13 @@ impl VmExit {
     /// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table C-1. Basic Exit Reasons 10
     /// CPUID. Guest software attempted to execute CPUID.
     fn handle_cpuid(&self, registers: &mut GuestRegisters) {
-        log::info!("[+] Handling CPUID...");
-
         let leaf = registers.rax as u32;
         let sub_leaf = registers.rcx as u32;
 
-        // Macro which queries cpuid directly.
         // First parameter is cpuid leaf (EAX register value), second optional parameter is the subleaf (ECX register value).
         let mut cpuid_result = x86::cpuid::cpuid!(leaf, sub_leaf);
 
-        // Change vendor info if required
-        if leaf == CPUID_VENDOR_AND_MAX_FUNCTIONS {
-            cpuid_result.ebx = VENDOR_NAME;
-            cpuid_result.ecx = VENDOR_NAME;
-            cpuid_result.edx = VENDOR_NAME;
-        } else if leaf == EAX_HYPERVISOR_PRESENT {
+        if leaf == EAX_HYPERVISOR_PRESENT {
             // Clearing VT-x Support: If the leaf value is 1 (which corresponds to the standard CPUID function that returns feature information),
             // We clear bit 5 in the ECX register, which is used to indicate support for VT-x (Virtualization Technology),
             // to prevent the guest from recognizing VT-x support and attempting to use it.
@@ -100,8 +93,6 @@ impl VmExit {
         registers.rbx = cpuid_result.ebx as u64;
         registers.rcx = cpuid_result.ecx as u64;
         registers.rdx = cpuid_result.edx as u64;
-
-        log::info!("[+] CPUID handled!");
     }
 
     /// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table C-1. Basic Exit Reasons 31 and 32
@@ -110,11 +101,9 @@ impl VmExit {
     /// 2: The value of RCX is neither in the range 00000000H – 00001FFFH nor in the range C0000000H – C0001FFFH.
     /// 3: The value of RCX was in the range 00000000H – 00001FFFH and the nth bit in read bitmap for low MSRs is 1, where n was the value of RCX
     /// 4: The value of RCX is in the range C0000000H – C0001FFFH and the nth bit in read bitmap for high MSRs is 1, where n is the value of RCX & 00001FFFH
-    fn handle_msr_access(&self, registers: &mut GuestRegisters, access_type: bool) {
-        log::info!("[+] Handling rdmsr/wrmsr access...");
-
+    fn handle_msr_access(&self, registers: &mut GuestRegisters, access_type: MsrAccessType) {
         const MSR_MASK_LOW: u64 = u32::MAX as u64;
-        const MSR_RANGE_LOW_START: u64 = 0x00000000;
+        //const MSR_RANGE_LOW_START: u64 = 0x00000000;
         const MSR_RANGE_LOW_END: u64 = 0x00001FFF;
         const MSR_RANGE_HIGH_START: u64 = 0xC0000000;
         const MSR_RANGE_HIGH_END: u64 = 0xC0001FFF;
@@ -123,72 +112,45 @@ impl VmExit {
         const RESERVED_MSR_RANGE_HI: u64 = 0x400000FF;
 
         let msr_id = registers.rcx;
-        log::info!("[*] MSR ID: {:#x}", msr_id);
 
         // Intel® 64 and IA-32 Architectures Software Developer's Manual: RDMSR—Read From Model Specific Register / WRMSR—Write to Model Specific Register
         // - Protected Mode Exceptions
         // - #GP(0) If the current privilege level is not 0
         // - If the value in ECX specifies a reserved or unimplemented MSR address
-
         // Check for reserved or unimplemented MSR address
+
+        /* (This causes a problem and in Windbg it says "Shutdown occurred")
         if msr_id >= RESERVED_MSR_RANGE_LOW && msr_id <= RESERVED_MSR_RANGE_HI {
-            log::error!("[!] Attempted to access reserved MSR: {:#x}", msr_id);
-            self.vmentry_inject_gp(0);
-            return;
-        }
-
-        /* (Unhandled check)
-        // Check if “use MSR bitmaps” VM-execution control is 0
-        if !self.use_msr_bitmaps_control() {
-            log::error!("[!] MSR bitmaps control is not set.");
             self.vmentry_inject_gp(0);
             return;
         }
         */
 
-        // Check if RCX is outside the specified ranges
-        if (msr_id < MSR_RANGE_LOW_START || msr_id > MSR_RANGE_LOW_END)
-            && (msr_id < MSR_RANGE_HIGH_START || msr_id > MSR_RANGE_HIGH_END)
+        // Check for sanity of MSR if they're valid or they're for reserved range for WRMSR and RDMSR
+        if (msr_id <= MSR_RANGE_LOW_END)
+            || ((msr_id >= MSR_RANGE_HIGH_START) && (msr_id <= MSR_RANGE_HIGH_END))
+            || (msr_id >= RESERVED_MSR_RANGE_LOW && msr_id <= RESERVED_MSR_RANGE_HI)
         {
-            log::error!("[!] RCX is outside the specified MSR ranges.");
-            self.vmentry_inject_gp(0);
-            return;
+            match access_type {
+                MsrAccessType::Read => {
+                    let msr_value = unsafe { x86::msr::rdmsr(msr_id as _) };
+                    registers.rdx = msr_value >> 32;
+                    registers.rax = msr_value & MSR_MASK_LOW;
+                }
+                MsrAccessType::Write => {
+                    let mut msr_value = registers.rdx << 32;
+                    msr_value |= registers.rax & MSR_MASK_LOW;
+                    unsafe { x86::msr::wrmsr(msr_id as _, msr_value) };
+                }
+            }
         }
-
-        /* (Unhandled check)
-        // Check the bitmaps for the given MSR
-        if msr_id <= MSR_RANGE_LOW_END && self.read_bitmap_low_msr(msr_id) {
-            log::error!("[!] The nth bit in read bitmap for low MSRs is 1.");
-            self.vmentry_inject_gp(0);
-            return;
-        }
-        if msr_id >= MSR_RANGE_HIGH_START && self.read_bitmap_high_msr(msr_id & MSR_RANGE_LOW_END) {
-            log::error!("[!] The nth bit in read bitmap for high MSRs is 1.");
-            self.vmentry_inject_gp(0);
-            return;
-        }
-        */
-
-        // Handle the MSR access
-        if access_type == MSR_READ {
-            let msr_value = unsafe { x86::msr::rdmsr(msr_id as _) };
-            registers.rdx = msr_value >> 32;
-            registers.rax = msr_value & MSR_MASK_LOW;
-            log::info!("[*] MSR_READ value: {:#x}", msr_value);
-        } else {
-            let mut msr_value = registers.rdx << 32;
-            msr_value |= registers.rax & MSR_MASK_LOW;
-            unsafe { x86::msr::wrmsr(msr_id as _, msr_value) };
-            log::info!("[*] MSR_WRITE value: {:#x}", msr_value);
-        }
-
-        log::info!("[+] rdmsr/wrmsr handled!");
     }
 
     /// Intel® 64 and IA-32 Architectures Software Developer's Manual:
     /// # Event Injection
     /// - 25.8.3 VM-Entry Controls for Event Injection
     /// - Table 25-17. Format of the VM-Entry Interruption-Information Field
+    #[allow(dead_code)]
     fn vmentry_inject_gp(&self, error_code: u32) {
         vmwrite(
             x86::vmx::vmcs::control::VMENTRY_EXCEPTION_ERR_CODE,
@@ -216,30 +178,30 @@ impl VmExit {
 /// Reverse order because when you push something on stack the last thing you push will be at the top of the stack
 #[no_mangle]
 pub unsafe extern "C" fn vmexit_handler(registers: *mut GuestRegisters) -> u16 {
-    log::info!("[+] Called VMEXIT Handler...");
+    log::info!("Called VMEXIT Handler...");
     let registers = unsafe { &mut *registers };
 
     let vmexit = VmExit::new();
 
     match vmexit.handle_vmexit(registers) {
         Ok(vmexit_basic_reason) => {
-            log::info!("[+] VMEXIT handled successfully!");
+            log::info!("VMEXIT handled successfully!");
             return vmexit_basic_reason as u16; // we return the vmexit basic reason if it's needed by the caller
         }
         Err(e) => {
-            panic!("[-] Failed to handle VMEXIT: {:?}", e); // panic if error could not be handled
+            panic!("Failed to handle VMEXIT: {:?}", e); // panic if error could not be handled
         }
     }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn vmlaunch_failed() {
-    panic!("[-] VMLAUNCH failed!");
+    panic!("VMLAUNCH failed!");
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn vmresume_failed() {
-    panic!("[-] VMRESUME failed!");
+    panic!("VMRESUME failed!");
 }
 
 //vmwrite(host::RSP, host_rsp + STACK_CONTENTS_SIZE as u64);

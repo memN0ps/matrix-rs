@@ -1,10 +1,7 @@
 use {alloc::boxed::Box, core::cell::OnceCell};
 extern crate alloc;
 
-use super::{
-    vmexit::{CPUID_VENDOR_AND_MAX_FUNCTIONS, VENDOR_NAME},
-    vmx::Vmx,
-};
+use super::vmx::Vmx;
 
 use crate::{
     error::HypervisorError,
@@ -14,14 +11,17 @@ use crate::{
     },
 };
 
+/// The bitmap used to track which processor has been virtualized.
+//static VIRTUALIZED_BITSET: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
 pub struct Vcpu {
     /// The index of the processor.
     index: u32,
 
-    /// Whether the processor is virtualized.
-    is_virtualized: bool,
+    /// The bitmap used to track which processor has been virtualized.
+    virtualized_bitset: core::sync::atomic::AtomicU64,
 
-    /// The VMX instance. Store to avoid dropping it.
+    /// The VMX instance to prevent its premature deallocation.
     vmx: OnceCell<Box<Vmx>>,
 }
 
@@ -31,30 +31,32 @@ impl Vcpu {
 
         Ok(Self {
             index,
-            is_virtualized: false,
+            virtualized_bitset: core::sync::atomic::AtomicU64::new(0),
             vmx: OnceCell::new(),
         })
     }
 
     /// Virtualize the CPU by capturing the context, enabling VMX operation, adjusting control registers, calling VMXON, VMPTRLD and VMLAUNCH
     pub fn virtualize_cpu(&mut self) -> Result<(), HypervisorError> {
-        log::info!("[+] Virtualizing processor {}", self.index);
+        log::info!("Virtualizing processor {}", self.index);
 
-        // Capture the context of the current processor. The Guest will start running from here as we capture and vmwrite the context to the guest state per vcpu
-        log::info!("[+] Capturing context");
+        // Capture the current processor's context. The Guest will resume from this point since we capture and write this context to the guest state for each vcpu.
+        log::info!("Capturing context");
         let context = self.capture_registers();
 
-        // Check if we are running as Host (root operation) or Guest (non-root operation) by checking the vendor name in the cpuid which is set in vmexit_handler -> handle_cpuid
-        // Virtualize the system only if the hypervisor is running as Host (root operation)
+        // Determine if we're operating as the Host (root) or Guest (non-root). Only proceed with system virtualization if operating as the Host.
         if !self.is_virtualized() {
-            let vmx_box = Vmx::new(context)?;
+            log::info!("Preparing for virtualization");
 
+            self.set_virtualized();
+
+            let vmx_box = Vmx::new(context)?;
             self.vmx.get_or_init(|| vmx_box);
 
-            log::info!("[+] Virtualization complete for processor {}", self.index);
+            log::info!("Virtualization complete for processor {}", self.index);
 
             // Run the VM until the VM-exit occurs.
-            log::info!("[+] Running the guest until VM-exit occurs.");
+            log::info!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
             unsafe { launch_vm() };
             // unreachable code: we should not be here
         }
@@ -62,33 +64,35 @@ impl Vcpu {
         Ok(())
     }
 
-    /// Gets the index of the current logical/virtual processor
+    /// Gets the index of the current processor
     pub fn id(&self) -> u32 {
         self.index
     }
 
-    /// Checks if the processor is virtualized by checking the vendor name in the cpuid which is set in vmexit_handler -> handle_cpuid
-    pub fn is_virtualized(&mut self) -> bool {
-        let regs = x86::cpuid::cpuid!(CPUID_VENDOR_AND_MAX_FUNCTIONS);
+    /// Checks whether the current process is already virtualized.
+    pub fn is_virtualized(&self) -> bool {
+        let bit = 1 << self.index;
 
-        if (regs.ebx == VENDOR_NAME) && (regs.ecx == VENDOR_NAME) && (regs.edx == VENDOR_NAME) {
-            self.is_virtualized = true;
-        } else {
-            self.is_virtualized = false;
-        }
-
-        return self.is_virtualized;
+        self.virtualized_bitset
+            .load(core::sync::atomic::Ordering::Relaxed)
+            & bit
+            != 0
     }
 
-    /// Capture the state of the registers (context) for the current processor.
+    /// Marks the current processor as virtualized.
+    pub fn set_virtualized(&self) {
+        let bit = 1 << self.index;
+
+        self.virtualized_bitset
+            .fetch_or(bit, core::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Capture the current processor's context. The Guest will resume from this point since we capture and write this context to the guest state for each vcpu.
     pub fn capture_registers(&self) -> Context {
-        // Contains processor-specific register data. The system uses CONTEXT structures to perform various internal operations.
-        // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-context
         let mut context = unsafe { core::mem::zeroed::<Context>() };
 
-        // The Guest will start running from here as we capture and vmwrite the context to the guest state per vcpu
         unsafe { RtlCaptureContext(&mut context) };
 
-        return context;
+        context
     }
 }

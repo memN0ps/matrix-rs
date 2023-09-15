@@ -19,12 +19,12 @@ use {
 use crate::{
     error::HypervisorError,
     x86_64::{
-        intel::{host::STACK_CONTENTS_SIZE, support::vmwrite, vmexit::vmexit_stub},
+        intel::{hostrsp::STACK_CONTENTS_SIZE, support::vmwrite, vmexit::vmexit_stub},
         utils::{addresses::PhysicalAddress, nt::Context},
     },
 };
 
-use super::{bitmap::MsrBitmap, host::Host, vmcs::Vmcs, vmxon::Vmxon};
+use super::{bitmap::MsrBitmap, hostrsp::HostRsp, vmcs::Vmcs, vmxon::Vmxon};
 
 /// Custom memory allocator Boxed pointers for the Vmxon, Vmcs, MsrBitmap and HostRsp structures are stored in the Vmx struct to ensure they are not dropped.
 pub struct Vmx {
@@ -38,17 +38,16 @@ pub struct Vmx {
     pub msr_bitmap: Box<MsrBitmap, KernelAlloc>,
 
     /// The virtual address of the VMCS_HOST_RSP naturally aligned 4-KByte region of memory (ExAllocatePool / ExAllocatePoolWithTag)
-    pub host_rsp: Box<Host, KernelAlloc>,
+    pub host_rsp: Box<HostRsp, KernelAlloc>,
 }
 
 impl Vmx {
     pub fn new(context: Context) -> Result<Box<Self>, HypervisorError> {
-        log::info!("[*] Setting up VMX");
-
+        log::info!("Setting up VMXON, VMCS, MSR Bitmap and Host RSP structures");
         let vmxon_region = Vmxon::new()?;
         let vmcs_region = Vmcs::new()?;
         let msr_bitmap = MsrBitmap::new()?;
-        let host_rsp = Host::new()?;
+        let host_rsp = HostRsp::new()?;
 
         let instance = Self {
             vmxon_region,
@@ -60,12 +59,14 @@ impl Vmx {
         let mut instance = Box::new(instance);
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
-        log::info!("[+] init_guest_register_state");
-        instance.init_guest_register_state(context);
+        log::info!("Setting up Guest Registers State");
+        instance.setup_guest_registers_state(context);
+        log::info!("Guest Registers State successful!");
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
-        log::info!("[+] init_host_register_state");
-        instance.init_host_register_state(context);
+        log::info!("Setting up Host Registers State");
+        instance.setup_host_registers_state(context);
+        log::info!("Host Registers State successful!");
 
         /*
          * VMX controls:
@@ -74,9 +75,11 @@ impl Vmx {
          * - 25.7 VM-EXIT CONTROL FIELDS
          * - 25.8 VM-ENTRY CONTROL FIELDS
          */
-        log::info!("[+] init_vmcs_control_values");
-        instance.init_vmcs_control_values();
+        log::info!("Setting up VMCS Control Fields");
+        instance.setup_vmcs_control_fields();
+        log::info!("VMCS Control Fields successful!");
 
+        log::info!("VMXON, VMCS, MSR Bitmap and Host RSP structures successful!");
         Ok(instance)
     }
 
@@ -97,23 +100,17 @@ impl Vmx {
     ///     - IA32_SYSENTER_EIP
     ///     - LINK_PTR_FULL
     #[rustfmt::skip]
-    fn init_guest_register_state(&mut self, context: Context) {
-        log::info!("[+] Guest Register State");
-
-        // Guest Control Registers
+    fn setup_guest_registers_state(&mut self, context: Context) {
         unsafe { vmwrite(guest::CR0, controlregs::cr0().bits() as u64) };
         unsafe { vmwrite(guest::CR3, controlregs::cr3()) };
         unsafe { vmwrite(guest::CR4, controlregs::cr4().bits() as u64) };
 
-        // Guest Debug Register
         vmwrite(guest::DR7, context.Dr7);
 
-        // Guest RSP, RIP and RFLAGS
         vmwrite(guest::RSP, context.Rsp);
         vmwrite(guest::RIP, context.Rip);
         vmwrite(guest::RFLAGS, context.EFlags);
 
-        // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Selector
         vmwrite(guest::CS_SELECTOR, context.SegCs);
         vmwrite(guest::SS_SELECTOR, context.SegSs);
         vmwrite(guest::DS_SELECTOR, context.SegDs);
@@ -125,7 +122,6 @@ impl Vmx {
 
         let gdt = get_current_gdt();
 
-        // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Base Address
         vmwrite(guest::CS_BASE, unpack_gdt_entry(gdt, context.SegCs).base);
         vmwrite(guest::SS_BASE, unpack_gdt_entry(gdt, context.SegSs).base);
         vmwrite(guest::DS_BASE, unpack_gdt_entry(gdt, context.SegDs).base);
@@ -135,7 +131,6 @@ impl Vmx {
         unsafe { vmwrite(guest::LDTR_BASE, unpack_gdt_entry(gdt, x86::dtables::ldtr().bits()).base) };
         unsafe { vmwrite(guest::TR_BASE, unpack_gdt_entry(gdt,  x86::task::tr().bits()).base) };
 
-        // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Limit
         vmwrite(guest::CS_LIMIT, unpack_gdt_entry(gdt, context.SegCs).limit);
         vmwrite(guest::SS_LIMIT, unpack_gdt_entry(gdt, context.SegSs).limit);
         vmwrite(guest::DS_LIMIT, unpack_gdt_entry(gdt, context.SegDs).limit);
@@ -145,7 +140,6 @@ impl Vmx {
         unsafe { vmwrite(guest::LDTR_LIMIT, unpack_gdt_entry(gdt, dtables::ldtr().bits()).limit) };
         unsafe { vmwrite(guest::TR_LIMIT, unpack_gdt_entry(gdt, task::tr().bits()).limit) };
 
-        // Guest Segment CS, SS, DS, ES, FS, GS, LDTR, and TR Access Rights
         vmwrite(guest::CS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.SegCs).access_rights);
         vmwrite(guest::SS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.SegSs).access_rights);
         vmwrite(guest::DS_ACCESS_RIGHTS, unpack_gdt_entry(gdt, context.SegDs).access_rights);
@@ -161,15 +155,12 @@ impl Vmx {
         let mut guest_idtr: dtables::DescriptorTablePointer<u64> = Default::default();
         unsafe { dtables::sidt(&mut guest_idtr); }
 
-        // Guest Segment GDTR and LDTR Base Address 
         vmwrite(guest::GDTR_BASE, guest_gdtr.base as u64);
         vmwrite(guest::IDTR_BASE, guest_idtr.base as u64);
 
-        // Guest Segment GDTR and LDTR Limit
         vmwrite(guest::GDTR_LIMIT, guest_gdtr.limit);
         vmwrite(guest::IDTR_LIMIT, guest_idtr.limit);
 
-        // Guest MSRs IA32_DEBUGCTL, IA32_SYSENTER_CS, IA32_SYSENTER_ESP, IA32_SYSENTER_EIP and LINK_PTR_FULL
         unsafe {
             vmwrite(guest::IA32_DEBUGCTL_FULL, msr::rdmsr(msr::IA32_DEBUGCTL));
             vmwrite(guest::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS));
@@ -177,8 +168,6 @@ impl Vmx {
             vmwrite(guest::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP));
             vmwrite(guest::LINK_PTR_FULL, u64::MAX);
         }
-
-        log::info!("[+] Guest initialized!");
     }
 
     /// Initialize the host state for the currently loaded VMCS.
@@ -193,26 +182,21 @@ impl Vmx {
     ///     - IA32_SYSENTER_ESP
     ///     - IA32_SYSENTER_EIP
     #[rustfmt::skip]
-    fn init_host_register_state(&mut self, context: Context) {
-        log::info!("[+] Host Register State");
-
+    fn setup_host_registers_state(&mut self, context: Context) {
         let mut host_gdtr: dtables::DescriptorTablePointer<u64> = Default::default();
         unsafe { dtables::sgdt(&mut host_gdtr); }
 
         let mut host_idtr: dtables::DescriptorTablePointer<u64> = Default::default();
         unsafe { dtables::sidt(&mut host_idtr); }
 
-        // Host Control Registers
         unsafe { vmwrite(host::CR0, controlregs::cr0().bits() as u64) };
         unsafe { vmwrite(host::CR3, controlregs::cr3()) };
         unsafe { vmwrite(host::CR4, controlregs::cr4().bits() as u64) };
 
-        // Host RIP and RSP
         let host_rsp = &mut self.host_rsp.as_ref() as *mut _ as u64;
         vmwrite(host::RIP, vmexit_stub as u64);
         vmwrite(host::RSP, host_rsp + STACK_CONTENTS_SIZE as u64);
 
-        // Host Segment CS, SS, DS, ES, FS, GS, and TR Selector
         const SELECTOR_MASK: u16 = 0xF8;
         vmwrite(host::CS_SELECTOR, context.SegCs & SELECTOR_MASK);
         vmwrite(host::SS_SELECTOR, context.SegSs & SELECTOR_MASK);
@@ -223,21 +207,18 @@ impl Vmx {
         unsafe { vmwrite(host::TR_SELECTOR, task::tr().bits() & SELECTOR_MASK) };
 
         let gdt = get_current_gdt();
-        // Host Segment FS, GS, TR, GDTR, and IDTR Base Address
+
         unsafe { vmwrite(host::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE)) };
         unsafe { vmwrite(host::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE)) };
         unsafe { vmwrite(host::TR_BASE, unpack_gdt_entry(gdt,  x86::task::tr().bits()).base) };
         vmwrite(host::GDTR_BASE, host_gdtr.base as u64);
         vmwrite(host::IDTR_BASE, host_idtr.base as u64);
 
-        // Host MSRs IA32_SYSENTER_CS, IA32_SYSENTER_ESP, IA32_SYSENTER_EIP
         unsafe {
             vmwrite(host::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS));
             vmwrite(host::IA32_SYSENTER_ESP, msr::rdmsr(msr::IA32_SYSENTER_ESP));
             vmwrite(host::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP));
         }
-
-        log::info!("[+] Host initialized!");
     }
 
     /// Initialize the VMCS control values for the currently loaded VMCS.
@@ -248,7 +229,7 @@ impl Vmx {
     /// - 25.8 VM-ENTRY CONTROL FIELDS
     /// - 25.6 VM-EXECUTION CONTROL FIELDS
     #[rustfmt::skip]
-    fn init_vmcs_control_values(&mut self) {
+    fn setup_vmcs_control_fields(&mut self) {
         const PRIMARY_CTL: u64 = PrimaryControls::SECONDARY_CONTROLS.bits() as u64;
         const SECONDARY_CTL: u64 = (SecondaryControls::ENABLE_RDTSCP.bits() | SecondaryControls::ENABLE_XSAVES_XRSTORS.bits() | SecondaryControls::ENABLE_INVPCID.bits()) as u64;
         const ENTRY_CTL: u64 = EntryControls::IA32E_MODE_GUEST.bits() as u64;
@@ -261,13 +242,10 @@ impl Vmx {
         vmwrite(vmx::vmcs::control::VMEXIT_CONTROLS, adjust_vmx_controls(VmxControl::VmExit, EXIT_CTL));
         vmwrite(vmx::vmcs::control::PINBASED_EXEC_CONTROLS, adjust_vmx_controls(VmxControl::PinBased, PINBASED_CTL));
 
-        log::info!("[+] VMCS Primary, Secondary, Entry, Exit and Pinbased, Controls initialized!");
-
-        // Control Register Shadows
         unsafe {
             vmwrite(x86::vmx::vmcs::control::CR0_READ_SHADOW, controlregs::cr0().bits() as u64);
             vmwrite(x86::vmx::vmcs::control::CR4_READ_SHADOW, controlregs::cr4().bits() as u64);
-            log::info!("[+] VMCS Controls Shadow Registers initialized!");
+            log::info!("VMCS Controls Shadow Registers initialized!");
         };
 
         let msr_bitmap_physical_address = PhysicalAddress::pa_from_va(self.msr_bitmap.as_ref() as *const _ as _);
@@ -276,7 +254,6 @@ impl Vmx {
             panic!("Failed to get physical address of MSR Bitmap");
         }
 
-        // MSRBitmap
         vmwrite(x86::vmx::vmcs::control::MSR_BITMAPS_ADDR_FULL, msr_bitmap_physical_address);
     }
 }

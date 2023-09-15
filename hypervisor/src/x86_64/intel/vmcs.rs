@@ -23,7 +23,7 @@ impl Vmcs {
     /// # VMCS Region
     /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.2 FORMAT OF THE VMCS REGION
     pub fn new() -> Result<Box<Self, PhysicalAllocator>, HypervisorError> {
-        log::info!("[*] Setting up VMCS region");
+        log::info!("Setting up VMCS region");
 
         let mut vmcs_region: Box<Vmcs, PhysicalAllocator> =
             unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
@@ -35,24 +35,24 @@ impl Vmcs {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
-        log::info!("[+] VMCS Region Virtual Address: {:p}", vmcs_region);
+        log::info!("VMCS Region Virtual Address: {:p}", vmcs_region);
         log::info!(
-            "[+] VMCS Region Physical Addresss: 0x{:x}",
+            "VMCS Region Physical Addresss: 0x{:x}",
             vmcs_region_physical_address
         );
 
         vmcs_region.revision_id = Self::get_vmcs_revision_id();
         vmcs_region.as_mut().revision_id.set_bit(31, false);
 
-        log::info!("[+] VMCS successful!");
+        log::info!("VMCS successful!");
 
         // Clear the VMCS region.
         vmclear(vmcs_region_physical_address);
-        log::info!("[+] VMCLEAR successful!");
+        log::info!("VMCLEAR successful!");
 
         // Load current VMCS pointer.
         vmptrld(vmcs_region_physical_address);
-        log::info!("[+] VMPTRLD successful!");
+        log::info!("VMPTRLD successful!");
 
         Ok(vmcs_region)
     }

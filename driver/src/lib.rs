@@ -35,19 +35,19 @@ fn panic(_info: &PanicInfo) -> ! {
 #[no_mangle]
 pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRING) -> NTSTATUS {
     KernelLogger::init(LevelFilter::Info).expect("Failed to initialize logger");
-    log::info!("[+] Driver Entry called");
+    log::info!("Driver Entry called");
 
     driver.DriverUnload = Some(driver_unload);
 
     let Ok(mut hypervisor) = Hypervisor::new() else {
-        log::error!("[-] Failed to build hypervisor");
+        log::error!("Failed to build hypervisor");
         return STATUS_UNSUCCESSFUL;
     };
 
     match hypervisor.virtualize_system() {
-        Ok(_) => log::info!("[+] Successfully virtualized system!"),
+        Ok(_) => log::info!("Successfully virtualized system!"),
         Err(err) => {
-            log::error!("[-] Failed to virtualize system: {}", err);
+            log::error!("Failed to virtualize system: {}", err);
             return STATUS_UNSUCCESSFUL;
         }
     }
@@ -61,8 +61,8 @@ pub extern "system" fn driver_unload(_driver: &mut DRIVER_OBJECT) {
     if let Some(mut hypervisor) = unsafe { HYPERVISOR.take() } {
 
         match hypervisor.devirtualize() {
-            Ok(_) => log::info!("[+] Devirtualized successfully!"),
-            Err(err) => log::error!("[-] Failed to dervirtualize {}", err),
+            Ok(_) => log::info!("Devirtualized successfully!"),
+            Err(err) => log::error!("Failed to dervirtualize {}", err),
         }
 
     }
