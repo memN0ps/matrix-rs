@@ -1,32 +1,38 @@
+# Define environment variables for the development (debug) configuration
 [env.development]
 TARGET_PATH = "../target/x86_64-pc-windows-msvc/debug"
 
+# Define environment variables for the production (release) configuration
 [env.production]
 TARGET_PATH = "../target/x86_64-pc-windows-msvc/release"
 BUILD_FLAGS = "--release"
 
+# Task to build the driver
 [tasks.build-driver]
 script = [
+    # Build using cargo with the appropriate flags (debug or release)
     "cargo b %BUILD_FLAGS%"
 ]
 
+# Task to rename the built driver from .dll to .sys
 [tasks.rename]
 dependencies = ["build-driver"]
 ignore_errors = true
 script = [
-    "cd %TARGET_PATH%",
-    "rename matrix.dll matrix.sys",
+    # Change directory to the target path and rename the file if it exists
+    "cd %TARGET_PATH% && if exist matrix.dll rename matrix.dll matrix.sys"
 ]
 
+# Task to sign the driver
 [tasks.sign]
 dependencies = ["build-driver", "rename"]
 script = [
     # Load the Visual Studio Developer environment
     "call \"%ProgramFiles%\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat\"",
 
-    # Create a self signed certificate (only if not already done)
+    # Check if the certificate exists; if not, create a self-signed certificate
     "if not exist %TARGET_PATH%/DriverCertificate.cer ( makecert -r -pe -ss PrivateCertStore -n CN=DriverCertificate %TARGET_PATH%/DriverCertificate.cer ) else ( echo Certificate already exists. )",
 
-    # Sign the driver
+    # Sign the driver using the created certificate
     "signtool sign /a /v /s PrivateCertStore /n DriverCertificate /fd certHash /t http://timestamp.digicert.com %TARGET_PATH%/matrix.sys"
 ]
