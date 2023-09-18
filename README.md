@@ -55,8 +55,16 @@ cargo install cargo-make
 
 Change directory to `.\driver\` and build driver and hypervisor
 
+### Development
+
 ```
 cargo make sign
+```
+
+### Production
+
+```
+cargo make --profile production sign
 ```
 
 ### Enable `Test Mode` or `Test Signing` Mode 
