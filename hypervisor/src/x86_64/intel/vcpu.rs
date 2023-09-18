@@ -7,19 +7,19 @@ use crate::{
     error::HypervisorError,
     x86_64::{
         intel::launch::launch_vm,
-        utils::nt::{Context, RtlCaptureContext},
+        utils::{
+            nt::{Context, RtlCaptureContext},
+            processor::current_processor_index,
+        },
     },
 };
-
-/// The bitmap used to track which processor has been virtualized.
-//static VIRTUALIZED_BITSET: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 
 pub struct Vcpu {
     /// The index of the processor.
     index: u32,
 
     /// The bitmap used to track which processor has been virtualized.
-    virtualized_bitset: core::sync::atomic::AtomicU64,
+    //virtualized_bitset: core::sync::atomic::AtomicU64,
 
     /// The VMX instance to prevent its premature deallocation.
     vmx: OnceCell<Box<Vmx>>,
@@ -31,7 +31,7 @@ impl Vcpu {
 
         Ok(Self {
             index,
-            virtualized_bitset: core::sync::atomic::AtomicU64::new(0),
+            //virtualized_bitset: core::sync::atomic::AtomicU64::new(0),
             vmx: OnceCell::new(),
         })
     }
@@ -42,13 +42,15 @@ impl Vcpu {
 
         // Capture the current processor's context. The Guest will resume from this point since we capture and write this context to the guest state for each vcpu.
         log::info!("Capturing context");
-        let context = self.capture_registers();
+        let mut context = unsafe { core::mem::zeroed::<Context>() };
+
+        unsafe { RtlCaptureContext(&mut context) };
 
         // Determine if we're operating as the Host (root) or Guest (non-root). Only proceed with system virtualization if operating as the Host.
-        if !self.is_virtualized() {
+        if !is_virtualized() {
             log::info!("Preparing for virtualization");
 
-            self.set_virtualized();
+            set_virtualized();
 
             let vmx_box = Vmx::new(context)?;
             self.vmx.get_or_init(|| vmx_box);
@@ -69,6 +71,7 @@ impl Vcpu {
         self.index
     }
 
+    /*
     /// Checks whether the current process is already virtualized.
     pub fn is_virtualized(&self) -> bool {
         let bit = 1 << self.index;
@@ -86,13 +89,23 @@ impl Vcpu {
         self.virtualized_bitset
             .fetch_or(bit, core::sync::atomic::Ordering::Relaxed);
     }
+    */
+}
 
-    /// Capture the current processor's context. The Guest will resume from this point since we capture and write this context to the guest state for each vcpu.
-    pub fn capture_registers(&self) -> Context {
-        let mut context = unsafe { core::mem::zeroed::<Context>() };
+// Global Bitmap vs. Instance Variable approach. Which one is better and why?
+/// The bitmap used to track which processor has been virtualized.
+static VIRTUALIZED_BITSET: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 
-        unsafe { RtlCaptureContext(&mut context) };
+/// Checks whether the current process is already virtualized.
+pub fn is_virtualized() -> bool {
+    let bit = 1 << current_processor_index();
 
-        context
-    }
+    VIRTUALIZED_BITSET.load(core::sync::atomic::Ordering::Relaxed) & bit != 0
+}
+
+/// Marks the current processor as virtualized.
+pub fn set_virtualized() {
+    let bit = 1 << current_processor_index();
+
+    VIRTUALIZED_BITSET.fetch_or(bit, core::sync::atomic::Ordering::Relaxed);
 }

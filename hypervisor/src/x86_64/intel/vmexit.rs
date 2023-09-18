@@ -36,20 +36,20 @@ impl VmExit {
         &self,
         registers: &mut GuestRegisters,
     ) -> Result<VmxBasicExitReason, HypervisorError> {
-        log::info!("VMEXIT occurred at RIP: {:#x}", vmread(guest::RIP));
-        log::info!("VMEXIT occurred at RSP: {:#x}", vmread(guest::RSP));
+        //log::info!("VMEXIT occurred at RIP: {:#x}", vmread(guest::RIP));
+        //log::info!("VMEXIT occurred at RSP: {:#x}", vmread(guest::RSP));
 
         // Every VM exit writes a 32-bit exit reason to the VMCS (see Section 25.9.1). Certain VM-entry failures also do this (see Section 27.8).
         // The low 16 bits of the exit-reason field form the basic exit reason which provides basic information about the cause of the VM exit or VM-entry failure.
         let exit_reason = vmread(vmcs::ro::EXIT_REASON) as u32;
-        log::info!("VMEXIT Reason: {:#x}", exit_reason);
+        //log::info!("VMEXIT Reason: {:#x}", exit_reason);
 
         let Some(basic_exit_reason) = VmxBasicExitReason::from_u32(exit_reason) else {
             log::error!("[!] Unknown exit reason: {:#x}", exit_reason);
             return Err(HypervisorError::UnknownVMExitReason);
         };
 
-        log::info!("Basic Exit Reason: {}", basic_exit_reason);
+        //log::info!("Basic Exit Reason: {}", basic_exit_reason);
 
         /* Handle VMEXIT */
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.2 Instructions That Cause VM Exits Unconditionally */
@@ -64,9 +64,9 @@ impl VmExit {
             _ => panic!("Unhandled VMEXIT: {}", basic_exit_reason),
         }
 
-        log::info!("Advancing guest RIP...");
+        //log::info!("Advancing guest RIP...");
         self.advance_guest_rip();
-        log::info!("Guest RIP advanced to: {:#x}", vmread(guest::RIP));
+        //log::info!("Guest RIP advanced to: {:#x}", vmread(guest::RIP));
 
         return Ok(basic_exit_reason);
     }
@@ -79,14 +79,16 @@ impl VmExit {
         let sub_leaf = registers.rcx as u32;
 
         // First parameter is cpuid leaf (EAX register value), second optional parameter is the subleaf (ECX register value).
-        let mut cpuid_result = x86::cpuid::cpuid!(leaf, sub_leaf);
+        let cpuid_result = x86::cpuid::cpuid!(leaf, sub_leaf);
 
+        /* Uncomment later if needed
         if leaf == EAX_HYPERVISOR_PRESENT {
             // Clearing VT-x Support: If the leaf value is 1 (which corresponds to the standard CPUID function that returns feature information),
             // We clear bit 5 in the ECX register, which is used to indicate support for VT-x (Virtualization Technology),
             // to prevent the guest from recognizing VT-x support and attempting to use it.
             cpuid_result.ecx &= !(1 << 5);
         }
+        */
 
         // Update the Guest registers with cpuid result
         registers.rax = cpuid_result.eax as u64;
@@ -178,14 +180,15 @@ impl VmExit {
 /// Reverse order because when you push something on stack the last thing you push will be at the top of the stack
 #[no_mangle]
 pub unsafe extern "C" fn vmexit_handler(registers: *mut GuestRegisters) -> u16 {
-    log::info!("Called VMEXIT Handler...");
+    //log::info!("Called VMEXIT Handler...");
+
     let registers = unsafe { &mut *registers };
 
     let vmexit = VmExit::new();
 
     match vmexit.handle_vmexit(registers) {
         Ok(vmexit_basic_reason) => {
-            log::info!("VMEXIT handled successfully!");
+            //log::info!("VMEXIT handled successfully!");
             return vmexit_basic_reason as u16; // we return the vmexit basic reason if it's needed by the caller
         }
         Err(e) => {

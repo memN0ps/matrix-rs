@@ -2,13 +2,14 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
+use alloc::vec::Vec;
 use winapi::{
     km::wdm::KIRQL,
     shared::ntdef::{
         NTSTATUS, PGROUP_AFFINITY, PHYSICAL_ADDRESS, PPROCESSOR_NUMBER, PVOID, UNICODE_STRING,
     },
+    um::winnt::CONTEXT,
 };
-use windows_sys::Win32::System::Diagnostics::Debug::CONTEXT;
 
 extern "system" {
     pub static KdDebuggerNotPresent: *mut bool;
@@ -126,38 +127,39 @@ pub struct RTL_BITMAP {
 pub type PRTL_BITMAP = *mut RTL_BITMAP;
 
 /// Gets ta pointer to a function from ntoskrnl exports
-fn get_ntoskrnl_exports(function_name: *mut UNICODE_STRING) -> PVOID {
-    //The MmGetSystemRoutineAddress routine returns a pointer to a function specified by SystemRoutineName.
-    return unsafe { MmGetSystemRoutineAddress(function_name) };
+fn get_ntoskrnl_export(function_name: *mut UNICODE_STRING) -> PVOID {
+    // The MmGetSystemRoutineAddress routine returns a pointer to a function specified by SystemRoutineName.
+    unsafe { MmGetSystemRoutineAddress(function_name) }
 }
 
+/// Raises the current IRQL to DISPATCH_LEVEL and returns the previous IRQL.
 pub fn KeRaiseIrqlToDpcLevel() -> KIRQL {
     type FnKeRaiseIrqlToDpcLevel = unsafe extern "system" fn() -> KIRQL;
 
-    //KeRaiseIrqlToDpcLevel
-    let unicode_function_name =
-        &mut create_unicode_string(obfstr::wide!("KeRaiseIrqlToDpcLevel\0")) as *mut UNICODE_STRING;
+    // Include the null terminator for the C-style API
+    let wide_string: Vec<u16> = "KeRaiseIrqlToDpcLevel\0".encode_utf16().collect();
 
-    let function_address = get_ntoskrnl_exports(unicode_function_name);
-
-    let pKeRaiseIrqlToDpcLevel =
-        unsafe { core::mem::transmute::<PVOID, FnKeRaiseIrqlToDpcLevel>(function_address) };
-
-    return unsafe { pKeRaiseIrqlToDpcLevel() };
-}
-
-pub fn create_unicode_string(s: &[u16]) -> UNICODE_STRING {
-    let len = s.len();
-
-    let n = if len > 0 && s[len - 1] == 0 {
-        len - 1
-    } else {
-        len
+    let mut unicode_string = UNICODE_STRING {
+        // Length in bytes, excluding the null terminator
+        Length: ((wide_string.len() - 1) * 2) as u16,
+        MaximumLength: (wide_string.len() * 2) as u16,
+        Buffer: wide_string.as_ptr() as *mut _,
     };
 
-    UNICODE_STRING {
-        Length: (n * 2) as u16,
-        MaximumLength: (len * 2) as u16,
-        Buffer: s.as_ptr() as _,
-    }
+    // Get the address of the function from ntoskrnl
+    let routine_address = get_ntoskrnl_export(&mut unicode_string);
+
+    let pKeRaiseIrqlToDpcLevel =
+        unsafe { core::mem::transmute::<PVOID, FnKeRaiseIrqlToDpcLevel>(routine_address) };
+
+    // Ensure the wide_string doesn't get dropped while the UNICODE_STRING is in use
+    core::mem::forget(wide_string);
+
+    // Invoke the retrieved function
+    unsafe { pKeRaiseIrqlToDpcLevel() }
+}
+
+/// Lowers the current IRQL to the specified value.
+pub fn KeLowerIrqlToOldLevel(old_irql: KIRQL) {
+    unsafe { KeLowerIrql(old_irql) };
 }
