@@ -1,5 +1,7 @@
+use kernel_alloc::PhysicalAllocator;
+
 use crate::error::HypervisorError;
-use {alloc::boxed::Box, kernel_alloc::KernelAlloc};
+use alloc::boxed::Box;
 
 /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.6.9 MSR-Bitmap Address
 /// On processors that support the 1-setting of the “use MSR bitmaps” VM-execution control, the VM-execution control
@@ -35,10 +37,10 @@ pub struct MsrBitmap {
 }
 
 impl MsrBitmap {
-    pub fn new() -> Result<Box<Self, KernelAlloc>, HypervisorError> {
+    pub fn new() -> Result<Box<Self, PhysicalAllocator>, HypervisorError> {
         log::info!("Setting up MSR-Bitmap");
-        let msr_bitmap: Box<MsrBitmap, KernelAlloc> =
-            unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
+        let msr_bitmap: Box<MsrBitmap, PhysicalAllocator> =
+            unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
 
         log::info!("MSR-Bitmap Virtual Address: {:p}", msr_bitmap);
 

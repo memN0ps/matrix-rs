@@ -168,6 +168,14 @@ impl VmExit {
         );
     }
 
+    /// Advances the guest's instruction pointer (RIP) after a VM exit.
+    ///
+    /// When a VM exit occurs, the guest's execution is interrupted, and control is transferred
+    /// to the hypervisor. To ensure that the guest does not re-execute the instruction that
+    /// caused the VM exit (which would lead to another VM exit), the hypervisor needs to advance
+    /// the guest's RIP to the next instruction. This function reads the length of the instruction
+    /// that caused the VM exit and updates the guest's RIP accordingly, ensuring smooth
+    /// continuation of the guest's execution.
     fn advance_guest_rip(&self) {
         let mut rip = vmread(guest::RIP);
         let len = vmread(VMEXIT_INSTRUCTION_LEN);

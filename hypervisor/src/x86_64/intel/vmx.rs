@@ -34,8 +34,8 @@ pub struct Vmx {
     /// The virtual address of the Vmcs naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode)
     pub vmcs_region: Box<Vmcs, PhysicalAllocator>,
 
-    // The virtual address of the MSR Bitmap naturally aligned 4-KByte region of memory (ExAllocatePool / ExAllocatePoolWithTag)
-    pub msr_bitmap: Box<MsrBitmap, KernelAlloc>,
+    // The virtual address of the MSR Bitmap naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode)
+    pub msr_bitmap: Box<MsrBitmap, PhysicalAllocator>,
 
     /// The virtual address of the VMCS_HOST_RSP naturally aligned 4-KByte region of memory (ExAllocatePool / ExAllocatePoolWithTag)
     pub host_rsp: Box<HostRsp, KernelAlloc>,
@@ -245,7 +245,6 @@ impl Vmx {
         unsafe {
             vmwrite(x86::vmx::vmcs::control::CR0_READ_SHADOW, controlregs::cr0().bits() as u64);
             vmwrite(x86::vmx::vmcs::control::CR4_READ_SHADOW, controlregs::cr4().bits() as u64);
-            log::info!("VMCS Controls Shadow Registers initialized!");
         };
 
         let msr_bitmap_physical_address = PhysicalAddress::pa_from_va(self.msr_bitmap.as_ref() as *const _ as _);
