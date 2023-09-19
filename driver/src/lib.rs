@@ -1,7 +1,6 @@
 #![no_std]
 
 use hypervisor::Hypervisor;
-use kernel_log::KernelLogger;
 use log::LevelFilter;
 use winapi::{
     km::wdm::DRIVER_OBJECT,
@@ -34,7 +33,17 @@ fn panic(_info: &PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "system" fn driver_entry(driver: &mut DRIVER_OBJECT, _: &UNICODE_STRING) -> NTSTATUS {
-    KernelLogger::init(LevelFilter::Info).expect("Failed to initialize logger");
+    //KernelLogger::init(LevelFilter::Info).expect("Failed to initialize logger");
+
+    /* Setup a logger with the default settings. The default settings is COM1 port with level filter Info */
+    //com_logger::init();
+
+    // Use COM2 port with level filter Info
+    com_logger::builder()
+        .base(0x2f8)
+        .filter(LevelFilter::Info)
+        .setup();
+
     log::info!("Driver Entry called");
 
     driver.DriverUnload = Some(driver_unload);
