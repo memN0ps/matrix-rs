@@ -2,19 +2,9 @@ use crate::x86_64::intel::{support::vmread, vmerror::VmInstructionError};
 
 use super::vmexit::VmExit;
 
-/// The collection of XMM register values.
-#[derive(Debug, Clone, Copy, Default)]
-#[repr(C)]
-pub struct Xmm {
-    value: [u8; 16],
-}
-
-/// The collection of the guest general purpose register values.
-#[derive(Debug, Clone, Copy, Default)]
+/// Guest registers.
 #[repr(C)]
 pub struct GuestRegisters {
-    pub xmm: [Xmm; 6],
-    pub alignment: u64,
     pub r15: u64,
     pub r14: u64,
     pub r13: u64,
@@ -26,11 +16,16 @@ pub struct GuestRegisters {
     pub rdi: u64,
     pub rsi: u64,
     pub rbp: u64,
+    pub rsp: u64,
     pub rbx: u64,
     pub rdx: u64,
     pub rcx: u64,
     pub rax: u64,
 }
+const_assert_eq!(
+    core::mem::size_of::<GuestRegisters>(),
+    0x80 /* 16 * 0x8 */
+);
 
 extern "C" {
     /// Run the VM until the VM-exit occurs.
@@ -41,100 +36,86 @@ extern "C" {
 // Inline assembly for VM operations
 core::arch::global_asm!(
     r#"
-    .global launch_vm
-    launch_vm:
-        // Save general purpose registers onto stack
-        push    rax
-        push    rcx
-        push    rdx
-        push    rbx
-        push    rbp
-        push    rsi
-        push    rdi
-        push    r8
-        push    r9
-        push    r10
-        push    r11
-        push    r12
-        push    r13
-        push    r14
-        push    r15
+.global launch_vm
+launch_vm:
+    // The host's state is saved in the VMCS before executing `vmlaunch`.
+    // The processor will automatically save and restore the host's state using the VMCS.
+    vmlaunch
 
-        // Launch the VM until a VM-exit occurs
-        vmlaunch
+    // If vmlaunch fails, call the error handler
+    call    vmlaunch_failed
 
-        // If vmlaunch fails, call the error handler
-        call    vmlaunch_failed
+.global vmexit_stub
+vmexit_stub:
+    // On VM-exit, the processor saves some of the guest's state in the VMCS, but not all.
+    // Manually save the rest of the guest's state to ensure full restoration on `vmresume`.
 
-    .global vmexit_stub
-    vmexit_stub:
-        // Ensure stack alignment
-        sub    rsp, 8
+    // Save general purpose registers
+    push    rax
+    push    rcx
+    push    rdx
+    push    rbx
+    push    -1      // Dummy for rsp.
+    push    rbp
+    push    rsi
+    push    rdi
+    push    r8
+    push    r9
+    push    r10
+    push    r11
+    push    r12
+    push    r13
+    push    r14
+    push    r15
 
-        // Save general purpose registers
-        push    rax
-        push    rcx
-        push    rdx
-        push    rbx
-        push    rbp
-        push    rsi
-        push    rdi
-        push    r8
-        push    r9
-        push    r10
-        push    r11
-        push    r12
-        push    r13
-        push    r14
-        push    r15
+    // Set rcx to point to the saved guest registers for the vmexit_handler.
+    mov     rcx, rsp
 
-        // Save xmm registers
-        sub     rsp,   0x70  // Increased this for more space
-        movaps  xmmword ptr [rsp +  0x00], xmm0
-        movaps  xmmword ptr [rsp + 0x10], xmm1
-        movaps  xmmword ptr [rsp + 0x20], xmm2
-        movaps  xmmword ptr [rsp + 0x30], xmm3
-        movaps  xmmword ptr [rsp + 0x40], xmm4
-        movaps  xmmword ptr [rsp + 0x50], xmm5
+    // Allocate stack space and save XMM registers.
+    sub     rsp, 0x20 + 0x60
+    movaps  [rsp + 0x20], xmm0
+    movaps  [rsp + 0x20 + 0x10], xmm1
+    movaps  [rsp + 0x20 + 0x20], xmm2
+    movaps  [rsp + 0x20 + 0x30], xmm3
+    movaps  [rsp + 0x20 + 0x40], xmm4
+    movaps  [rsp + 0x20 + 0x50], xmm5
 
-        // Call vmexit_handler
-        call    vmexit_handler
+    // Handle the VM-exit event
+    call    vmexit_handler
 
-        // Restore xmm registers
-        movaps  xmm0, xmmword ptr [rsp +  0x00]
-        movaps  xmm1, xmmword ptr [rsp + 0x10]
-        movaps  xmm2, xmmword ptr [rsp + 0x20]
-        movaps  xmm3, xmmword ptr [rsp + 0x30]
-        movaps  xmm4, xmmword ptr [rsp + 0x40]
-        movaps  xmm5, xmmword ptr [rsp + 0x50]
-        add     rsp, 0x70  // Match the increased space
+    // Restore XMM registers and adjust the stack pointer
+    movaps  xmm5, [rsp + 0x20 + 0x50]
+    movaps  xmm4, [rsp + 0x20 + 0x40]
+    movaps  xmm3, [rsp + 0x20 + 0x30]
+    movaps  xmm2, [rsp + 0x20 + 0x20]
+    movaps  xmm1, [rsp + 0x20 + 0x10]
+    movaps  xmm0, [rsp + 0x20]
+    add     rsp, 0x20 + 0x60
 
-        // Restore general purpose registers
-        pop     r15
-        pop     r14
-        pop     r13
-        pop     r12
-        pop     r11
-        pop     r10
-        pop     r9
-        pop     r8
-        pop     rdi
-        pop     rsi
-        pop     rbp
-        pop     rbx
-        pop     rdx
-        pop     rcx
-        pop     rax
+    // Restore general purpose registers
+    pop     r15
+    pop     r14
+    pop     r13
+    pop     r12
+    pop     r11
+    pop     r10
+    pop     r9
+    pop     r8
+    pop     rdi
+    pop     rsi
+    pop     rbp
+    pop     rbx    // Dummy for rsp.
+    pop     rbx
+    pop     rdx
+    pop     rcx
+    pop     rax
 
-        // Restore the stack alignment
-        add    rsp, 8
+    // Attempt to resume VM execution
+    vmresume
 
-        // Resume VM
-        vmresume
-
-        // If vmresume fails, call the error handler
-        call vmresume_failed
-    "#
+    // If vmresume fails, call the error handler
+    call vmresume_failed
+"#
 );
 
 /// The first parameter is a pointer to GuestRegisters that were just saved on the stack in reverse order.
