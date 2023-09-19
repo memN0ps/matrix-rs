@@ -12,10 +12,7 @@ use alloc::vec::Vec;
 use error::HypervisorError;
 use x86_64::intel::vcpu::Vcpu;
 
-use crate::x86_64::utils::{
-    nt::{KeLowerIrqlToOldLevel, KeRaiseIrqlToDpcLevel},
-    processor::{processor_count, ProcessorExecutor},
-};
+use crate::x86_64::utils::processor::{processor_count, ProcessorExecutor};
 extern crate alloc;
 
 pub mod error;
@@ -48,15 +45,11 @@ impl Hypervisor {
         log::info!("Virtualizing processors");
 
         for processor in self.processors.iter_mut() {
-            let old_irql = KeRaiseIrqlToDpcLevel();
-
             let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
                 return Err(HypervisorError::ProcessorSwitchFailed);
             };
 
             processor.virtualize_cpu()?;
-
-            KeLowerIrqlToOldLevel(old_irql);
 
             core::mem::drop(executor);
         }
