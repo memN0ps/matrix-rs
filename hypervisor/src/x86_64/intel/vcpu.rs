@@ -6,7 +6,7 @@ use super::vmx::Vmx;
 use crate::{
     error::HypervisorError,
     x86_64::{
-        intel::launch::launch_vm,
+        intel::vmlaunch::launch_vm,
         utils::{
             nt::{Context, RtlCaptureContext},
             processor::current_processor_index,

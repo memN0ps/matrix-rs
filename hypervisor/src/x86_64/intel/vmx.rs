@@ -19,7 +19,7 @@ use {
 use crate::{
     error::HypervisorError,
     x86_64::{
-        intel::{hostrsp::STACK_CONTENTS_SIZE, support::vmwrite, vmexit::vmexit_stub},
+        intel::{hostrsp::STACK_CONTENTS_SIZE, support::vmwrite, vmlaunch::vmexit_stub},
         utils::{addresses::PhysicalAddress, nt::Context},
     },
 };
