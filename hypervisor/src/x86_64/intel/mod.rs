@@ -1,7 +1,7 @@
-pub mod bitmap;
 pub mod ept;
 pub mod events;
-pub mod hostrsp;
+pub mod host_rsp;
+pub mod msr_bitmap;
 pub mod support;
 pub mod vcpu;
 pub mod vmcs;

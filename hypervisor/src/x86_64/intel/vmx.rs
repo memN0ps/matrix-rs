@@ -19,12 +19,12 @@ use {
 use crate::{
     error::HypervisorError,
     x86_64::{
-        intel::{hostrsp::STACK_CONTENTS_SIZE, support::vmwrite, vmlaunch::vmexit_stub},
+        intel::{host_rsp::STACK_CONTENTS_SIZE, support::vmwrite, vmlaunch::vmexit_stub},
         utils::{addresses::PhysicalAddress, nt::Context},
     },
 };
 
-use super::{bitmap::MsrBitmap, hostrsp::HostRsp, vmcs::Vmcs, vmxon::Vmxon};
+use super::{host_rsp::HostRsp, msr_bitmap::MsrBitmap, vmcs::Vmcs, vmxon::Vmxon};
 
 /// Custom memory allocator Boxed pointers for the Vmxon, Vmcs, MsrBitmap and HostRsp structures are stored in the Vmx struct to ensure they are not dropped.
 pub struct Vmx {
