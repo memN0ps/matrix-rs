@@ -8,6 +8,9 @@
 #![feature(once_cell_try)]
 #![feature(decl_macro)]
 
+#[macro_use]
+extern crate static_assertions;
+
 use alloc::vec::Vec;
 use error::HypervisorError;
 use x86_64::intel::vcpu::Vcpu;

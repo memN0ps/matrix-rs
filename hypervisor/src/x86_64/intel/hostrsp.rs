@@ -12,6 +12,8 @@ pub struct HostRsp {
     pub padding_1: u64,
     pub reserved_1: u64,
 }
+const_assert_eq!(core::mem::size_of::<HostRsp>(), KERNEL_STACK_SIZE);
+const_assert_eq!(STACK_CONTENTS_SIZE % 16, 0);
 
 impl HostRsp {
     pub fn new() -> Result<Box<Self, KernelAlloc>, HypervisorError> {
