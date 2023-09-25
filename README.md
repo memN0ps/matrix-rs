@@ -1,5 +1,7 @@
 # Windows Blue Pill Type-2 Hypervisor in Rust (Codename: Matrix)
 
+* Blog: https://memn0ps.github.io/hypervisor-development-in-rust-part-1/
+
 This project is a Rust-based research hypervisor for Intel VT-x and AMD-v (SVM) virtualization, designed to be lightweight and focused on studying the core concepts. While it currently lacks a memory management unit (MMU) for virtualization using Intel's Extended Page Tables (EPT) and AMD's Nested Page Tables (NPT), these features are planned for future implementation.
 
 Big thanks to [@daax_rynd](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/), [@Intel80x86](https://github.com/SinaKarvandi/Hypervisor-From-Scratch/), [@not_matthias](https://github.com/not-matthias/amd_hypervisor), and [@standa_t](https://github.com/tandasat/Hypervisor-101-in-Rust) for their awesome blogs and code. They’ve been incredibly helpful!
