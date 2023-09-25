@@ -120,7 +120,7 @@ For more focused and efficient kernel development troubleshooting, set up filter
 4. Name it `DEFAULT`.
 5. Set its `Value data` to `8`.
 
-## [Creating and Starting a Service](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sc-create)
+### 5. [Creating and Starting a Service](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/sc-create)
 
 ```
 sc.exe create matrix type= kernel binPath= C:\Windows\System32\drivers\matrix.sys
@@ -171,7 +171,7 @@ This project has been inspired, influenced, and supported by numerous individual
 - **iPower**: [KasperskyHook](https://github.com/iPower/KasperskyHook)
 
 ### Videos
-- **[Gamozo Labs]**: [Orange Slice: Writing the Hypervisor](https://www.youtube.com/watch?v=WabeOICAOq4&list=PLSkhUfcCXvqFJAuFbABktmLaQvJwKxJ3i)
+- **Gamozo Labs**: [Orange Slice: Writing the Hypervisor](https://www.youtube.com/watch?v=WabeOICAOq4&list=PLSkhUfcCXvqFJAuFbABktmLaQvJwKxJ3i)
 
 ### Forums & Communities
 - [UnknownCheats](https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html)
