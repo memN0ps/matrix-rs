@@ -133,7 +133,10 @@ sc.exe start matrix
 This project has been inspired, influenced, and supported by numerous individuals and resources. A huge shout-out and thank you to everyone listed below:
 
 ### Tutorials & Articles
-- **Daax Rynd**: [7 Days to Virtualization: A Series on Hypervisor Development](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/)
+
+- **Daax Rynd**:
+  - [7 Days to Virtualization: A Series on Hypervisor Development](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/)
+  - [MMU Virtualization via Intel EPT](https://revers.engineering/mmu-virtualization-via-intel-ept-index/)
 - **Sina Karvandi**: [Hypervisor From Scratch](https://rayanfam.com/tutorials/)
 - **Back Engineering Labs**: [AMD-V Hypervisor Development](https://blog.back.engineering/04/08/2022/)
 - **Secret Club**:
@@ -147,6 +150,7 @@ This project has been inspired, influenced, and supported by numerous individual
 - **Advanced Micro Devices, Inc. (AMD)**: [AMD Software Developer's Manual](https://www.amd.com/)
 
 ### Projects & Repositories
+
 - **Matthias**: [AMD Hypervisor](https://github.com/not-matthias/amd_hypervisor/)
 - **Satoshi Tanda**:
   - [Hypervisor 101 in Rust](https://github.com/tandasat/Hypervisor-101-in-Rust)
@@ -171,19 +175,25 @@ This project has been inspired, influenced, and supported by numerous individual
 - **iPower**: [KasperskyHook](https://github.com/iPower/KasperskyHook)
 
 ### Videos
+
 - **Gamozo Labs**: [Orange Slice: Writing the Hypervisor](https://www.youtube.com/watch?v=WabeOICAOq4&list=PLSkhUfcCXvqFJAuFbABktmLaQvJwKxJ3i)
+- **Guided Hacking**: [x64 Virtual Address Translation](https://www.youtube.com/watch?v=W3o5jYHMh8s)
 
 ### Forums & Communities
-- [UnknownCheats](https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html)
+
+- [UnKnoWnCheaTs](https://www.unknowncheats.me/)
+- [Guided Hacking](https://guidedhacking.com/)
 
 ### Special Thanks
-- [@not_matthias](https://twitter.com/not_matthias)
-- [@rmccrystal](https://github.com/rmccrystal)
-- `@jessiep_ aka Jess`
-- [@felix-rs / @joshuа](https://github.com/felix-rs)
-- `@vmprotect aka Jim Colerick`
-- [Christopher aka Kharosx0](https://twitter.com/Kharosx0)
-- [@namazso](https://github.com/namazso) for [this post](https://www.unknowncheats.me/forum/2779560-post4.html)
+
+- [@not_matthias](https://twitter.com/not_matthias) for your project, answering a lot questions, helping in some errors, and being really helpful.
+- [@felix-rs / @joshuа](https://github.com/felix-rs) for answering a lot questions, helping in some errors, and being really helpful.
+- `@jessiep_ aka Jess` for answering a lot of questions.
+- `@vmprotect aka Jim Colerick` for helping in some errors and answering a few questions.
+- [@rmccrystal](https://github.com/rmccrystal) for answering a few questions.
+- [Christopher aka Kharosx0](https://twitter.com/Kharosx0) for answering a couple of questions.
+- [@namazso](https://github.com/namazso) for [this post](https://www.unknowncheats.me/forum/2779560-post4.html).
 
 ### Conceptual Clarifications
+
 - [Difference between Trap and Interrupt](https://stackoverflow.com/questions/3149175/what-is-the-difference-between-trap-and-interrupt/37558741#37558741)
