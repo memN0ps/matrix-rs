@@ -6,6 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+wdk = "0.1.0"
+wdk-alloc = "0.1.0"
+wdk-panic = "0.1.0"
+wdk-sys = "0.1.0"
 x86 = "0.52.0" # https://crates.io/crates/x86
 x86_64 = "0.14.10" # https://crates.io/crates/x86_64
 log = "0.4.19" # https://crates.io/crates/log
@@ -17,33 +21,7 @@ bitflags = "2.3.3" # https://crates.io/crates/bitflags
 elain = "0.3.0" # https://crates.io/crates/elain
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] } # https://crates.io/crates/lazy_static
 obfstr = "0.4.3" # https://crates.io/crates/obfstr/
-winapi = { git = "https://github.com/Trantect/winapi-rs.git", branch = "feature/km", default-features = false, features = ["wdm", "ntstatus"] }
 static_assertions = "1.1.0" # https://crates.io/crates/static_assertions
 
-[dependencies.windows-sys]
-version = "0.48.0"
-features = [
-    "Win32_Foundation",
-    "Win32_Security",
-    "Win32_System_Threading",
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_System_Memory",
-    "Win32_System_Diagnostics_Debug",
-    "Win32_System_SystemServices",
-    "Win32_System_WindowsProgramming",
-    "Win32_System_LibraryLoader",
-    "Win32_NetworkManagement_IpHelper",
-    "Win32_Networking_WinSock",
-    "Win32_System_SystemInformation",
-    "Win32_System_Environment",
-    "Win32_System_ProcessStatus",
-    "Win32_Globalization",
-    "Win32_System_Diagnostics_ToolHelp",
-    "Win32_System_Kernel",
-    "Win32_System_Pipes",
-    "Win32_Storage_FileSystem",
-    "Win32_System_IO",
-    "Win32_Networking_ActiveDirectory",
-    "Win32_Security_Authentication_Identity",
-    "Win32_System_Ioctl"
-]
+[build-dependencies]
+wdk-build = "0.1.0"
