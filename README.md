@@ -38,42 +38,66 @@ I’ve also been learning a lot by preparing for the legendary [Satoshi Tanda's 
 
 ## Install
 
-### [Install Rust](https://www.rust-lang.org/tools/install)
+### Install [Rust](https://www.rust-lang.org/tools/install)
 
 To start using Rust, [download the installer](https://www.rust-lang.org/tools/install), then run the program and follow the onscreen instructions. You may need to install the [Visual Studio C++ Build tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) when prompted to do so.
 
 
-### [Install and change to Rust nightly](https://rust-lang.github.io/rustup/concepts/channels.html)
+### Install and change to [Rust nightly](https://rust-lang.github.io/rustup/concepts/channels.html)
+
+Execute the following commands to switch to the nightly version of Rust:
 
 ```
 rustup toolchain install nightly
 rustup default nightly
 ```
 
-### [Install cargo-make](https://github.com/sagiegurari/cargo-make)
+### Install [LLVM](https://github.com/llvm/llvm-project)
+
+The LLVM Toolkit is essential for generating bindings via `bindgen` due to its dependency on `libclang`. For Windows users, the recommended method to install LLVM and acquire `libclang` is through the `winget` package manager. Execute the following command to install:
 
 ```
-cargo install cargo-make
+winget install LLVM.LLVM
 ```
 
-### [Install WDK/SDK](https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk)
+### Install [cargo-make](https://github.com/sagiegurari/cargo-make)
 
-* Step 1: Install Visual Studio 2022
-* Step 2: Install Windows 11, version 22H2 SDK
-* Step 3: Install Windows 11, version 22H2 WDK
+Install the `cargo-make` tool with the following command:
+
+```
+cargo install --locked cargo-make --no-default-features --features tls-native
+```
+
+### Install [cargo-expand](https://github.com/dtolnay/cargo-expand), [cargo-edit](https://github.com/killercup/cargo-edit), and [cargo-workspaces](https://github.com/pksunkara/cargo-workspaces) (Optional)
+
+While it's not mandatory to install `cargo-expand`, `cargo-edit`, and `cargo-workspaces`, doing so can enhance your Rust development experience. Use the command below to install them:
+
+```
+cargo install cargo-expand cargo-edit cargo-workspaces
+```
+
+### [Install WDK/SDK/EWDK](https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk)
+
+- Step 1: Install Visual Studio 2022
+- Step 2: Install Windows 11, version 22H2 SDK
+- Step 3: Install Windows 11, version 22H2 WDK
+- Step 4: Install Windows 11, version 22H2 (updated May 2023) EWDK with Visual Studio Build Tools
+  - Expand the `.zip/.iso` file into an appropriately named directory, such as `d:\ewdk`.
+  - Expand the `.zip/.iso` file into an appropriately named directory, such as `d:\ewdk`.
+  - From an Administrator command prompt, navigate to the expanded folder in the previous step, and then run `LaunchBuildEnv.cmd` to create the build environment. For example: `D:\ewdk\LaunchBuildEnv.cmd`
 
 ## Build
 
 ### Development
 
 ```
-cargo make --cwd .\driver\ --profile development sign
+cargo make --profile release
 ```
 
 ### Production
 
 ```
-cargo make --cwd .\driver\ --profile production sign
+cargo make --profile development
 ```
 
 ## Debugging (Optional)
