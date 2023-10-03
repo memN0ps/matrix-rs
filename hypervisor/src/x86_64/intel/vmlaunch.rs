@@ -24,7 +24,7 @@ pub struct GuestRegisters {
 }
 const_assert_eq!(
     core::mem::size_of::<GuestRegisters>(),
-    0x80 /* 16 * 0x8 */
+    0x80 /* 16 * 0x80 */
 );
 
 extern "C" {

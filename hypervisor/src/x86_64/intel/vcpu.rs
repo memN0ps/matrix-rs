@@ -1,17 +1,13 @@
 use {alloc::boxed::Box, core::cell::OnceCell};
 extern crate alloc;
 
+use wdk_sys::{ntddk::RtlCaptureContext, _CONTEXT};
+
 use super::vmx::Vmx;
 
 use crate::{
     error::HypervisorError,
-    x86_64::{
-        intel::vmlaunch::launch_vm,
-        utils::{
-            nt::{Context, RtlCaptureContext},
-            processor::current_processor_index,
-        },
-    },
+    x86_64::{intel::vmlaunch::launch_vm, utils::processor::current_processor_index},
 };
 
 pub struct Vcpu {
@@ -42,7 +38,7 @@ impl Vcpu {
 
         // Capture the current processor's context. The Guest will resume from this point since we capture and write this context to the guest state for each vcpu.
         log::info!("Capturing context");
-        let mut context = unsafe { core::mem::zeroed::<Context>() };
+        let mut context = unsafe { core::mem::zeroed::<_CONTEXT>() };
 
         unsafe { RtlCaptureContext(&mut context) };
 

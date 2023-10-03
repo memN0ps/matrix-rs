@@ -3,93 +3,10 @@
 #![allow(non_camel_case_types)]
 
 use alloc::vec::Vec;
-use winapi::{
-    km::wdm::KIRQL,
-    shared::ntdef::{
-        NTSTATUS, PGROUP_AFFINITY, PHYSICAL_ADDRESS, PPROCESSOR_NUMBER, PVOID, UNICODE_STRING,
-    },
-    um::winnt::CONTEXT,
+
+use wdk_sys::{
+    ntddk::KeLowerIrql, ntddk::MmGetSystemRoutineAddress, KIRQL, NTSTATUS, PVOID, UNICODE_STRING,
 };
-
-extern "system" {
-    pub static KdDebuggerNotPresent: *mut bool;
-}
-
-#[link(name = "ntoskrnl")]
-extern "system" {
-    pub fn KeGetCurrentIrql() -> KIRQL;
-
-    //This wont work as the function is not in ntoskrnl.lib or hal.lib so we use MmGetSystemRoutineAddress to get the address
-    //pub fn KeRaiseIrqlToDpcLevel() -> KIRQL;
-
-    pub fn KfRaiseIrql(new_irql: KIRQL) -> KIRQL;
-
-    pub fn KeLowerIrql(new_irql: KIRQL);
-
-    pub fn MmGetSystemRoutineAddress(system_routine_name: *mut UNICODE_STRING) -> PVOID;
-
-    ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-mmgetphysicaladdress
-    pub fn MmGetPhysicalAddress(BaseAddress: PVOID) -> PHYSICAL_ADDRESS;
-
-    ///undocumented
-    pub fn MmGetVirtualForPhysical(PhysicalAddress: PHYSICAL_ADDRESS) -> *mut u64;
-
-    ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-kequeryactiveprocessorcountex
-    pub fn KeQueryActiveProcessorCountEx(GroupNumber: u16) -> u32;
-
-    ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-kegetcurrentprocessornumberex
-    pub fn KeGetCurrentProcessorNumberEx(ProcNumber: *mut u64) -> u32;
-
-    ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-kegetprocessornumberfromindex
-    pub fn KeGetProcessorNumberFromIndex(ProcIndex: u32, ProcNumber: PPROCESSOR_NUMBER)
-        -> NTSTATUS;
-
-    ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-kesetsystemgroupaffinitythread
-    pub fn KeSetSystemGroupAffinityThread(
-        Affinity: PGROUP_AFFINITY,
-        PreviousAffinity: PGROUP_AFFINITY,
-    );
-
-    ///undocumented
-    pub fn ZwYieldExecution() -> NTSTATUS;
-
-    ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-kereverttousergroupaffinitythread
-    pub fn KeRevertToUserGroupAffinityThread(PreviousAffinity: PGROUP_AFFINITY);
-
-    ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-rtlinitializebitmap
-    pub fn RtlInitializeBitMap(
-        BitMapHeader: PRTL_BITMAP,
-        BitMapBuffer: *mut u32,
-        SizeOfBitMap: u32,
-    );
-
-    ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-rtlclearallbits
-    pub fn RtlClearAllBits(BitMapHeader: PRTL_BITMAP);
-
-    ///https://learn.microsoft.com/en-us/windows/win32/api/winnt/nf-winnt-rtlcapturecontext
-    pub fn RtlCaptureContext(ContextRecord: *mut Context);
-
-    ///https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-kebugcheck
-    pub fn KeBugCheck(BugCheckCode: u32) -> !;
-}
-
-// There is a bug in windows-rs/windows-sys and WINAPI: https://github.com/microsoft/win32metadata/issues/1044. Otherwise this is not needed.
-#[derive(Clone, Copy)]
-#[repr(C, align(16))]
-pub struct Context(pub CONTEXT);
-
-impl core::ops::Deref for Context {
-    type Target = CONTEXT;
-    fn deref(&self) -> &CONTEXT {
-        &self.0
-    }
-}
-
-impl core::ops::DerefMut for Context {
-    fn deref_mut(&mut self) -> &mut CONTEXT {
-        &mut self.0
-    }
-}
 
 // See: https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2#bug-check-codes
 pub const MANUALLY_INITIATED_CRASH: u32 = 0x000000E2;
@@ -162,4 +79,10 @@ pub fn KeRaiseIrqlToDpcLevel() -> KIRQL {
 /// Lowers the current IRQL to the specified value.
 pub fn KeLowerIrqlToOldLevel(old_irql: KIRQL) {
     unsafe { KeLowerIrql(old_irql) };
+}
+
+#[link(name = "ntoskrnl")]
+extern "system" {
+    ///undocumented
+    pub fn ZwYieldExecution() -> NTSTATUS;
 }

@@ -20,11 +20,13 @@ use crate::{
     error::HypervisorError,
     x86_64::{
         intel::{host_rsp::STACK_CONTENTS_SIZE, support::vmwrite, vmlaunch::vmexit_stub},
-        utils::{addresses::PhysicalAddress, nt::Context},
+        utils::addresses::PhysicalAddress,
     },
 };
 
 use super::{host_rsp::HostRsp, msr_bitmap::MsrBitmap, vmcs::Vmcs, vmxon::Vmxon};
+
+use wdk_sys::_CONTEXT;
 
 /// Custom memory allocator Boxed pointers for the Vmxon, Vmcs, MsrBitmap and HostRsp structures are stored in the Vmx struct to ensure they are not dropped.
 pub struct Vmx {
@@ -42,7 +44,7 @@ pub struct Vmx {
 }
 
 impl Vmx {
-    pub fn new(context: Context) -> Result<Box<Self>, HypervisorError> {
+    pub fn new(context: _CONTEXT) -> Result<Box<Self>, HypervisorError> {
         log::info!("Setting up VMXON, VMCS, MSR Bitmap and Host RSP structures");
         let vmxon_region = Vmxon::new()?;
         let vmcs_region = Vmcs::new()?;
@@ -100,7 +102,7 @@ impl Vmx {
     ///     - IA32_SYSENTER_EIP
     ///     - LINK_PTR_FULL
     #[rustfmt::skip]
-    fn setup_guest_registers_state(&mut self, context: Context) {
+    fn setup_guest_registers_state(&mut self, context: _CONTEXT) {
         unsafe { vmwrite(guest::CR0, controlregs::cr0().bits() as u64) };
         unsafe { vmwrite(guest::CR3, controlregs::cr3()) };
         unsafe { vmwrite(guest::CR4, controlregs::cr4().bits() as u64) };
@@ -182,7 +184,7 @@ impl Vmx {
     ///     - IA32_SYSENTER_ESP
     ///     - IA32_SYSENTER_EIP
     #[rustfmt::skip]
-    fn setup_host_registers_state(&mut self, context: Context) {
+    fn setup_host_registers_state(&mut self, context: _CONTEXT) {
         let mut host_gdtr: dtables::DescriptorTablePointer<u64> = Default::default();
         unsafe { dtables::sgdt(&mut host_gdtr); }
 
@@ -304,7 +306,7 @@ pub fn unpack_gdt_entry(gdt: &[GdtEntry], selector: u16) -> UnpackedGdtEntry {
 /// the accompanying [tutorial](https://wiki.osdev.org/GDT_Tutorial).
 #[derive(Debug, Clone, Copy)]
 #[allow(unused)]
-#[repr(packed)]
+#[repr(C)]
 pub struct GdtEntry {
     /// Low 16 bits of the segment limit.
     pub limit_low: u16,
@@ -325,6 +327,7 @@ pub struct GdtEntry {
 /// compatible since the days of the i286. This represents the component parts
 /// of a GDT entry unpacked into a format we can feed into various host and
 /// guest VMCS entries.
+#[repr(C)]
 #[derive(Default, Debug)]
 pub struct UnpackedGdtEntry {
     /// The base of the segment.

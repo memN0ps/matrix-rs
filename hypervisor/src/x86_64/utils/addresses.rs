@@ -1,11 +1,12 @@
 #![allow(dead_code)]
-use super::nt::{MmGetPhysicalAddress, MmGetVirtualForPhysical};
 
-use {
-    core::ops::{Deref, DerefMut},
-    winapi::shared::ntdef::PHYSICAL_ADDRESS,
-    x86::bits64::paging::{PAddr, BASE_PAGE_SHIFT},
+use core::ops::{Deref, DerefMut};
+
+use wdk_sys::{
+    ntddk::{MmGetPhysicalAddress, MmGetVirtualForPhysical},
+    PHYSICAL_ADDRESS,
 };
+use x86::bits64::paging::{PAddr, BASE_PAGE_SHIFT};
 
 pub struct PhysicalAddress(PAddr);
 
@@ -35,12 +36,12 @@ impl PhysicalAddress {
     }
 
     pub fn pa_from_va(va: u64) -> u64 {
-        unsafe { *MmGetPhysicalAddress(va as _).QuadPart() as u64 }
+        unsafe { MmGetPhysicalAddress(va as _).QuadPart as u64 }
     }
 
     fn va_from_pa(pa: u64) -> u64 {
         let mut physical_address: PHYSICAL_ADDRESS = unsafe { core::mem::zeroed() };
-        unsafe { *(physical_address.QuadPart_mut()) = pa as i64 };
+        (physical_address.QuadPart) = pa as i64;
 
         unsafe { MmGetVirtualForPhysical(physical_address) as u64 }
     }

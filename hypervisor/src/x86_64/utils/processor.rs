@@ -1,16 +1,22 @@
 // This part is easy and can be used as a crate once uploaded to crates.io so there was no point in rewriting it.
 // Full credits not-matthias: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/utils/processor.rs
 use core::mem::MaybeUninit;
-use winapi::shared::ntdef::{ALL_PROCESSOR_GROUPS, GROUP_AFFINITY, NT_SUCCESS, PROCESSOR_NUMBER};
 
-use super::nt::{
-    KeGetCurrentProcessorNumberEx, KeGetProcessorNumberFromIndex, KeQueryActiveProcessorCountEx,
-    KeRevertToUserGroupAffinityThread, KeSetSystemGroupAffinityThread, ZwYieldExecution,
+use wdk_sys::NT_SUCCESS;
+use wdk_sys::{
+    ntddk::{
+        KeGetCurrentProcessorNumberEx, KeGetProcessorNumberFromIndex,
+        KeQueryActiveProcessorCountEx, KeRevertToUserGroupAffinityThread,
+        KeSetSystemGroupAffinityThread,
+    },
+    ALL_PROCESSOR_GROUPS, GROUP_AFFINITY, PROCESSOR_NUMBER,
 };
+
+use crate::x86_64::utils::nt::ZwYieldExecution;
 
 /// The KeQueryActiveProcessorCountEx routine returns the number of active logical processors in a specified group in a multiprocessor system or in the entire system.
 pub fn processor_count() -> u32 {
-    unsafe { KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS) }
+    unsafe { KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS as _) }
 }
 
 #[allow(dead_code)]
