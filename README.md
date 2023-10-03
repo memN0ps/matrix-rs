@@ -91,13 +91,13 @@ cargo install cargo-expand cargo-edit cargo-workspaces
 ### Development
 
 ```
-cargo make --profile release
+cargo make --profile debug
 ```
 
 ### Production
 
 ```
-cargo make --profile development
+cargo make --profile release
 ```
 
 ## Debugging (Optional)
