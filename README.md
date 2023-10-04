@@ -81,7 +81,10 @@ cargo install cargo-expand cargo-edit cargo-workspaces
 - Step 1: Install Visual Studio 2022
 - Step 2: Install Windows 11, version 22H2 SDK
 - Step 3: Install Windows 11, version 22H2 WDK
-- Step 4: Set the `WDKContentRoot` environment variable to point to your WDK installation path, If it hasn't been set automatically during the WDK installation: `[System.Environment]::SetEnvironmentVariable("WDKContentRoot", "C:\Program Files (x86)\Windows Kits\10", [System.EnvironmentVariableTarget]::User)`
+- Step 4: Set the `WDKContentRoot` environment variable to point to your WDK installation path, If it hasn't been set automatically during the WDK installation: 
+```
+[System.Environment]::SetEnvironmentVariable("WDKContentRoot", "C:\Program Files (x86)\Windows Kits\10", [System.EnvironmentVariableTarget]::User)
+```
 - Step 5 (Optional) Alternative Method - Install Windows 11, version 22H2 (updated May 2023) EWDK with Visual Studio Build Tools
   - Expand the `.zip/.iso` file into an appropriately named directory, such as `d:\ewdk`.
   - Expand the `.zip/.iso` file into an appropriately named directory, such as `d:\ewdk`.
