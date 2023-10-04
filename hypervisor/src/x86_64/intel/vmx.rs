@@ -18,6 +18,7 @@ use {
 
 use crate::{
     error::HypervisorError,
+    println,
     x86_64::{
         intel::{host_rsp::STACK_CONTENTS_SIZE, support::vmwrite, vmlaunch::vmexit_stub},
         utils::addresses::PhysicalAddress,
@@ -45,7 +46,7 @@ pub struct Vmx {
 
 impl Vmx {
     pub fn new(context: _CONTEXT) -> Result<Box<Self>, HypervisorError> {
-        log::info!("Setting up VMXON, VMCS, MSR Bitmap and Host RSP structures");
+        println!("Setting up VMXON, VMCS, MSR Bitmap and Host RSP structures");
         let vmxon_region = Vmxon::new()?;
         let vmcs_region = Vmcs::new()?;
         let msr_bitmap = MsrBitmap::new()?;
@@ -61,14 +62,14 @@ impl Vmx {
         let mut instance = Box::new(instance);
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
-        log::info!("Setting up Guest Registers State");
+        println!("Setting up Guest Registers State");
         instance.setup_guest_registers_state(context);
-        log::info!("Guest Registers State successful!");
+        println!("Guest Registers State successful!");
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
-        log::info!("Setting up Host Registers State");
+        println!("Setting up Host Registers State");
         instance.setup_host_registers_state(context);
-        log::info!("Host Registers State successful!");
+        println!("Host Registers State successful!");
 
         /*
          * VMX controls:
@@ -77,11 +78,11 @@ impl Vmx {
          * - 25.7 VM-EXIT CONTROL FIELDS
          * - 25.8 VM-ENTRY CONTROL FIELDS
          */
-        log::info!("Setting up VMCS Control Fields");
+        println!("Setting up VMCS Control Fields");
         instance.setup_vmcs_control_fields();
-        log::info!("VMCS Control Fields successful!");
+        println!("VMCS Control Fields successful!");
 
-        log::info!("VMXON, VMCS, MSR Bitmap and Host RSP structures successful!");
+        println!("VMXON, VMCS, MSR Bitmap and Host RSP structures successful!");
         Ok(instance)
     }
 
@@ -275,7 +276,6 @@ pub fn unpack_gdt_entry(gdt: &[GdtEntry], selector: u16) -> UnpackedGdtEntry {
     let index: usize = usize::from(selector) / core::mem::size_of::<GdtEntry>();
     if index == 0 {
         unpacked.access_rights |= VMX_INFO_SEGMENT_UNUSABLE;
-        //trace!("Unpacked {:x?}", unpacked);
         return unpacked;
     }
 

@@ -19,6 +19,7 @@ use crate::x86_64::utils::processor::{processor_count, ProcessorExecutor};
 extern crate alloc;
 
 pub mod error;
+pub mod serial;
 pub mod x86_64;
 
 pub struct Hypervisor {
@@ -29,23 +30,23 @@ impl Hypervisor {
     pub fn new() -> Result<Self, HypervisorError> {
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.6 DISCOVERING SUPPORT FOR VMX */
         Self::has_intel_cpu()?;
-        log::info!("CPU is Intel");
+        println!("CPU is Intel");
 
         Self::has_vmx_support()?;
-        log::info!("Virtual Machine Extension (VMX) technology is supported");
+        println!("Virtual Machine Extension (VMX) technology is supported");
 
         let mut processors: Vec<Vcpu> = Vec::new();
 
         for i in 0..processor_count() {
             processors.push(Vcpu::new(i)?);
         }
-        log::info!("Found {} processors", processors.len());
+        println!("Found {} processors", processors.len());
 
         Ok(Hypervisor { processors })
     }
 
     pub fn virtualize_system(&mut self) -> Result<(), HypervisorError> {
-        log::info!("Virtualizing processors");
+        println!("Virtualizing processors");
 
         for processor in self.processors.iter_mut() {
             let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
@@ -84,7 +85,7 @@ impl Hypervisor {
 
     /*
     pub fn devirtualize(&mut self) -> Result<(), HypervisorError> {
-        log::info!("Devirtualizing processors");
+        println!("Devirtualizing processors");
 
         for processor in self.processors.iter_mut() {
             let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {

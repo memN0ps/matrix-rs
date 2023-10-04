@@ -7,6 +7,7 @@ use super::vmx::Vmx;
 
 use crate::{
     error::HypervisorError,
+    println,
     x86_64::{intel::vmlaunch::launch_vm, utils::processor::current_processor_index},
 };
 
@@ -23,7 +24,7 @@ pub struct Vcpu {
 
 impl Vcpu {
     pub fn new(index: u32) -> Result<Self, HypervisorError> {
-        log::info!("Creating processor {}", index);
+        println!("Creating processor {}", index);
 
         Ok(Self {
             index,
@@ -34,27 +35,27 @@ impl Vcpu {
 
     /// Virtualize the CPU by capturing the context, enabling VMX operation, adjusting control registers, calling VMXON, VMPTRLD and VMLAUNCH
     pub fn virtualize_cpu(&mut self) -> Result<(), HypervisorError> {
-        log::info!("Virtualizing processor {}", self.index);
+        println!("Virtualizing processor {}", self.index);
 
         // Capture the current processor's context. The Guest will resume from this point since we capture and write this context to the guest state for each vcpu.
-        log::info!("Capturing context");
+        println!("Capturing context");
         let mut context = unsafe { core::mem::zeroed::<_CONTEXT>() };
 
         unsafe { RtlCaptureContext(&mut context) };
 
         // Determine if we're operating as the Host (root) or Guest (non-root). Only proceed with system virtualization if operating as the Host.
         if !is_virtualized() {
-            log::info!("Preparing for virtualization");
+            println!("Preparing for virtualization");
 
             set_virtualized();
 
             let vmx_box = Vmx::new(context)?;
             self.vmx.get_or_init(|| vmx_box);
 
-            log::info!("Virtualization complete for processor {}", self.index);
+            println!("Virtualization complete for processor {}", self.index);
 
             // Run the VM until the VM-exit occurs.
-            log::info!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
+            println!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
             unsafe { launch_vm() };
             // unreachable code: we should not be here
         }
