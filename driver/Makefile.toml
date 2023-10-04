@@ -1,14 +1,58 @@
-extend = ".cargo-make-loadscripts/rust-driver-makefile.toml"
-
 [env]
-CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+VC_BUILD_DIR = "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsamd64_x86.bat"
+CARGO_MAKE_CARGO_BUILD_TEST_FLAGS = "--profile ${CARGO_MAKE_CARGO_PROFILE}"
+OUTPUT_DIR = { source = "${CARGO_MAKE_CARGO_PROFILE}", default_value = "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}\\${CARGO_MAKE_CARGO_PROFILE}", mapping = { "dev" = "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}\\debug" } }
 
-[config]
-load_script = """
-powershell.exe -Command "\
-if ($env:CARGO_MAKE_CRATE_IS_WORKSPACE) { return };\
-$cargoMakeURI = 'https://raw.githubusercontent.com/microsoft/windows-drivers-rs/main/rust-driver-makefile.toml';\
-New-Item -ItemType Directory .cargo-make-loadscripts -Force;\
-Invoke-RestMethod -Method GET -Uri $CargoMakeURI -OutFile $env:CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY/.cargo-make-loadscripts/rust-driver-makefile.toml\
-"
-"""
+[tasks.rename-dll-to-sys]
+dependencies = ["build"]
+script = '''
+echo "%OUTPUT_DIR%"
+cd "%OUTPUT_DIR%"
+mkdir package
+if exist package\%CARGO_MAKE_CRATE_FS_NAME%.sys (
+  del package\%CARGO_MAKE_CRATE_FS_NAME%.sys
+)
+rename %CARGO_MAKE_CRATE_FS_NAME%.dll %CARGO_MAKE_CRATE_FS_NAME%.sys
+copy %CARGO_MAKE_CRATE_FS_NAME%.sys package\%CARGO_MAKE_CRATE_FS_NAME%.sys
+'''
+
+[tasks.stampinf]
+dependencies = ["build"]
+script = '''
+copy "%CARGO_MAKE_WORKING_DIRECTORY%\%CARGO_MAKE_CRATE_FS_NAME%.inx" "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf"
+"C:\Program Files (x86)\Windows Kits\10\bin\x64\stampinf.exe" -f "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf" -d * -a amd64 -c %CARGO_MAKE_CRATE_FS_NAME%.cat -v * -k 1.33 -n
+'''
+
+[tasks.copypdb]
+dependencies = ["build"]
+script = '''
+cd "%OUTPUT_DIR%"
+copy %CARGO_MAKE_CRATE_FS_NAME%.pdb package\%CARGO_MAKE_CRATE_FS_NAME%.pdb
+'''
+
+[tasks.inf2cat]
+dependencies = ["stampinf"]
+script = '''
+"C:\Program Files (x86)\Windows Kits\10\bin\x86\inf2cat.exe" /driver:"%OUTPUT_DIR%\package" /os:10_NI_X64,10_VB_X64 /uselocaltime /verbose
+'''
+
+[tasks.infverif]
+dependencies = ["stampinf"]
+script = '''
+"C:\Program Files (x86)\Windows Kits\10\Tools\10.0.22621.0\x64\infverif.exe" /v /w "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf" /msft
+'''
+
+[tasks.sign]
+dependencies = ["rename-dll-to-sys", "inf2cat", "infverif"]
+script = '''
+call "%VC_BUILD_DIR%"
+if not exist DriverCertificate.cer (
+  makecert -r -pe -ss PrivateCertStore -n CN=DriverCertificate DriverCertificate.cer
+) else (
+  echo Certificate already exists.
+)
+signtool sign /a /v /s PrivateCertStore /n DriverCertificate /fd certHash /t http://timestamp.digicert.com "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.cat"
+'''
+
+[tasks.default]
+alias = "sign"
