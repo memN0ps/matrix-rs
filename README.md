@@ -4,15 +4,15 @@ Blog: https://memn0ps.github.io/hypervisor-development-in-rust-part-1/
 
 This project is a Rust-based research hypervisor for Intel VT-x and AMD-v (SVM) virtualization, designed to be lightweight and focused on studying the core concepts. While it currently lacks a memory management unit (MMU) for virtualization using Intel's Extended Page Tables (EPT) and AMD's Nested Page Tables (NPT), these features are planned for future implementation.
 
-Big thanks to [@daax_rynd](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/), [@Intel80x86](https://github.com/SinaKarvandi/Hypervisor-From-Scratch/), [@not_matthias](https://github.com/not-matthias/amd_hypervisor), and [@standa_t](https://github.com/tandasat/Hypervisor-101-in-Rust) for their awesome blogs and code. They’ve been incredibly helpful!
+Big thanks to [@daax_rynd](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/), [@Intel80x86](https://github.com/SinaKarvandi/Hypervisor-From-Scratch/), [@not_matthias](https://github.com/not-matthias/amd_hypervisor), and [@standa_t](https://github.com/tandasat/Hypervisor-101-in-Rust) for their awesome blogs and code. They've been incredibly helpful!
 
-I was inspired to start this project after seeing [@not_matthias](https://github.com/not-matthias/amd_hypervisor)’s project and reading some insightful articles by [Secret Club](https://secret.club/) and the unveiling of [DarthTon's HyperBone](https://github.com/DarthTon/HyperBone) (based on the legendary [Alex Ionescu's](https://github.com/ionescu007/SimpleVisor) version) on [UnknownCheats](https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html). Here are some of them if you want to check them out:
+I was inspired to start this project after seeing [@not_matthias](https://github.com/not-matthias/amd_hypervisor)'s project and reading some insightful articles by [Secret Club](https://secret.club/) and the unveiling of [DarthTon's HyperBone](https://github.com/DarthTon/HyperBone) (based on the legendary [Alex Ionescu's](https://github.com/ionescu007/SimpleVisor) version) on [UnknownCheats](https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html). Here are some of them if you want to check them out:
 
 - [BattlEye Hypervisor Detection](https://secret.club/2020/01/12/battleye-hypervisor-detection.html)
 - [BottlEye](https://secret.club/2020/07/06/bottleye.html)
 - [How Anti-Cheats Detect System Emulation](https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html)
 
-I’ve also been learning a lot by preparing for the legendary [Satoshi Tanda's Hypervisor Development for Security Researchers training](https://tandasat.github.io/Hypervisor_Development_for_Security_Researchers.html) and exploring other projects and blogs, like [BluePill by @_xeroxz (IDontCode)](https://git.back.engineering/_xeroxz/bluepill) and [AMD-V Hypervisor Development](https://blog.back.engineering/04/08/2022/) by [Back Engineering Labs](https://back.engineering/). They've provided lots of inspiration and knowledge, encouraging me to dive deeper into this field.
+I've also been learning a lot by preparing for the legendary [Satoshi Tanda's Hypervisor Development for Security Researchers training](https://tandasat.github.io/Hypervisor_Development_for_Security_Researchers.html) and exploring other projects and blogs, like [BluePill by @_xeroxz (IDontCode)](https://git.back.engineering/_xeroxz/bluepill) and [AMD-V Hypervisor Development](https://blog.back.engineering/04/08/2022/) by [Back Engineering Labs](https://back.engineering/). They've provided lots of inspiration and knowledge, encouraging me to dive deeper into this field.
 
 ## Features
 
@@ -81,7 +81,8 @@ cargo install cargo-expand cargo-edit cargo-workspaces
 - Step 1: Install Visual Studio 2022
 - Step 2: Install Windows 11, version 22H2 SDK
 - Step 3: Install Windows 11, version 22H2 WDK
-- Step 4: Install Windows 11, version 22H2 (updated May 2023) EWDK with Visual Studio Build Tools
+- Step 4: Set the `WDKContentRoot` environment variable to point to your WDK installation path, If it hasn't been set automatically during the WDK installation: `[System.Environment]::SetEnvironmentVariable("WDKContentRoot", "C:\Program Files (x86)\Windows Kits\10", [System.EnvironmentVariableTarget]::User)`
+- Step 5 (Optional) Alternative Method - Install Windows 11, version 22H2 (updated May 2023) EWDK with Visual Studio Build Tools
   - Expand the `.zip/.iso` file into an appropriately named directory, such as `d:\ewdk`.
   - Expand the `.zip/.iso` file into an appropriately named directory, such as `d:\ewdk`.
   - From an Administrator command prompt, navigate to the expanded folder in the previous step, and then run `LaunchBuildEnv.cmd` to create the build environment. For example: `D:\ewdk\LaunchBuildEnv.cmd`
