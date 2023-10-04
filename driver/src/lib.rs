@@ -4,7 +4,7 @@
 #[cfg(not(test))]
 extern crate wdk_panic;
 
-/* Add a global allocator in lib.rs: */
+/* Add a global allocator in lib.rs */
 #[cfg(not(test))]
 use wdk_alloc::WDKAllocator;
 
@@ -15,7 +15,7 @@ static GLOBAL_ALLOCATOR: WDKAllocator = WDKAllocator;
 use hypervisor::Hypervisor;
 use log::LevelFilter;
 
-use wdk_sys::{DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING, STATUS_UNSUCCESSFUL, STATUS_SUCCESS};
+use wdk_sys::{DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL};
 
 //static mut HYPERVISOR: Option<Hypervisor> = None;
 
@@ -25,17 +25,17 @@ pub unsafe extern "system" fn driver_entry(
     driver: &mut DRIVER_OBJECT,
     _registry_path: PCUNICODE_STRING,
 ) -> NTSTATUS {
-    kernel_log::KernelLogger::init(LevelFilter::Info).expect("Failed to initialize logger");
+    /* Upon virtualizing the processors and invoking vmlaunch, the kernel logger introduces unpredictable behavior leading to sporadic crashes. This issue consumed a significant amount of troubleshooting time. */
+    //kernel_log::KernelLogger::init(LevelFilter::Info).expect("Failed to initialize logger");
 
     /* Setup a logger with the default settings. The default settings is COM1 port with level filter Info */
     //com_logger::init();
 
-    // Use COM2 port with level filter Info
-    /*
+    /* Use COM2 port with level filter Info */
     com_logger::builder()
         .base(0x2f8)
         .filter(LevelFilter::Info)
-        .setup();*/
+        .setup();
 
     log::info!("Driver Entry called");
 
