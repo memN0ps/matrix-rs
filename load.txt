@@ -1,3 +1,0 @@
-sc.exe create matrix type= kernel binPath= C:\Windows\System32\drivers\matrix.sys
-sc.exe query matrix
-sc.exe start matrix
