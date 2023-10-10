@@ -175,7 +175,7 @@ $serialPort = New-Object System.IO.Ports.SerialPort
 
 # Specify the name of the serial port (COM2 in this case)
 # COM ports are communication interfaces on a Windows system.
-# COM2 refers to the first serial communication port.
+# COM2 refers to the second serial communication port.
 $serialPort.PortName = "COM2"
 
 # Set the baud rate to 9600
