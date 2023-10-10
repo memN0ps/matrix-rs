@@ -1,3 +1,5 @@
+pub mod controls;
+pub mod descriptors;
 pub mod ept;
 pub mod events;
 pub mod host_rsp;
