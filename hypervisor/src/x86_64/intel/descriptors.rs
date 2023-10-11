@@ -1,79 +1,172 @@
 use alloc::boxed::Box;
-use kernel_alloc::PhysicalAllocator;
+use kernel_alloc::KernelAlloc;
 use x86_64::structures::{
     gdt::{Descriptor, GlobalDescriptorTable, SegmentSelector},
     idt::InterruptDescriptorTable,
     DescriptorTablePointer,
 };
 
-use crate::{println, error::HypervisorError};
+use crate::{error::HypervisorError, println};
 
-/// The `DescriptorTables` structure contains the GDT and IDT for either the host or guest.
-/// For the host:
-/// - The GDT and IDT are already set up and loaded by the operating system. When a VM exit occurs,
-///   the processor will use the host's GDT and IDT to continue executing the host code correctly.
-///
-/// For the guest:
-/// - Instead of directly loading the GDT and IDT using the `load()` method, the base and limit
-///   of the GDT and IDT are set in the VMCS. The processor will then use these values when it
-///   switches to the guest state during a VM entry.
-pub struct DescriptorTables {
-    pub gdt: Option<GlobalDescriptorTable>,
-    pub idt: Option<InterruptDescriptorTable>,
+#[repr(C, align(4096))]
+pub struct DescriptorTable {
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.5.1 Segment Descriptor Tables
+    /// - Figure 3-10. Global and Local Descriptor Tables
+    pub gdt: GlobalDescriptorTable,
+
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 2.4.1 Global Descriptor Table Register (GDTR)
     pub gdtr: DescriptorTablePointer,
+
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 6.10 INTERRUPT DESCRIPTOR TABLE (IDT)
+    /// - Figure 6-1. Relationship of the IDTR and IDT
+    pub idt: InterruptDescriptorTable,
+
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 2.4.3 IDTR Interrupt Descriptor Table Register
     pub idtr: DescriptorTablePointer,
 }
 
-impl DescriptorTables {
-    /// Retrieves the current GDTR and IDTR without trying to convert them to GDT or IDT objects.
-    pub fn current_for_guest() -> Result<Box<Self, PhysicalAllocator>, HypervisorError> {
-        let mut descriptor_tables: Box<DescriptorTables, PhysicalAllocator> = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
+impl DescriptorTable {
+    /// Initializes a new Global Descriptor Table (GDT) and Interrupt Descriptor Table (IDT) for the guest and returns a DescriptorTable object.
+    pub fn initialize_gdt_idt_for_guest() -> Result<Box<Self, KernelAlloc>, HypervisorError> {
+        println!(
+            "Setting up Guest Global Descriptor Table (GDT) and Interrupt Descriptor Table (IDT)"
+        );
+        let mut descriptor_tables: Box<DescriptorTable, KernelAlloc> =
+            unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
 
-        descriptor_tables.gdtr = Self::get_gdtr();
-        descriptor_tables.idtr = Self::get_idtr();
-        
+        descriptor_tables.gdt_for_guest();
+        descriptor_tables.idt_for_guest();
+
+        println!("Guest Global Descriptor Table (GDT) and Interrupt Descriptor Table (IDT) setup successful!");
+
         Ok(descriptor_tables)
     }
 
-    /// Retrieves the current GDT and IDT for the host.
-    pub fn new_for_host() -> Result<Box<Self, PhysicalAllocator>, HypervisorError> {
-        let mut descriptor_tables: Box<DescriptorTables, PhysicalAllocator> = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
+    /// Initializes a new Global Descriptor Table (GDT) and Interrupt Descriptor Table (IDT) for the host and returns a DescriptorTable object.
+    pub fn initialize_gdt_idt_for_host() -> Result<Box<Self, KernelAlloc>, HypervisorError> {
+        println!(
+            "Setting up Host Global Descriptor Table (GDT) and Interrupt Descriptor Table (IDT)"
+        );
+        let mut descriptor_tables: Box<DescriptorTable, KernelAlloc> =
+            unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
 
-        // Initializes a new GDT, which inherently contains the null descriptor as its initial entry.
-        println!("Setting up Global Descriptor Table");
-        descriptor_tables.gdt = Some(GlobalDescriptorTable::new());
+        descriptor_tables.gdt_for_host();
+        descriptor_tables.idt_for_host();
 
-        descriptor_tables.gdt.as_mut().unwrap().add_entry(Descriptor::kernel_code_segment());
-        descriptor_tables.gdt.as_mut().unwrap().add_entry(Descriptor::kernel_data_segment());        
-
-        // The user_code_segment and user_data_segment might not be necessary for this specific use case, but they are included here for completeness. Consider uncommenting them if they are needed.
-        // descriptor_tables.gdt.add_entry(Descriptor::user_code_segment());
-        // descriptor_tables.gdt.add_entry(Descriptor::user_data_segment());
-
-        // For a hypervisor operating as a Windows driver, adding a TSS might not be necessary since Windows already sets up its own TSS. However, if you're working with UEFI, you might need to set up a TSS. Uncomment the following lines if required.
-        /*
-            let tss = x86_64::structures::tss::TaskStateSegment::new();
-            let tss_entry = Descriptor::tss_segment(&tss);
-            let tss_selector = descriptor_tables.gdt.add_entry(tss_entry);
-        */
-
-        // Creates a new IDT filled with non-present entries.
-        println!("Setting up Interrupt Descriptor Table");
-        descriptor_tables.idt = Some(InterruptDescriptorTable::new());
-
-        // Set up interrupt handlers here if needed
-
-        // Load the Global Descriptor Table Register (GDTR) using lgdt and the Interrupt Descriptor Table Register (IDTR) using lidt. These can be retrieved later using sgdt and sidt respectively.
-        // The host's GDT and IDT are set by the OS. For the guest, the GDT and IDT base and limit are set in the VMCS, used during VM entry.
-        // unsafe { descriptor_tables.gdt.load_unsafe() };
-        // unsafe { descriptor_tables.idt.load_unsafe() };
-
-        descriptor_tables.gdtr = Self::get_gdtr();
-        descriptor_tables.idtr = Self::get_idtr();
-
-        println!("Descriptor Tables successful!");
+        println!("Host Global Descriptor Table (GDT) and Interrupt Descriptor Table (IDT) setup successful!");
 
         Ok(descriptor_tables)
+    }
+
+    /// Creates a new Global Descriptor Table (GDT) for the guest.
+    pub fn gdt_for_guest(&mut self) {
+        println!("Creating a new Global Descriptor Table (GDT) for the guest");
+        // Get the current  Global Descriptor Table Register (GDTR).
+        let current_gdtr = Self::get_gdtr();
+
+        // Get the current Global Descriptor Table (GDT).
+        let current_gdt = unsafe {
+            core::slice::from_raw_parts(
+                current_gdtr.base.as_ptr::<u64>(),
+                usize::from(current_gdtr.limit + 1) / 8,
+            )
+        };
+
+        // Copy the current Global Descriptor Table (GDT) into a new vector.
+        let gdt_entires = current_gdt.to_vec();
+
+        // Create a new GDT from the copied entries.
+        let gdt = unsafe { GlobalDescriptorTable::from_raw_slice(gdt_entires.as_slice()) };
+
+        // Update the Descriptor Table object.
+        self.gdt = gdt;
+        self.gdtr = Self::get_gdtr();
+        println!("Global Descriptor Table (GDT) for the guest created successfully!");
+    }
+
+    /// Creates a new Global Descriptor Table (GDT) for the host.
+    pub fn gdt_for_host(&mut self) {
+        println!("Creating a new Global Descriptor Table (GDT) for the host");
+        // Initializes a new GDT, which inherently contains the null descriptor as its initial entry.
+        let mut gdt = GlobalDescriptorTable::new();
+        gdt.add_entry(Descriptor::kernel_code_segment());
+        gdt.add_entry(Descriptor::kernel_data_segment());
+
+        // Load the new GDT
+        unsafe { gdt.load_unsafe() };
+
+        // Update the Descriptor Table object.
+        self.gdt = gdt;
+        self.gdtr = Self::get_gdtr();
+        println!("Global Descriptor Table (GDT) for the host created successfully!");
+    }
+
+    /// Creates a new Interrupt Descriptor Table (IDT) for the guest.
+    pub fn idt_for_guest(&mut self) {
+        println!("Creating a new Interrupt Descriptor Table (IDT) for the guest");
+        // Obtain the current IDTR (Interrupt Descriptor Table Register) value.
+        // This register contains the base address and limit of the current IDT.
+        let current_idtr = Self::get_idtr();
+
+        // Calculate the number of entries in the current IDT.
+        // The IDTR limit field contains the maximum offset within the IDT, so dividing by the entry size gives the entry count.
+        let entry_count = (usize::from(current_idtr.limit) + 1)
+            / core::mem::size_of::<InterruptDescriptorTable>();
+
+        // Obtain a slice to the current IDT.
+        // The slice starts at the base address of the IDT and has a length of entry_count.
+        let current_idt = unsafe {
+            core::slice::from_raw_parts(
+                current_idtr.base.as_ptr::<InterruptDescriptorTable>(),
+                entry_count,
+            )
+        };
+
+        // Create a new IDT initialized with non-present entries.
+        // This will be our new IDT that we'll eventually replace the current IDT with.
+        let mut new_idt = InterruptDescriptorTable::new();
+
+        // Perform a shallow copy of the current IDT to the new IDT.
+        // This assumes that the memory layout of InterruptDescriptorTable matches the actual memory layout of the IDT.
+        // A shallow copy is performed, so be cautious if the IDT contains any pointers or other resources.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                current_idt.as_ptr() as *const u8,
+                &mut new_idt as *mut _ as *mut u8,
+                usize::from(current_idtr.limit) + 1,
+            );
+        }
+
+        // Load the new IDT
+        unsafe { new_idt.load_unsafe() };
+
+        // Update the idt field in your DescriptorTable object with the new IDT.
+        self.idt = new_idt;
+        println!("Interrupt Descriptor Table (IDT) for the guest created successfully!");
+    }
+
+    /// Creates a new Interrupt Descriptor Table (IDT) for the host.
+    pub fn idt_for_host(&mut self) {
+        println!("Creating a new Interrupt Descriptor Table (IDT) for the host");
+        // Get the current Interrupt Descriptor Table Register (IDTR).
+        let current_idtr = Self::get_idtr();
+
+        // Create a new IDT filled with non-present entries.
+        let mut new_idt = InterruptDescriptorTable::new();
+
+        // Perform a shallow copy of the current IDT to the new IDT.
+        // Note: Ensure the memory layout of InterruptDescriptorTable matches the actual memory layout of the IDT.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                current_idtr.base.as_ptr::<u8>(),
+                &mut new_idt as *mut _ as *mut u8,
+                usize::from(current_idtr.limit) + 1,
+            );
+        }
+
+        // Update the idt field in your DescriptorTable object with the new IDT.
+        self.idt = new_idt;
+        println!("Interrupt Descriptor Table (IDT) for the host created successfully!");
     }
 
     /// Returns the Global Descriptor Table register (GDTR).
@@ -98,11 +191,9 @@ pub struct SegmentDescriptor {
 
 impl SegmentDescriptor {
     /// Retrieves the base, limit, and access rights of a segment selector.
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
-    /// - Figure 3-8. Segment Descriptor
     pub fn from(selector: SegmentSelector) -> SegmentDescriptor {
         // Get the Global Descriptor Table Register (GDTR)
-        let gdtr = DescriptorTables::get_gdtr();
+        let gdtr = DescriptorTable::get_gdtr();
 
         // Calculate the index into the GDT for the given selector
         let idx = selector.index();

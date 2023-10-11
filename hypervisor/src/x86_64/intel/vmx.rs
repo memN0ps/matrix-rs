@@ -22,7 +22,7 @@ use crate::{
     x86_64::{
         intel::{
             controls::{adjust_vmx_controls, VmxControl},
-            descriptors::DescriptorTables,
+            descriptors::DescriptorTable,
             host_rsp::STACK_CONTENTS_SIZE,
             support::vmwrite,
             vmlaunch::vmexit_stub,
@@ -54,10 +54,10 @@ pub struct Vmx {
     pub host_rsp: Box<HostRsp, KernelAlloc>,
 
     /// The virtual address of the Host DescriptorTables containing the Descriptor Tables (GDT, IDT, TSS)
-    pub host_descriptor_table: Box<DescriptorTables, PhysicalAllocator>,
+    pub host_descriptor_table: Box<DescriptorTable, KernelAlloc>,
 
     /// The virtual address of the Guest DescriptorTables containing the Descriptor Tables (GDT, IDT, TSS)
-    pub guest_descriptor_table: Box<DescriptorTables, PhysicalAllocator>,
+    pub guest_descriptor_table: Box<DescriptorTable, KernelAlloc>,
 }
 
 impl Vmx {
@@ -69,8 +69,9 @@ impl Vmx {
         let msr_bitmap = MsrBitmap::new()?;
         let host_rsp = HostRsp::new()?;
 
-        let host_descriptor_table = DescriptorTables::new_for_host()?;
-        let guest_descriptor_table = DescriptorTables::current_for_guest()?;
+        // The order in which these 2 functions are called is important.
+        let guest_descriptor_table = DescriptorTable::initialize_gdt_idt_for_guest()?;
+        let host_descriptor_table = DescriptorTable::initialize_gdt_idt_for_host()?;
 
         let instance = Self {
             vmxon_region,
