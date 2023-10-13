@@ -29,7 +29,7 @@ impl SegmentDescriptor {
         let idx = selector.index();
 
         // Dereference the GDT to get the descriptor for the given index.
-        let descriptor = unsafe { *((gdtr.base.as_u64() as *const u64).add(idx as usize)) };
+        let descriptor = unsafe { *((gdtr.base as u64 as *const u64).add(idx as usize)) };
 
         // Extract the base address, segment limit, and access rights following the layout specified in the Intel Manual.
         let base_address = ((descriptor >> 16) & 0xFFFFFF) | ((descriptor >> 32) & 0xFF000000);

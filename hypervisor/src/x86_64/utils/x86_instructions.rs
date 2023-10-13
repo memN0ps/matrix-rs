@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 use core::arch::asm;
-
 use x86::controlregs::{Cr0, Cr4};
-use x86_64::structures::DescriptorTablePointer;
+use x86::dtables::DescriptorTablePointer;
 
 /// Returns the timestamp counter value.
 pub fn rdtsc() -> u64 {
@@ -65,13 +64,17 @@ pub fn outb(port: u16, val: u8) {
 }
 
 /// Reads the IDTR register.
-pub fn sidt() -> DescriptorTablePointer {
-    x86_64::instructions::tables::sidt()
+pub fn sidt() -> DescriptorTablePointer<u64> {
+    let mut idtr = DescriptorTablePointer::<u64>::default();
+    unsafe { x86::dtables::sidt(&mut idtr) };
+    idtr
 }
 
 /// Reads the GDTR.
-pub fn sgdt() -> DescriptorTablePointer {
-    x86_64::instructions::tables::sgdt()
+pub fn sgdt() -> DescriptorTablePointer<u64> {
+    let mut gdtr = DescriptorTablePointer::<u64>::default();
+    unsafe { x86::dtables::sgdt(&mut gdtr) };
+    gdtr
 }
 
 /// Read the RIP register (instruction pointer).

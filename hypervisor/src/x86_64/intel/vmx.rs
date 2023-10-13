@@ -175,8 +175,8 @@ impl Vmx {
         unsafe { vmwrite(guest::LDTR_ACCESS_RIGHTS, SegmentDescriptor::from(SegmentSelector(dtables::ldtr().bits())).access_rights) };
         unsafe { vmwrite(guest::TR_ACCESS_RIGHTS, SegmentDescriptor::from(SegmentSelector(task::tr().bits())).access_rights) };
 
-        vmwrite(guest::GDTR_BASE, self.guest_descriptor_table.gdtr.base.as_u64());
-        vmwrite(guest::IDTR_BASE, self.guest_descriptor_table.idtr.base.as_u64());
+        vmwrite(guest::GDTR_BASE, self.guest_descriptor_table.gdtr.base as u64);
+        vmwrite(guest::IDTR_BASE, self.guest_descriptor_table.idtr.base as u64);
 
         vmwrite(guest::GDTR_LIMIT, self.guest_descriptor_table.gdtr.limit as u64);
         vmwrite(guest::IDTR_LIMIT, self.guest_descriptor_table.idtr.limit as u64);
@@ -224,8 +224,8 @@ impl Vmx {
         unsafe { vmwrite(host::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE)) };
         unsafe { vmwrite(host::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE)) };
         unsafe { vmwrite(host::TR_BASE, SegmentDescriptor::from(SegmentSelector(task::tr().bits())).base_address) };
-        vmwrite(host::GDTR_BASE, self.host_descriptor_table.gdtr.base.as_u64());
-        vmwrite(host::IDTR_BASE, self.host_descriptor_table.idtr.base.as_u64());
+        vmwrite(host::GDTR_BASE, self.host_descriptor_table.gdtr.base as u64);
+        vmwrite(host::IDTR_BASE, self.host_descriptor_table.idtr.base as u64);
 
         unsafe {
             vmwrite(host::IA32_SYSENTER_CS, msr::rdmsr(msr::IA32_SYSENTER_CS));
