@@ -6,15 +6,12 @@ use x86_64::registers::segmentation::SegmentSelector;
 /// - Figure 3-8. Segment Descriptor
 pub struct SegmentDescriptor {
     /// Base address of the segment.
-    /// Reference: Intel Manual, Volume 3A, Chapter 3.4.5
     pub base_address: u64,
 
     /// Segment limit defines the size of the segment.
-    /// Reference: Intel Manual, Volume 3A, Chapter 3.4.5
     pub segment_limit: u32,
 
     /// Access rights and type of the segment.
-    /// Reference: Intel Manual, Volume 3A, Chapter 3.4.5
     pub access_rights: u32,
 }
 

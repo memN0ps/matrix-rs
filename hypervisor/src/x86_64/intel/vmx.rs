@@ -240,7 +240,6 @@ impl Vmx {
     /// - 25.6 VM-EXECUTION CONTROL FIELDS
     /// - 25.7 VM-EXIT CONTROL FIELDS
     /// - 25.8 VM-ENTRY CONTROL FIELDS
-    /// - 25.6 VM-EXECUTION CONTROL FIELDS
     #[rustfmt::skip]
     fn setup_vmcs_control_fields(&mut self) {
         const PRIMARY_CTL: u64 = PrimaryControls::SECONDARY_CONTROLS.bits() as u64;

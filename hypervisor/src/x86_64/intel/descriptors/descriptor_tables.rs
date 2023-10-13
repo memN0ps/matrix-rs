@@ -9,19 +9,19 @@ use x86::dtables::DescriptorTablePointer;
 /// Contains the GDT and IDT along with their respective register pointers.
 pub struct DescriptorTables {
     /// Global Descriptor Table (GDT) for the host.
-    /// Reference: Intel Manual, Volume 3A, Chapter 3.5.1
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.5.1 Segment Descriptor Tables
     pub global_descriptor_table: Vec<u64>,
 
     /// GDTR holds the address and size of the GDT.
-    /// Reference: Intel Manual, Volume 3A, Chapter 2.4.1
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 2.4.1 Global Descriptor Table Register (GDTR)
     pub gdtr: DescriptorTablePointer<u64>,
 
     /// Interrupt Descriptor Table (IDT) for the host.
-    /// Reference: Intel Manual, Volume 3A, Chapter 6.10
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 6.10 INTERRUPT DESCRIPTOR TABLE (IDT)
     pub interrupt_descriptor_table: Vec<u64>,
 
     /// IDTR holds the address and size of the IDT.
-    /// Reference: Intel Manual, Volume 3A, Chapter 2.4.3
+    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 2.4.3 IDTR Interrupt Descriptor Table Register
     pub idtr: DescriptorTablePointer<u64>,
 }
 
