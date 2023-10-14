@@ -60,10 +60,14 @@ pub struct Vmx {
 
 impl Vmx {
     pub fn new(context: _CONTEXT) -> Result<Box<Self>, HypervisorError> {
-        println!("Setting up VMXON, VMCS, MSR Bitmap and Host RSP structures");
+        println!("Setting up VMXON, VMCS, MSR Bitmap, Host RSP, and Descriptor structures");
 
         let vmxon_region = Vmxon::new()?;
         let vmcs_region = Vmcs::new()?;
+
+        println!("Dumping Vmcs...");
+        Vmcs::execute_with_expanded_stack(vmcs_region.as_ref());
+
         let msr_bitmap = MsrBitmap::new()?;
         let host_rsp = HostRsp::new()?;
 
@@ -107,7 +111,7 @@ impl Vmx {
         instance.setup_vmcs_control_fields();
         println!("VMCS Control Fields successful!");
 
-        println!("VMXON, VMCS, MSR Bitmap and Host RSP structures successful!");
+        println!("VMXON, VMCS, MSR Bitmap, Host RSP, and Descriptor structures successful!");
         Ok(instance)
     }
 

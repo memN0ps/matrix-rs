@@ -70,7 +70,7 @@ impl DescriptorTables {
         let current_gdt = unsafe {
             core::slice::from_raw_parts(
                 current_gdtr.base.cast::<u64>(),
-                usize::from(current_gdtr.limit + 1) / core::mem::size_of::<u64>()
+                usize::from(current_gdtr.limit + 1) / core::mem::size_of::<u64>(),
             )
         };
 
