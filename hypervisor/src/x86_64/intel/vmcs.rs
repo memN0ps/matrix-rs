@@ -6,6 +6,7 @@ use crate::{
         utils::addresses::PhysicalAddress,
     },
 };
+use core::fmt;
 use x86::vmx::vmcs;
 use {alloc::boxed::Box, bitfield::BitMut, kernel_alloc::PhysicalAllocator};
 
@@ -65,10 +66,10 @@ impl Vmcs {
 }
 
 /// Dump the VMCS fields
-impl alloc::fmt::Debug for Vmcs {
+impl fmt::Debug for Vmcs {
     #[rustfmt::skip]
     /// Debug implementation for Vmcs
-    fn fmt(&self, format: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
+    fn fmt(&self, format: &mut fmt::Formatter<'_>) -> fmt::Result {
         //assert_eq!(self as *const _, vmptrst());
 
         format.debug_struct("Vmcs")
