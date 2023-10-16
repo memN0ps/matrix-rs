@@ -70,8 +70,7 @@ impl fmt::Debug for Vmcs {
     #[rustfmt::skip]
     /// Debug implementation for Vmcs
     fn fmt(&self, format: &mut fmt::Formatter<'_>) -> fmt::Result {
-        //assert_eq!(self as *const _, vmptrst());
-
+        
         format.debug_struct("Vmcs")
             .field("Current VMCS: ", &(self as *const _))
             .field("Revision ID: ", &self.revision_id)
