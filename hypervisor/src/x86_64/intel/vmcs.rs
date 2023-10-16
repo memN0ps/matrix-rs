@@ -58,117 +58,13 @@ impl Vmcs {
         Ok(vmcs_region)
     }
 
-    /// Dump the VMCS fields
-    #[rustfmt::skip]
-    #[rustfmt::skip]
-    pub fn dump_vmcs(&self) {
-        println!("Dumping VMCS...");
-
-        println!("VMCS Region Virtual Address: {:p}", self);
-        println!("VMCS Region Physical Addresss: 0x{:x}", self as *const _ as u64);
-
-        println!("Current VMCS: {:p}", vmptrst());
-        println!("Revision ID: 0x{:x}", self.revision_id);
-
-        /* VMCS Guest state fields */
-        println!("Guest CR0: 0x{:x}", vmread(vmcs::guest::CR0));
-        println!("Guest CR3: 0x{:x}", vmread(vmcs::guest::CR3));
-        println!("Guest CR4: 0x{:x}", vmread(vmcs::guest::CR4));
-        println!("Guest DR7: 0x{:x}", vmread(vmcs::guest::DR7));
-        println!("Guest RSP: 0x{:x}", vmread(vmcs::guest::RSP));
-        println!("Guest RIP: 0x{:x}", vmread(vmcs::guest::RIP));
-        println!("Guest RFLAGS: 0x{:x}", vmread(vmcs::guest::RFLAGS));
-
-        println!("Guest CS Selector: 0x{:x}", vmread(vmcs::guest::CS_SELECTOR));
-        println!("Guest SS Selector: 0x{:x}", vmread(vmcs::guest::SS_SELECTOR));
-        println!("Guest DS Selector: 0x{:x}", vmread(vmcs::guest::DS_SELECTOR));
-        println!("Guest ES Selector: 0x{:x}", vmread(vmcs::guest::ES_SELECTOR));
-        println!("Guest FS Selector: 0x{:x}", vmread(vmcs::guest::FS_SELECTOR));
-        println!("Guest GS Selector: 0x{:x}", vmread(vmcs::guest::GS_SELECTOR));
-        println!("Guest LDTR Selector: 0x{:x}", vmread(vmcs::guest::LDTR_SELECTOR));
-        println!("Guest TR Selector: 0x{:x}", vmread(vmcs::guest::TR_SELECTOR));
-
-        println!("Guest CS Base: 0x{:x}", vmread(vmcs::guest::CS_BASE));
-        println!("Guest SS Base: 0x{:x}", vmread(vmcs::guest::SS_BASE));
-        println!("Guest DS Base: 0x{:x}", vmread(vmcs::guest::DS_BASE));
-        println!("Guest ES Base: 0x{:x}", vmread(vmcs::guest::ES_BASE));
-        println!("Guest FS Base: 0x{:x}", vmread(vmcs::guest::FS_BASE));
-        println!("Guest GS Base: 0x{:x}", vmread(vmcs::guest::GS_BASE));
-        println!("Guest LDTR Base: 0x{:x}", vmread(vmcs::guest::LDTR_BASE));
-        println!("Guest TR Base: 0x{:x}", vmread(vmcs::guest::TR_BASE));
-
-        println!("Guest CS Limit: 0x{:x}", vmread(vmcs::guest::CS_LIMIT));
-        println!("Guest SS Limit: 0x{:x}", vmread(vmcs::guest::SS_LIMIT));
-        println!("Guest DS Limit: 0x{:x}", vmread(vmcs::guest::DS_LIMIT));
-        println!("Guest ES Limit: 0x{:x}", vmread(vmcs::guest::ES_LIMIT));
-        println!("Guest FS Limit: 0x{:x}", vmread(vmcs::guest::FS_LIMIT));
-        println!("Guest GS Limit: 0x{:x}", vmread(vmcs::guest::GS_LIMIT));
-        println!("Guest LDTR Limit: 0x{:x}", vmread(vmcs::guest::LDTR_LIMIT));
-        println!("Guest TR Limit: 0x{:x}", vmread(vmcs::guest::TR_LIMIT));
-
-        println!("Guest CS Access Rights: 0x{:x}", vmread(vmcs::guest::CS_ACCESS_RIGHTS));
-        println!("Guest SS Access Rights: 0x{:x}", vmread(vmcs::guest::SS_ACCESS_RIGHTS));
-        println!("Guest DS Access Rights: 0x{:x}", vmread(vmcs::guest::DS_ACCESS_RIGHTS));
-        println!("Guest ES Access Rights: 0x{:x}", vmread(vmcs::guest::ES_ACCESS_RIGHTS));
-        println!("Guest FS Access Rights: 0x{:x}", vmread(vmcs::guest::FS_ACCESS_RIGHTS));
-        println!("Guest GS Access Rights: 0x{:x}", vmread(vmcs::guest::GS_ACCESS_RIGHTS));
-        println!("Guest LDTR Access Rights: 0x{:x}", vmread(vmcs::guest::LDTR_ACCESS_RIGHTS));
-        println!("Guest TR Access Rights: 0x{:x}", vmread(vmcs::guest::TR_ACCESS_RIGHTS));
-
-        println!("Guest GDTR Base: 0x{:x}", vmread(vmcs::guest::GDTR_BASE));
-        println!("Guest IDTR Base: 0x{:x}", vmread(vmcs::guest::IDTR_BASE));
-        println!("Guest GDTR Limit: 0x{:x}", vmread(vmcs::guest::GDTR_LIMIT));
-        println!("Guest IDTR Limit: 0x{:x}", vmread(vmcs::guest::IDTR_LIMIT));
-
-        println!("Guest IA32_DEBUGCTL_FULL: 0x{:x}", vmread(vmcs::guest::IA32_DEBUGCTL_FULL));
-        println!("Guest IA32_SYSENTER_CS: 0x{:x}", vmread(vmcs::guest::IA32_SYSENTER_CS));
-        println!("Guest IA32_SYSENTER_ESP: 0x{:x}", vmread(vmcs::guest::IA32_SYSENTER_ESP));
-        println!("Guest IA32_SYSENTER_EIP: 0x{:x}", vmread(vmcs::guest::IA32_SYSENTER_EIP));
-        println!("Guest VMCS Link Pointer: 0x{:x}", vmread(vmcs::guest::LINK_PTR_FULL));
-
-        /* VMCS Host state fields */
-        println!("Host CR0: 0x{:x}", vmread(vmcs::host::CR0));
-        println!("Host CR3: 0x{:x}", vmread(vmcs::host::CR3));
-        println!("Host CR4: 0x{:x}", vmread(vmcs::host::CR4));
-        println!("Host RSP: 0x{:x}", vmread(vmcs::host::RSP));
-        println!("Host RIP: 0x{:x}", vmread(vmcs::host::RIP));
-
-        println!("Host CS Selector: 0x{:x}", vmread(vmcs::host::CS_SELECTOR));
-        println!("Host SS Selector: 0x{:x}", vmread(vmcs::host::SS_SELECTOR));
-        println!("Host DS Selector: 0x{:x}", vmread(vmcs::host::DS_SELECTOR));
-        println!("Host ES Selector: 0x{:x}", vmread(vmcs::host::ES_SELECTOR));
-        println!("Host FS Selector: 0x{:x}", vmread(vmcs::host::FS_SELECTOR));
-        println!("Host GS Selector: 0x{:x}", vmread(vmcs::host::GS_SELECTOR));
-        println!("Host TR Selector: 0x{:x}", vmread(vmcs::host::TR_SELECTOR));
-
-        println!("Host FS Base: 0x{:x}", vmread(vmcs::host::FS_BASE));
-        println!("Host GS Base: 0x{:x}", vmread(vmcs::host::GS_BASE));
-        println!("Host TR Base: 0x{:x}", vmread(vmcs::host::TR_BASE));
-        println!("Host GDTR Base: 0x{:x}", vmread(vmcs::host::GDTR_BASE));
-        println!("Host IDTR Base: 0x{:x}", vmread(vmcs::host::IDTR_BASE));
-
-        println!("Host IA32_SYSENTER_CS: 0x{:x}", vmread(vmcs::host::IA32_SYSENTER_CS));
-        println!("Host IA32_SYSENTER_ESP: 0x{:x}", vmread(vmcs::host::IA32_SYSENTER_ESP));
-        println!("Host IA32_SYSENTER_EIP: 0x{:x}", vmread(vmcs::host::IA32_SYSENTER_EIP));
-
-        /* VMCS Control fields */
-        println!("Primary Proc Based Execution Controls: 0x{:x}", vmread(vmcs::control::PRIMARY_PROCBASED_EXEC_CONTROLS));
-        println!("Secondary Proc Based Execution Controls: 0x{:x}", vmread(vmcs::control::SECONDARY_PROCBASED_EXEC_CONTROLS));
-        println!("VM Entry Controls: 0x{:x}", vmread(vmcs::control::VMENTRY_CONTROLS));
-        println!("VM Exit Controls: 0x{:x}", vmread(vmcs::control::VMEXIT_CONTROLS));
-        println!("Pin Based Execution Controls: 0x{:x}", vmread(vmcs::control::PINBASED_EXEC_CONTROLS));
-        println!("CR0 Read Shadow: 0x{:x}", vmread(vmcs::control::CR0_READ_SHADOW));
-        println!("CR4 Read Shadow: 0x{:x}", vmread(vmcs::control::CR4_READ_SHADOW));
-        println!("MSR Bitmaps Address: 0x{:x}", vmread(vmcs::control::MSR_BITMAPS_ADDR_FULL));
-    }
-
     /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID)
     fn get_vmcs_revision_id() -> u32 {
         unsafe { (x86::msr::rdmsr(x86::msr::IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
     }
 }
 
-/*
+/// Dump the VMCS fields
 impl alloc::fmt::Debug for Vmcs {
     #[rustfmt::skip]
     /// Debug implementation for Vmcs
@@ -269,4 +165,3 @@ impl alloc::fmt::Debug for Vmcs {
             .finish_non_exhaustive()
     }
 }
-*/

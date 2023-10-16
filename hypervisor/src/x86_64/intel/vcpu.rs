@@ -54,7 +54,8 @@ impl Vcpu {
 
             println!("Virtualization complete for processor {}", self.index);
 
-            vmx_ref.vmcs_region.dump_vmcs();
+            //vmx_ref.vmcs_region.dump_vmcs();
+            println!("{:#x?}", vmx_ref.vmcs_region);
 
             // Run the VM until the VM-exit occurs.
             println!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
