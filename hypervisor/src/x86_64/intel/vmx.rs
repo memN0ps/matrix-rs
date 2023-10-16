@@ -38,6 +38,7 @@ use wdk_sys::_CONTEXT;
 use x86_64::structures::gdt::SegmentSelector;
 
 /// Custom memory allocator Boxed pointers for the Vmxon, Vmcs, MsrBitmap and HostRsp structures are stored in the Vmx struct to ensure they are not dropped.
+#[repr(C, align(4096))]
 pub struct Vmx {
     /// The virtual address of the Vmxon naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode)
     pub vmxon_region: Box<Vmxon, PhysicalAllocator>,
@@ -48,47 +49,43 @@ pub struct Vmx {
     // The virtual address of the MSR Bitmap naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode)
     pub msr_bitmap: Box<MsrBitmap, PhysicalAllocator>,
 
-    /// The virtual address of the VMCS_HOST_RSP naturally aligned 4-KByte region of memory (ExAllocatePool / ExAllocatePoolWithTag)
-    pub host_rsp: Box<HostRsp, KernelAlloc>,
-
     /// The virtual address of the Guest DescriptorTables containing the Descriptor Tables (GDT, IDT)
     pub guest_descriptor_table: Box<DescriptorTables, KernelAlloc>,
 
     /// The virtual address of the Host DescriptorTables containing the Descriptor Tables (GDT, IDT)
     pub host_descriptor_table: Box<DescriptorTables, KernelAlloc>,
+
+    /// The virtual address of the VMCS_HOST_RSP naturally aligned 4-KByte region of memory (ExAllocatePool / ExAllocatePoolWithTag)
+    pub host_rsp: Box<HostRsp, KernelAlloc>,
 }
 
 impl Vmx {
     pub fn new(context: _CONTEXT) -> Result<Box<Self>, HypervisorError> {
-        println!("Setting up VMXON, VMCS, MSR Bitmap, Host RSP, and Descriptor structures");
+        println!("Setting up VMX");
 
+        // To capture the current GDT and IDT for the guest the order is important so we can setup up a new GDT and IDT for the host.
         let vmxon_region = Vmxon::new()?;
         let vmcs_region = Vmcs::new()?;
-
-        println!("Dumping Vmcs...");
-        Vmcs::execute_with_expanded_stack(vmcs_region.as_ref());
-
         let msr_bitmap = MsrBitmap::new()?;
+        let guest_descriptor_table = DescriptorTables::initialize_for_guest()?;
+        let host_descriptor_table = DescriptorTables::initialize_for_host()?;
         let host_rsp = HostRsp::new()?;
 
-        // The order of the following 2 functions is important.
-
-        // Capture the current GDT and IDT for the guest.
-        let guest_descriptor_table = DescriptorTables::initialize_for_guest()?;
-
-        // Set up a new GDT and IDT for the host.
-        let host_descriptor_table = DescriptorTables::initialize_for_host()?;
+        println!("Creating Vmx instance");
 
         let instance = Self {
             vmxon_region,
             vmcs_region,
             msr_bitmap,
-            host_rsp,
             guest_descriptor_table,
             host_descriptor_table,
+            host_rsp,
         };
 
         let mut instance = Box::new(instance);
+
+        // Set the self_data pointer to the instance. This can be used in the vmexit_handler to retrieve the instance.
+        instance.host_rsp.self_data = &mut *instance as *mut _ as _;
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
         println!("Setting up Guest Registers State");
@@ -111,7 +108,11 @@ impl Vmx {
         instance.setup_vmcs_control_fields();
         println!("VMCS Control Fields successful!");
 
-        println!("VMXON, VMCS, MSR Bitmap, Host RSP, and Descriptor structures successful!");
+        println!("Dumping Vmcs...");
+        println!("{:#x?}", instance.vmcs_region);
+
+        println!("VMX setup successful!");
+
         Ok(instance)
     }
 

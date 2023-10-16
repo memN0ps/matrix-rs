@@ -6,11 +6,7 @@ use crate::{
         utils::addresses::PhysicalAddress,
     },
 };
-use core::fmt;
 use x86::vmx::vmcs;
-
-use wdk_sys::{ntddk::KeExpandKernelStackAndCalloutEx, NT_SUCCESS, PVOID, SIZE_T};
-
 use {alloc::boxed::Box, bitfield::BitMut, kernel_alloc::PhysicalAllocator};
 
 pub const PAGE_SIZE: usize = 0x1000;
@@ -62,47 +58,16 @@ impl Vmcs {
         Ok(vmcs_region)
     }
 
-    /// Execute a callback with an expanded kernel stack to dump the Vmcs. (Credits to vmprotect).
-    pub fn execute_with_expanded_stack(vmcs: &Vmcs) {
-        let status = unsafe {
-            KeExpandKernelStackAndCalloutEx(
-                Some(expanded_stack_callback), // Note: As the type already matches, we don't need to cast.
-                vmcs as *const _ as PVOID,
-                DESIRED_STACK_SIZE,
-                0,                     // FALSE for WaitIfInSwap
-                core::ptr::null_mut(), // NULL for Context
-            )
-        };
-
-        if !NT_SUCCESS(status) {
-            panic!(
-                "Failed to call KeExpandKernelStackAndCalloutEx: 0x{:#x}",
-                status
-            );
-        }
-
-        println!("Successfully called KeExpandKernelStackAndCalloutEx");
-    }
-
     /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID)
     fn get_vmcs_revision_id() -> u32 {
         unsafe { (x86::msr::rdmsr(x86::msr::IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
     }
 }
-
-// Replace with the size you need.
-const DESIRED_STACK_SIZE: SIZE_T = 4096;
-
-pub unsafe extern "C" fn expanded_stack_callback(parameter: PVOID) {
-    let vmcs_instance = &*(parameter as *const Vmcs);
-    println!("{:#x?}", vmcs_instance);
-}
-
-impl fmt::Debug for Vmcs {
+impl alloc::fmt::Debug for Vmcs {
     #[rustfmt::skip]
     /// Debug implementation for Vmcs
-    fn fmt(&self, format: &mut fmt::Formatter<'_>) -> fmt::Result {
-        assert_eq!(self as *const _, vmptrst());
+    fn fmt(&self, format: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
+        //assert_eq!(self as *const _, vmptrst());
 
         format.debug_struct("Vmcs")
             .field("Current VMCS: ", &(self as *const _))
