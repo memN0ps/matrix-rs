@@ -7,6 +7,7 @@ use x86::dtables::DescriptorTablePointer;
 
 /// Represents the descriptor tables (GDT and IDT) for the host.
 /// Contains the GDT and IDT along with their respective register pointers.
+#[repr(C, align(4096))]
 pub struct DescriptorTables {
     /// Global Descriptor Table (GDT) for the host.
     /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.5.1 Segment Descriptor Tables
