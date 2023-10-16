@@ -85,7 +85,7 @@ impl Vmx {
         let mut instance = Box::new(instance);
 
         // Set the self_data pointer to the instance. This can be used in the vmexit_handler to retrieve the instance.
-        instance.host_rsp.self_data = &mut *instance as *mut _ as _;
+        // instance.host_rsp.self_data = &mut *instance as *mut _ as _;
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
         println!("Setting up Guest Registers State");
@@ -107,9 +107,6 @@ impl Vmx {
         println!("Setting up VMCS Control Fields");
         instance.setup_vmcs_control_fields();
         println!("VMCS Control Fields successful!");
-
-        println!("Dumping Vmcs...");
-        println!("{:#x?}", instance.vmcs_region);
 
         println!("VMX setup successful!");
 

@@ -50,9 +50,11 @@ impl Vcpu {
             set_virtualized();
 
             let vmx_box = Vmx::new(context)?;
-            self.vmx.get_or_init(|| vmx_box);
+            let vmx_ref = self.vmx.get_or_init(|| vmx_box);
 
             println!("Virtualization complete for processor {}", self.index);
+
+            vmx_ref.vmcs_region.dump_vmcs();
 
             // Run the VM until the VM-exit occurs.
             println!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
