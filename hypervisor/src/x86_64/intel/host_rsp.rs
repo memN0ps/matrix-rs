@@ -2,7 +2,7 @@ use crate::{error::HypervisorError, println};
 use {alloc::boxed::Box, core::mem::size_of, kernel_alloc::KernelAlloc};
 
 pub const KERNEL_STACK_SIZE: usize = 0x6000;
-pub const HOST_RSP_RESERVED: usize = size_of::<*mut u64>() * 3;
+pub const HOST_RSP_RESERVED: usize = size_of::<*mut u64>() * 2;
 pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - HOST_RSP_RESERVED;
 
 #[repr(C, align(4096))]
@@ -11,14 +11,13 @@ pub struct HostRsp {
 
     /// Provides a reference to the `Vmx` structure which can be utilized within the VM exit handlers.
     /// By leveraging an offset of `[RSP + 8]`, we can retrieve this "self data" reference during the handler's execution, if required.
-    pub self_data: *mut u64,
+    // pub self_data: *mut u64,
 
     // To keep Host Rsp 16 bytes aligned
     pub padding_1: u64,
     pub reserved_1: u64,
 }
 const_assert_eq!(size_of::<HostRsp>(), KERNEL_STACK_SIZE);
-const_assert_eq!(size_of::<HostRsp>() % 16, 0);
 
 impl HostRsp {
     pub fn new() -> Result<Box<Self, KernelAlloc>, HypervisorError> {
