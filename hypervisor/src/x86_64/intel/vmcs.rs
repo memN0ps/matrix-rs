@@ -2,7 +2,7 @@ use crate::{
     error::HypervisorError,
     println,
     x86_64::{
-        intel::support::{vmclear, vmptrld, vmptrst, vmread},
+        intel::support::{vmclear, vmptrld, vmread},
         utils::addresses::PhysicalAddress,
     },
 };
@@ -70,7 +70,7 @@ impl fmt::Debug for Vmcs {
     #[rustfmt::skip]
     /// Debug implementation for Vmcs
     fn fmt(&self, format: &mut fmt::Formatter<'_>) -> fmt::Result {
-        
+
         format.debug_struct("Vmcs")
             .field("Current VMCS: ", &(self as *const _))
             .field("Revision ID: ", &self.revision_id)
