@@ -1,7 +1,8 @@
 use super::{
     events::EventInjection, support::vmwrite, vmerror::VmxBasicExitReason, vmlaunch::GuestRegisters,
 };
-use crate::{error::HypervisorError, println, x86_64::intel::support::vmread};
+use crate::x86_64::intel::vmerror::VmInstructionError;
+use crate::{error::HypervisorError, x86_64::intel::support::vmread};
 use x86::vmx::vmcs::{self, guest, ro::VMEXIT_INSTRUCTION_LEN};
 
 // More leafs here if needed: https://docs.rs/raw-cpuid/10.6.0/src/raw_cpuid/lib.rs.html#289
@@ -33,14 +34,20 @@ impl VmExit {
         // Every VM exit writes a 32-bit exit reason to the VMCS (see Section 25.9.1). Certain VM-entry failures also do this (see Section 27.8).
         // The low 16 bits of the exit-reason field form the basic exit reason which provides basic information about the cause of the VM exit or VM-entry failure.
         let exit_reason = vmread(vmcs::ro::EXIT_REASON) as u32;
-        //println!("VMEXIT Reason: {:#x}", exit_reason);
 
         let Some(basic_exit_reason) = VmxBasicExitReason::from_u32(exit_reason) else {
-            println!("Unknown exit reason: {:#x}", exit_reason);
+            //println!("Unknown exit reason: {:#x}", exit_reason);
             return Err(HypervisorError::UnknownVMExitReason);
         };
-
         //println!("Basic Exit Reason: {}", basic_exit_reason);
+
+        let instruction_error = vmread(vmcs::ro::VM_INSTRUCTION_ERROR) as u32;
+
+        let Some(_error) = VmInstructionError::from_u32(instruction_error) else {
+            //println!("Unknown instruction error: {:#x}", instruction_error);
+            return Err(HypervisorError::UnknownVMInstructionError);
+        };
+        //println!("VMLAUNCH instruction error: {}", error);
 
         /* Handle VMEXIT */
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.2 Instructions That Cause VM Exits Unconditionally */
@@ -58,6 +65,8 @@ impl VmExit {
         //println!("Advancing guest RIP...");
         self.advance_guest_rip();
         //println!("Guest RIP advanced to: {:#x}", vmread(guest::RIP));
+
+        //println!("VMEXIT handled successfully.");
 
         return Ok(basic_exit_reason);
     }

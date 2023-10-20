@@ -49,4 +49,7 @@ pub enum HypervisorError {
 
     #[error("Unknown VM exit basic reason")]
     UnknownVMExitReason,
+
+    #[error("Unknown VM instruction error")]
+    UnknownVMInstructionError,
 }
