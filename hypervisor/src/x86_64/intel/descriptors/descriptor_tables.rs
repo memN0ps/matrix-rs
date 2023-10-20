@@ -113,4 +113,14 @@ impl DescriptorTables {
         self.idtr = new_idtr; // Use the same IDTR as it points to the correct base and limit
         println!("Copied current IDT");
     }
+
+    /// Get the table as slice from the pointer.
+    pub fn from_pointer(pointer: &DescriptorTablePointer<u64>) -> &[u64] {
+        unsafe {
+            core::slice::from_raw_parts(
+                pointer.base.cast::<u64>(),
+                (pointer.limit + 1) as usize / core::mem::size_of::<u64>(),
+            )
+        }
+    }
 }

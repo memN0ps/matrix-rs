@@ -31,11 +31,10 @@ use crate::{
 };
 
 use super::{host_rsp::HostRsp, msr_bitmap::MsrBitmap, vmcs::Vmcs, vmxon::Vmxon};
-
 use crate::x86_64::intel::descriptors::descriptor_tables::DescriptorTables;
 use crate::x86_64::intel::descriptors::segment_descriptor::SegmentDescriptor;
 use wdk_sys::_CONTEXT;
-use x86_64::structures::gdt::SegmentSelector;
+use x86::segmentation::SegmentSelector;
 
 /// Custom memory allocator Boxed pointers for the Vmxon, Vmcs, MsrBitmap and HostRsp structures are stored in the Vmx struct to ensure they are not dropped.
 #[repr(C, align(4096))]
@@ -150,32 +149,32 @@ impl Vmx {
         unsafe { vmwrite(guest::LDTR_SELECTOR, dtables::ldtr().bits() as u64) };
         unsafe { vmwrite(guest::TR_SELECTOR, task::tr().bits() as u64) };
 
-        vmwrite(guest::CS_BASE, SegmentDescriptor::from(SegmentSelector(context.SegCs)).base_address);
-        vmwrite(guest::SS_BASE, SegmentDescriptor::from(SegmentSelector(context.SegSs)).base_address);
-        vmwrite(guest::DS_BASE, SegmentDescriptor::from(SegmentSelector(context.SegDs)).base_address);
-        vmwrite(guest::ES_BASE, SegmentDescriptor::from(SegmentSelector(context.SegEs)).base_address);
+        vmwrite(guest::CS_BASE, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegCs), &self.guest_descriptor_table.gdtr).base_address);
+        vmwrite(guest::SS_BASE, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegSs), &self.guest_descriptor_table.gdtr).base_address);
+        vmwrite(guest::DS_BASE, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegDs), &self.guest_descriptor_table.gdtr).base_address);
+        vmwrite(guest::ES_BASE, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegEs), &self.guest_descriptor_table.gdtr).base_address);
         unsafe { vmwrite(guest::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE)) };
         unsafe { vmwrite(guest::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE)) };
-        unsafe { vmwrite(guest::LDTR_BASE, SegmentDescriptor::from(SegmentSelector(dtables::ldtr().bits())).base_address) };
-        unsafe { vmwrite(guest::TR_BASE, SegmentDescriptor::from( SegmentSelector(task::tr().bits())).base_address) };
+        unsafe { vmwrite(guest::LDTR_BASE, SegmentDescriptor::from_selector(SegmentSelector::from_raw(dtables::ldtr().bits()), &self.guest_descriptor_table.gdtr).base_address) };
+        unsafe { vmwrite(guest::TR_BASE, SegmentDescriptor::from_selector( SegmentSelector::from_raw(task::tr().bits()), &self.guest_descriptor_table.gdtr).base_address) };
 
-        vmwrite(guest::CS_LIMIT, SegmentDescriptor::from(SegmentSelector(context.SegCs)).segment_limit);
-        vmwrite(guest::SS_LIMIT, SegmentDescriptor::from(SegmentSelector(context.SegSs)).segment_limit);
-        vmwrite(guest::DS_LIMIT, SegmentDescriptor::from(SegmentSelector(context.SegDs)).segment_limit);
-        vmwrite(guest::ES_LIMIT, SegmentDescriptor::from(SegmentSelector(context.SegEs)).segment_limit);
-        vmwrite(guest::FS_LIMIT, SegmentDescriptor::from(SegmentSelector(context.SegFs)).segment_limit);
-        vmwrite(guest::GS_LIMIT, SegmentDescriptor::from(SegmentSelector(context.SegGs)).segment_limit);
-        unsafe { vmwrite(guest::LDTR_LIMIT, SegmentDescriptor::from(SegmentSelector(dtables::ldtr().bits())).segment_limit) };
-        unsafe { vmwrite(guest::TR_LIMIT, SegmentDescriptor::from(SegmentSelector(task::tr().bits())).segment_limit) };
+        vmwrite(guest::CS_LIMIT, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegCs), &self.guest_descriptor_table.gdtr).segment_limit);
+        vmwrite(guest::SS_LIMIT, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegSs), &self.guest_descriptor_table.gdtr).segment_limit);
+        vmwrite(guest::DS_LIMIT, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegDs), &self.guest_descriptor_table.gdtr).segment_limit);
+        vmwrite(guest::ES_LIMIT, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegEs), &self.guest_descriptor_table.gdtr).segment_limit);
+        vmwrite(guest::FS_LIMIT, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegFs), &self.guest_descriptor_table.gdtr).segment_limit);
+        vmwrite(guest::GS_LIMIT, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegGs), &self.guest_descriptor_table.gdtr).segment_limit);
+        unsafe { vmwrite(guest::LDTR_LIMIT, SegmentDescriptor::from_selector(SegmentSelector::from_raw(dtables::ldtr().bits()), &self.guest_descriptor_table.gdtr).segment_limit) };
+        unsafe { vmwrite(guest::TR_LIMIT, SegmentDescriptor::from_selector(SegmentSelector::from_raw(task::tr().bits()), &self.guest_descriptor_table.gdtr).segment_limit) };
 
-        vmwrite(guest::CS_ACCESS_RIGHTS, SegmentDescriptor::from(SegmentSelector(context.SegCs)).access_rights);
-        vmwrite(guest::SS_ACCESS_RIGHTS, SegmentDescriptor::from(SegmentSelector(context.SegSs)).access_rights);
-        vmwrite(guest::DS_ACCESS_RIGHTS, SegmentDescriptor::from(SegmentSelector(context.SegDs)).access_rights);
-        vmwrite(guest::ES_ACCESS_RIGHTS, SegmentDescriptor::from(SegmentSelector(context.SegEs)).access_rights);
-        vmwrite(guest::FS_ACCESS_RIGHTS, SegmentDescriptor::from(SegmentSelector(context.SegFs)).access_rights);
-        vmwrite(guest::GS_ACCESS_RIGHTS, SegmentDescriptor::from(SegmentSelector(context.SegGs)).access_rights);
-        unsafe { vmwrite(guest::LDTR_ACCESS_RIGHTS, SegmentDescriptor::from(SegmentSelector(dtables::ldtr().bits())).access_rights) };
-        unsafe { vmwrite(guest::TR_ACCESS_RIGHTS, SegmentDescriptor::from(SegmentSelector(task::tr().bits())).access_rights) };
+        vmwrite(guest::CS_ACCESS_RIGHTS, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegCs), &self.guest_descriptor_table.gdtr).access_rights.bits());
+        vmwrite(guest::SS_ACCESS_RIGHTS, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegSs), &self.guest_descriptor_table.gdtr).access_rights.bits());
+        vmwrite(guest::DS_ACCESS_RIGHTS, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegDs), &self.guest_descriptor_table.gdtr).access_rights.bits());
+        vmwrite(guest::ES_ACCESS_RIGHTS, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegEs), &self.guest_descriptor_table.gdtr).access_rights.bits());
+        vmwrite(guest::FS_ACCESS_RIGHTS, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegFs), &self.guest_descriptor_table.gdtr).access_rights.bits());
+        vmwrite(guest::GS_ACCESS_RIGHTS, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegGs), &self.guest_descriptor_table.gdtr).access_rights.bits());
+        unsafe { vmwrite(guest::LDTR_ACCESS_RIGHTS, SegmentDescriptor::from_selector(SegmentSelector::from_raw(dtables::ldtr().bits()), &self.guest_descriptor_table.gdtr).access_rights.bits()) };
+        unsafe { vmwrite(guest::TR_ACCESS_RIGHTS, SegmentDescriptor::from_selector(SegmentSelector::from_raw(task::tr().bits()), &self.guest_descriptor_table.gdtr).access_rights.bits()) };
 
         vmwrite(guest::GDTR_BASE, self.guest_descriptor_table.gdtr.base as u64);
         vmwrite(guest::IDTR_BASE, self.guest_descriptor_table.idtr.base as u64);
@@ -225,7 +224,7 @@ impl Vmx {
 
         unsafe { vmwrite(host::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE)) };
         unsafe { vmwrite(host::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE)) };
-        unsafe { vmwrite(host::TR_BASE, SegmentDescriptor::from(SegmentSelector(task::tr().bits())).base_address) };
+        unsafe { vmwrite(host::TR_BASE, SegmentDescriptor::from_selector(SegmentSelector::from_raw(task::tr().bits()), &self.host_descriptor_table.gdtr).base_address) };
         vmwrite(host::GDTR_BASE, self.host_descriptor_table.gdtr.base as u64);
         vmwrite(host::IDTR_BASE, self.host_descriptor_table.idtr.base as u64);
 
