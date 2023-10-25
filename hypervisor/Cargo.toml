@@ -11,6 +11,7 @@ wdk-alloc = "0.1.0"
 wdk-panic = "0.1.0"
 wdk-sys = "0.1.0"
 x86 = "0.52.0" # https://crates.io/crates/x86
+x86_64 = "0.14.11" # https://crates.io/crates/x86_64
 kernel-alloc = { version = "0.2.3", features = ["pool-tag"] } # https://crates.io/crates/kernel-alloc
 thiserror-no-std = "2.0.2" # https://crates.io/crates/thiserror-no-std
 bitfield = "0.14.0" # https://crates.io/crates/bitfield
