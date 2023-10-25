@@ -1,16 +1,16 @@
 use {
     // Super imports
-    super::{vmstack::VmStack, msr_bitmap::MsrBitmap, vmcs::Vmcs, vmxon::Vmxon},
+    super::{msr_bitmap::MsrBitmap, vmcs::Vmcs, vmstack::VmStack, vmxon::Vmxon},
     // Internal crate usages
     crate::{
         error::HypervisorError,
         intel::{
             controls::{adjust_vmx_controls, VmxControl},
             descriptor::DescriptorTables,
-            vmstack::STACK_CONTENTS_SIZE,
             segmentation::SegmentDescriptor,
             support::vmwrite,
             vmlaunch::vmexit_stub,
+            vmstack::STACK_CONTENTS_SIZE,
         },
         println,
         utils::addresses::PhysicalAddress,
