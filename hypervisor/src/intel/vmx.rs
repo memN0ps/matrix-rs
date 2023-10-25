@@ -1,13 +1,13 @@
 use {
     // Super imports
-    super::{host_rsp::HostRsp, msr_bitmap::MsrBitmap, vmcs::Vmcs, vmxon::Vmxon},
+    super::{vmstack::VmStack, msr_bitmap::MsrBitmap, vmcs::Vmcs, vmxon::Vmxon},
     // Internal crate usages
     crate::{
         error::HypervisorError,
         intel::{
             controls::{adjust_vmx_controls, VmxControl},
             descriptor::DescriptorTables,
-            host_rsp::STACK_CONTENTS_SIZE,
+            vmstack::STACK_CONTENTS_SIZE,
             segmentation::SegmentDescriptor,
             support::vmwrite,
             vmlaunch::vmexit_stub,
@@ -55,7 +55,7 @@ pub struct Vmx {
     pub host_descriptor_table: Box<DescriptorTables, KernelAlloc>,
 
     /// The virtual address of the VMCS_HOST_RSP naturally aligned 4-KByte region of memory (ExAllocatePool / ExAllocatePoolWithTag)
-    pub host_rsp: Box<HostRsp, KernelAlloc>,
+    pub host_rsp: Box<VmStack, KernelAlloc>,
 }
 
 impl Vmx {
@@ -68,7 +68,7 @@ impl Vmx {
         let msr_bitmap = MsrBitmap::new()?;
         let guest_descriptor_table = DescriptorTables::initialize_for_guest()?;
         let host_descriptor_table = DescriptorTables::initialize_for_host()?;
-        let host_rsp = HostRsp::new()?;
+        let host_rsp = VmStack::new()?;
 
         println!("Creating Vmx instance");
 
@@ -156,7 +156,7 @@ impl Vmx {
         unsafe { vmwrite(guest::FS_BASE, msr::rdmsr(msr::IA32_FS_BASE)) };
         unsafe { vmwrite(guest::GS_BASE, msr::rdmsr(msr::IA32_GS_BASE)) };
         unsafe { vmwrite(guest::LDTR_BASE, SegmentDescriptor::from_selector(SegmentSelector::from_raw(dtables::ldtr().bits()), &self.guest_descriptor_table.gdtr).base_address) };
-        unsafe { vmwrite(guest::TR_BASE, SegmentDescriptor::from_selector( SegmentSelector::from_raw(task::tr().bits()), &self.guest_descriptor_table.gdtr).base_address) };
+        unsafe { vmwrite(guest::TR_BASE, SegmentDescriptor::from_selector(SegmentSelector::from_raw(task::tr().bits()), &self.guest_descriptor_table.gdtr).base_address) };
 
         vmwrite(guest::CS_LIMIT, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegCs), &self.guest_descriptor_table.gdtr).segment_limit);
         vmwrite(guest::SS_LIMIT, SegmentDescriptor::from_selector(SegmentSelector::from_raw(context.SegSs), &self.guest_descriptor_table.gdtr).segment_limit);
@@ -251,7 +251,7 @@ impl Vmx {
 
         vmwrite(vmx::vmcs::control::PRIMARY_PROCBASED_EXEC_CONTROLS, adjust_vmx_controls(VmxControl::ProcessorBased, PRIMARY_CTL));
         vmwrite(vmx::vmcs::control::SECONDARY_PROCBASED_EXEC_CONTROLS, adjust_vmx_controls(VmxControl::ProcessorBased2, SECONDARY_CTL));
-        vmwrite(vmx::vmcs::control::VMENTRY_CONTROLS,adjust_vmx_controls(VmxControl::VmEntry, ENTRY_CTL));
+        vmwrite(vmx::vmcs::control::VMENTRY_CONTROLS, adjust_vmx_controls(VmxControl::VmEntry, ENTRY_CTL));
         vmwrite(vmx::vmcs::control::VMEXIT_CONTROLS, adjust_vmx_controls(VmxControl::VmExit, EXIT_CTL));
         vmwrite(vmx::vmcs::control::PINBASED_EXEC_CONTROLS, adjust_vmx_controls(VmxControl::PinBased, PINBASED_CTL));
 
