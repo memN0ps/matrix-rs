@@ -31,8 +31,8 @@ use crate::{
 };
 
 use super::{host_rsp::HostRsp, msr_bitmap::MsrBitmap, vmcs::Vmcs, vmxon::Vmxon};
-use crate::x86_64::intel::descriptors::descriptor_tables::DescriptorTables;
-use crate::x86_64::intel::descriptors::segment_descriptor::SegmentDescriptor;
+use crate::x86_64::intel::descriptor::DescriptorTables;
+use crate::x86_64::intel::segmentation::SegmentDescriptor;
 use wdk_sys::_CONTEXT;
 use x86::segmentation::SegmentSelector;
 

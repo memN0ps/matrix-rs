@@ -68,12 +68,7 @@ impl DescriptorTables {
         let current_gdtr = sgdt();
 
         // Create a slice from the current GDT entries.
-        let current_gdt = unsafe {
-            core::slice::from_raw_parts(
-                current_gdtr.base.cast::<u64>(),
-                usize::from(current_gdtr.limit + 1) / core::mem::size_of::<u64>(),
-            )
-        };
+        let current_gdt = Self::from_pointer(&current_gdtr);
 
         // Create a new GDT from the slice.
         let new_gdt = current_gdt.to_vec();
@@ -95,12 +90,7 @@ impl DescriptorTables {
         let current_idtr = sidt();
 
         // Create a slice from the current IDT entries.
-        let current_idt: &[u64] = unsafe {
-            core::slice::from_raw_parts(
-                current_idtr.base.cast::<u64>(),
-                (current_idtr.limit + 1) as usize / core::mem::size_of::<u64>(),
-            )
-        };
+        let current_idt = Self::from_pointer(&current_idtr);
 
         // Create a new IDT from the slice.
         let new_idt = current_idt.to_vec();

@@ -1,9 +1,10 @@
 pub mod controls;
-pub mod descriptors;
+pub mod descriptor;
 pub mod ept;
 pub mod events;
 pub mod host_rsp;
 pub mod msr_bitmap;
+pub mod segmentation;
 pub mod support;
 pub mod vcpu;
 pub mod vmcs;

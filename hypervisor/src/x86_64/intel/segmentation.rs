@@ -1,8 +1,9 @@
-use crate::x86_64::intel::descriptors::descriptor_tables::DescriptorTables;
+use crate::x86_64::intel::descriptor::DescriptorTables;
 use bit_field::BitField;
 use bitflags::bitflags;
 use x86::dtables::DescriptorTablePointer;
 use x86::segmentation::SegmentSelector;
+use x86_64::structures::gdt::DescriptorFlags;
 
 bitflags! {
     /// Access rights for VMCS guest register states.
@@ -69,22 +70,48 @@ bitflags! {
 }
 
 impl SegmentAccessRights {
+    /// Constructs `SegmentAccessRights` from a segment descriptor.
+    ///
+    /// The access rights are extracted from bits 40-55 of the segment descriptor.
+    /// Only bits 8-15 and 0-7 within this range are directly related to access rights.
+    ///
+    /// # Arguments
+    ///
+    /// * `desc` - The segment descriptor from which to extract access rights.
+    ///
+    /// # Returns
+    ///
+    /// A `SegmentAccessRights` instance representing the extracted access rights.
     pub fn from_descriptor(desc: u64) -> Self {
-        Self::from_bits_truncate(desc.get_bits(40..56) as u32 & 0xf0ff)
+        // Extract bits 40-55 from the descriptor
+        let access_bits = desc.get_bits(40..56) as u32;
+
+        // Mask out the unwanted bits to get only the relevant access rights
+        let relevant_bits = access_bits & 0xf0ff;
+
+        Self::from_bits_truncate(relevant_bits)
     }
 }
 
-/// Represents details of a segment descriptor in the GDT or LDT.
+/// Represents the details of a segment descriptor in the GDT or LDT.
+/// Segment descriptors are used to define the characteristics of a segment.
+///
 /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
 /// - Figure 3-8. Segment Descriptor
 pub struct SegmentDescriptor {
+    /// Selector provides an index into the GDT or LDT, pointing to the segment descriptor.
     pub selector: SegmentSelector,
+    /// The starting address of the segment.
     pub base_address: u64,
+    /// The size of the segment. The ending address is calculated as base_address + segment_limit.
     pub segment_limit: u32,
+    /// Flags detailing the properties of the segment.
     pub access_rights: SegmentAccessRights,
 }
 
 impl SegmentDescriptor {
+    /// Returns an invalid `SegmentDescriptor`.
+    /// This is useful to represent a non-present or non-configured segment.
     pub const fn invalid() -> Self {
         Self {
             selector: SegmentSelector::empty(),
@@ -94,53 +121,59 @@ impl SegmentDescriptor {
         }
     }
 
+    /// Constructs a `SegmentDescriptor` from a given segment selector and a pointer to the GDT.
+    ///
+    /// The method uses the segment selector to index into the GDT and retrieve the associated segment descriptor.
+    /// It then extracts the base address, segment limit, and access rights from the descriptor.
+    ///
+    /// # Arguments
+    ///
+    /// * `selector` - A segment selector that provides an index into the GDT.
+    /// * `gdtr` - A pointer to the GDT.
     pub fn from_selector(selector: SegmentSelector, gdtr: &DescriptorTablePointer<u64>) -> Self {
-        // Index calculation - Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.5.1 Segment Selectors
+        // Index into the GDT using the selector's index value.
         let index = selector.index() as usize;
-
-        // Using the GDTR to get the GDT table as an array of descriptors
         let table = DescriptorTables::from_pointer(gdtr);
 
-        // Fetching the descriptor using the index
+        // Fetch the descriptor entry from the GDT.
         let entry_value = table[index];
 
-        // Checking the Present bit - Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
-        let is_present = (entry_value >> 47) & 1 == 1;
+        // Convert the entry value into descriptor flags.
+        let entry = DescriptorFlags::from_bits_truncate(entry_value);
 
-        // Checking the S (Descriptor type) bit - Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
-        let is_user_segment = (entry_value >> 44) & 1 == 1;
+        // If the segment is present in memory, extract its properties.
+        if entry.contains(DescriptorFlags::PRESENT) {
+            // Extract base address from the descriptor.
+            let base_low = entry_value.get_bits(0..24);
+            let base_high = entry_value.get_bits(56..64) << 24;
+            let mut base_address = base_low | base_high;
 
-        // Checking the G (Granularity) bit - Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
-        let is_granularity = (entry_value >> 55) & 1 == 1;
+            // Extract segment limit from the descriptor.
+            let segment_limit_low = entry_value.get_bits(0..16);
+            let segment_limit_high = entry_value.get_bits(48..52) << 16;
+            let mut segment_limit = segment_limit_low | segment_limit_high;
 
-        if is_present {
-            // Extracting the base address - Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
-            let mut base = entry_value.get_bits(16..40) | entry_value.get_bits(56..64) << 24;
-
-            // Extracting the limit - Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
-            let mut limit = entry_value.get_bits(0..16) | entry_value.get_bits(48..52) << 16;
-
-            if !is_user_segment {
-                // If it's not a code or data segment (like TSS or LDT), we need to get the high 32-bits from the next entry
-                // Intel® 64 and IA-32 Architectures Software Developer's Manual: 7.2.2 TSS Descriptor
+            // For non-user segments (like TSS), the base address can span two GDT entries.
+            // If this is the case, fetch the high 32 bits of the base address from the next GDT entry.
+            if !entry.contains(DescriptorFlags::USER_SEGMENT) {
                 let high = table[index + 1];
-                base += high << 32;
+                base_address += high << 32;
             }
 
-            if is_granularity {
-                // If granularity bit is set, scale the limit - Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
-                limit = (limit << 12) | 0xfff;
+            // If the granularity flag is set, the segment limit is scaled by a factor of 4096.
+            if entry.contains(DescriptorFlags::GRANULARITY) {
+                segment_limit = (segment_limit << 12) | 0xfff;
             }
 
-            // Construct the SegmentDescriptor
+            // Construct and return the `SegmentDescriptor`.
             Self {
                 selector,
-                base_address: base,
-                segment_limit: limit as _,
+                base_address,
+                segment_limit: segment_limit as _,
                 access_rights: SegmentAccessRights::from_descriptor(entry_value),
             }
         } else {
-            // If the segment is not present, return an invalid segment
+            // If the segment is not present, return an invalid descriptor.
             Self::invalid()
         }
     }
