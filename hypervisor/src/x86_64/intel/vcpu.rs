@@ -35,10 +35,10 @@ impl Vcpu {
 
     /// Virtualize the CPU by capturing the context, enabling VMX operation, adjusting control registers, calling VMXON, VMPTRLD and VMLAUNCH
     pub fn virtualize_cpu(&mut self) -> Result<(), HypervisorError> {
-        println!("Virtualizing processor {}", self.index);
+        //println!("Virtualizing processor {}", self.index);
 
         // Capture the current processor's context. The Guest will resume from this point since we capture and write this context to the guest state for each vcpu.
-        println!("Capturing context");
+        //println!("Capturing context");
         let mut context = unsafe { core::mem::zeroed::<_CONTEXT>() };
 
         unsafe { RtlCaptureContext(&mut context) };
@@ -56,6 +56,7 @@ impl Vcpu {
 
             //vmx_ref.vmcs_region.dump_vmcs();
             println!("{:#x?}", vmx_ref.vmcs_region);
+            //println!("{:#x?}", context);
 
             // Run the VM until the VM-exit occurs.
             println!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");

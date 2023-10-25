@@ -2,7 +2,7 @@ use super::{
     events::EventInjection, support::vmwrite, vmerror::VmxBasicExitReason, vmlaunch::GuestRegisters,
 };
 use crate::x86_64::intel::vmerror::VmInstructionError;
-use crate::{error::HypervisorError, x86_64::intel::support::vmread};
+use crate::{error::HypervisorError, println, x86_64::intel::support::vmread};
 use x86::vmx::vmcs::{self, guest, ro::VMEXIT_INSTRUCTION_LEN};
 
 // More leafs here if needed: https://docs.rs/raw-cpuid/10.6.0/src/raw_cpuid/lib.rs.html#289
@@ -39,7 +39,7 @@ impl VmExit {
             //println!("Unknown exit reason: {:#x}", exit_reason);
             return Err(HypervisorError::UnknownVMExitReason);
         };
-        //println!("Basic Exit Reason: {}", basic_exit_reason);
+        println!("Basic Exit Reason: {}", basic_exit_reason);
 
         let instruction_error = vmread(vmcs::ro::VM_INSTRUCTION_ERROR) as u32;
 
@@ -47,7 +47,7 @@ impl VmExit {
             //println!("Unknown instruction error: {:#x}", instruction_error);
             return Err(HypervisorError::UnknownVMInstructionError);
         };
-        //println!("VMLAUNCH instruction error: {}", error);
+        println!("VM Instruction Error: {}", _error);
 
         /* Handle VMEXIT */
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.2 Instructions That Cause VM Exits Unconditionally */

@@ -12,7 +12,7 @@ use wdk_sys::{
     ALL_PROCESSOR_GROUPS, GROUP_AFFINITY, PROCESSOR_NUMBER,
 };
 
-use crate::println;
+//use crate::println;
 use crate::x86_64::utils::nt::ZwYieldExecution;
 
 /// The KeQueryActiveProcessorCountEx routine returns the number of active logical processors in a specified group in a multiprocessor system or in the entire system.
@@ -48,7 +48,7 @@ pub struct ProcessorExecutor {
 impl ProcessorExecutor {
     pub fn switch_to_processor(i: u32) -> Option<Self> {
         if i > processor_count() {
-            println!("Invalid processor index: {}", i);
+            //println!("Invalid processor index: {}", i);
             return None;
         }
 
@@ -63,12 +63,12 @@ impl ProcessorExecutor {
         affinity.Reserved[1] = 0;
         affinity.Reserved[2] = 0;
 
-        println!("Switching execution to processor {}", i);
+        //println!("Switching execution to processor {}", i);
 
         //The KeSetSystemGroupAffinityThread routine changes the group number and affinity mask of the calling thread.
         unsafe { KeSetSystemGroupAffinityThread(&mut affinity, old_affinity.as_mut_ptr()) };
 
-        println!("Yielding execution");
+        //println!("Yielding execution");
         if !NT_SUCCESS(unsafe { ZwYieldExecution() }) {
             return None;
         }
@@ -79,7 +79,7 @@ impl ProcessorExecutor {
 
 impl Drop for ProcessorExecutor {
     fn drop(&mut self) {
-        println!("Switching execution back to previous processor");
+        //println!("Switching execution back to previous processor");
         unsafe {
             //The KeRevertToUserGroupAffinityThread routine restores the group affinity of the calling thread to its original value at the time that the thread was created.
             KeRevertToUserGroupAffinityThread(self.old_affinity.as_mut_ptr());
