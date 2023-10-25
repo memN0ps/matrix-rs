@@ -1,5 +1,9 @@
-use crate::{error::HypervisorError, println};
-use {alloc::boxed::Box, core::mem::size_of, kernel_alloc::KernelAlloc};
+use {
+    crate::{error::HypervisorError, println},
+    alloc::boxed::Box,
+    core::mem::size_of,
+    kernel_alloc::KernelAlloc,
+};
 
 pub const KERNEL_STACK_SIZE: usize = 0x6000;
 pub const HOST_RSP_RESERVED: usize = size_of::<*mut u64>() * 2;

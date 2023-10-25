@@ -1,10 +1,10 @@
-use crate::{
-    error::HypervisorError,
-    println,
-    x86_64::{intel::support::vmxon, utils::addresses::PhysicalAddress},
-};
-
+// External crate usages
 use {alloc::boxed::Box, bitfield::BitMut, kernel_alloc::PhysicalAllocator};
+
+// Internal crate usages
+use crate::{
+    error::HypervisorError, intel::support::vmxon, println, utils::addresses::PhysicalAddress,
+};
 
 pub const PAGE_SIZE: usize = 0x1000;
 

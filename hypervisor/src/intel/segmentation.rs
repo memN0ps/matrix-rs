@@ -1,9 +1,10 @@
-use crate::x86_64::intel::descriptor::DescriptorTables;
-use bit_field::BitField;
-use bitflags::bitflags;
-use x86::dtables::DescriptorTablePointer;
-use x86::segmentation::SegmentSelector;
-use x86_64::structures::gdt::DescriptorFlags;
+use {
+    crate::intel::descriptor::DescriptorTables,
+    bit_field::BitField,
+    bitflags::bitflags,
+    x86::{dtables::DescriptorTablePointer, segmentation::SegmentSelector},
+    x86_64::structures::gdt::DescriptorFlags,
+};
 
 bitflags! {
     /// Access rights for VMCS guest register states.

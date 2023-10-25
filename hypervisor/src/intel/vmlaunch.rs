@@ -1,6 +1,7 @@
-use crate::x86_64::intel::{support::vmread, vmerror::VmInstructionError};
-
-use super::vmexit::VmExit;
+use {
+    super::vmexit::VmExit,
+    crate::intel::{support::vmread, vmerror::VmInstructionError},
+};
 
 /// Guest registers.
 #[repr(C)]

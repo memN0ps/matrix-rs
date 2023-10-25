@@ -1,9 +1,15 @@
-use super::{
-    events::EventInjection, support::vmwrite, vmerror::VmxBasicExitReason, vmlaunch::GuestRegisters,
+use {
+    super::{
+        events::EventInjection, support::vmwrite, vmerror::VmxBasicExitReason,
+        vmlaunch::GuestRegisters,
+    },
+    crate::{
+        error::HypervisorError,
+        intel::{support::vmread, vmerror::VmInstructionError},
+        println,
+    },
+    x86::vmx::vmcs::{self, guest, ro::VMEXIT_INSTRUCTION_LEN},
 };
-use crate::x86_64::intel::vmerror::VmInstructionError;
-use crate::{error::HypervisorError, println, x86_64::intel::support::vmread};
-use x86::vmx::vmcs::{self, guest, ro::VMEXIT_INSTRUCTION_LEN};
 
 // More leafs here if needed: https://docs.rs/raw-cpuid/10.6.0/src/raw_cpuid/lib.rs.html#289
 pub const EAX_HYPERVISOR_PRESENT: u32 = 0x1;

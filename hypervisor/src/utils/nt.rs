@@ -2,10 +2,12 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
-use alloc::vec::Vec;
-
-use wdk_sys::{
-    ntddk::KeLowerIrql, ntddk::MmGetSystemRoutineAddress, KIRQL, NTSTATUS, PVOID, UNICODE_STRING,
+use {
+    alloc::vec::Vec,
+    wdk_sys::{
+        ntddk::KeLowerIrql, ntddk::MmGetSystemRoutineAddress, KIRQL, NTSTATUS, PVOID,
+        UNICODE_STRING,
+    },
 };
 
 // See: https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2#bug-check-codes

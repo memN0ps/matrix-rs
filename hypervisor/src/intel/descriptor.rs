@@ -1,9 +1,13 @@
-use crate::x86_64::utils::x86_instructions::{sgdt, sidt};
-use crate::{error::HypervisorError, println};
-use alloc::boxed::Box;
-use alloc::vec::Vec;
-use kernel_alloc::KernelAlloc;
-use x86::dtables::DescriptorTablePointer;
+use {
+    crate::{
+        error::HypervisorError,
+        println,
+        utils::instructions::{sgdt, sidt},
+    },
+    alloc::{boxed::Box, vec::Vec},
+    kernel_alloc::KernelAlloc,
+    x86::dtables::DescriptorTablePointer,
+};
 
 /// Represents the descriptor tables (GDT and IDT) for the host.
 /// Contains the GDT and IDT along with their respective register pointers.

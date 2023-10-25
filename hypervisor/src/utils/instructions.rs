@@ -1,7 +1,9 @@
 #![allow(dead_code)]
-use core::arch::asm;
-use x86::controlregs::{Cr0, Cr4};
-use x86::dtables::DescriptorTablePointer;
+use {
+    core::arch::asm,
+    x86::controlregs::{Cr0, Cr4},
+    x86::dtables::DescriptorTablePointer,
+};
 
 /// Returns the timestamp counter value.
 pub fn rdtsc() -> u64 {

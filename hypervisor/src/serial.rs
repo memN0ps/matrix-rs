@@ -1,7 +1,6 @@
 // Full Credits to Jim Colerick (@vmprotect) for all of the serial.rs code below:
-
-pub const SERIAL_PORT: u16 = 0x2f8;
 use core::sync::atomic::AtomicBool;
+pub const SERIAL_PORT: u16 = 0x2f8;
 
 /// Provides mutual exclusion for the serial port
 pub static mut SERIAL_LOCK: AtomicBool = AtomicBool::new(false);

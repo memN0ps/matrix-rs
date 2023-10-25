@@ -1,4 +1,4 @@
 pub mod addresses;
+pub mod instructions;
 pub mod nt;
 pub mod processor;
-pub mod x86_instructions;

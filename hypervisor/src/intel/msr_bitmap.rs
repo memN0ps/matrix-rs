@@ -1,7 +1,8 @@
-use kernel_alloc::PhysicalAllocator;
-
-use crate::{error::HypervisorError, println};
-use alloc::boxed::Box;
+use {
+    crate::{error::HypervisorError, println},
+    alloc::boxed::Box,
+    kernel_alloc::PhysicalAllocator,
+};
 
 /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.6.9 MSR-Bitmap Address
 /// On processors that support the 1-setting of the “use MSR bitmaps” VM-execution control, the VM-execution control

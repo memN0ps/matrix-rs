@@ -1,12 +1,13 @@
 #![allow(dead_code)]
 
-use core::ops::{Deref, DerefMut};
-
-use wdk_sys::{
-    ntddk::{MmGetPhysicalAddress, MmGetVirtualForPhysical},
-    PHYSICAL_ADDRESS,
+use {
+    core::ops::{Deref, DerefMut},
+    wdk_sys::{
+        ntddk::{MmGetPhysicalAddress, MmGetVirtualForPhysical},
+        PHYSICAL_ADDRESS,
+    },
+    x86::bits64::paging::{PAddr, BASE_PAGE_SHIFT},
 };
-use x86::bits64::paging::{PAddr, BASE_PAGE_SHIFT};
 
 pub struct PhysicalAddress(PAddr);
 

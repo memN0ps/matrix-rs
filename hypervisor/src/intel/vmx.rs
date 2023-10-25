@@ -1,10 +1,30 @@
 use {
+    // Super imports
+    super::{host_rsp::HostRsp, msr_bitmap::MsrBitmap, vmcs::Vmcs, vmxon::Vmxon},
+    // Internal crate usages
+    crate::{
+        error::HypervisorError,
+        intel::{
+            controls::{adjust_vmx_controls, VmxControl},
+            descriptor::DescriptorTables,
+            host_rsp::STACK_CONTENTS_SIZE,
+            segmentation::SegmentDescriptor,
+            support::vmwrite,
+            vmlaunch::vmexit_stub,
+        },
+        println,
+        utils::addresses::PhysicalAddress,
+    },
+
+    // External crate usages
     alloc::boxed::Box,
     kernel_alloc::{KernelAlloc, PhysicalAllocator},
+    wdk_sys::_CONTEXT,
     x86::{
         controlregs,
         dtables::{self},
         msr::{self},
+        segmentation::SegmentSelector,
         task,
         vmx::{
             self,
@@ -15,26 +35,6 @@ use {
         },
     },
 };
-
-use crate::{
-    error::HypervisorError,
-    println,
-    x86_64::{
-        intel::{
-            controls::{adjust_vmx_controls, VmxControl},
-            host_rsp::STACK_CONTENTS_SIZE,
-            support::vmwrite,
-            vmlaunch::vmexit_stub,
-        },
-        utils::addresses::PhysicalAddress,
-    },
-};
-
-use super::{host_rsp::HostRsp, msr_bitmap::MsrBitmap, vmcs::Vmcs, vmxon::Vmxon};
-use crate::x86_64::intel::descriptor::DescriptorTables;
-use crate::x86_64::intel::segmentation::SegmentDescriptor;
-use wdk_sys::_CONTEXT;
-use x86::segmentation::SegmentSelector;
 
 /// Custom memory allocator Boxed pointers for the Vmxon, Vmcs, MsrBitmap and HostRsp structures are stored in the Vmx struct to ensure they are not dropped.
 #[repr(C, align(4096))]

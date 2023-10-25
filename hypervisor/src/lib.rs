@@ -10,17 +10,20 @@
 
 #[macro_use]
 extern crate static_assertions;
-
-use alloc::vec::Vec;
-use error::HypervisorError;
-use x86_64::intel::vcpu::Vcpu;
-
-use crate::x86_64::utils::processor::{processor_count, ProcessorExecutor};
 extern crate alloc;
 
+use {
+    crate::utils::processor::{processor_count, ProcessorExecutor},
+    alloc::vec::Vec,
+    error::HypervisorError,
+    intel::vcpu::Vcpu,
+};
+
+pub mod amd;
 pub mod error;
+pub mod intel;
 pub mod serial;
-pub mod x86_64;
+pub mod utils;
 
 pub struct Hypervisor {
     processors: Vec<Vcpu>,

@@ -1,14 +1,14 @@
-use {alloc::boxed::Box, core::cell::OnceCell};
 extern crate alloc;
 
-use wdk_sys::{ntddk::RtlCaptureContext, _CONTEXT};
-
-use super::vmx::Vmx;
-
-use crate::{
-    error::HypervisorError,
-    println,
-    x86_64::{intel::vmlaunch::launch_vm, utils::processor::current_processor_index},
+use {
+    super::vmx::Vmx,
+    crate::{
+        error::HypervisorError, intel::vmlaunch::launch_vm, println,
+        utils::processor::current_processor_index,
+    },
+    alloc::boxed::Box,
+    core::cell::OnceCell,
+    wdk_sys::{ntddk::RtlCaptureContext, _CONTEXT},
 };
 
 pub struct Vcpu {

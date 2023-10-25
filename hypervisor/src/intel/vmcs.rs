@@ -1,14 +1,16 @@
-use crate::{
-    error::HypervisorError,
-    println,
-    x86_64::{
+use {
+    crate::{
+        error::HypervisorError,
         intel::support::{vmclear, vmptrld, vmread},
+        println,
         utils::addresses::PhysicalAddress,
     },
+    alloc::boxed::Box,
+    bitfield::BitMut,
+    core::fmt,
+    kernel_alloc::PhysicalAllocator,
+    x86::vmx::vmcs,
 };
-use core::fmt;
-use x86::vmx::vmcs;
-use {alloc::boxed::Box, bitfield::BitMut, kernel_alloc::PhysicalAllocator};
 
 pub const PAGE_SIZE: usize = 0x1000;
 
