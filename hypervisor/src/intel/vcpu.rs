@@ -38,7 +38,7 @@ impl Vcpu {
         println!("Virtualizing processor {}", self.index);
 
         // Capture the current processor's context. The Guest will resume from this point since we capture and write this context to the guest state for each vcpu.
-        //println!("Capturing context");
+        println!("Capturing context");
         let mut context = unsafe { core::mem::zeroed::<_CONTEXT>() };
 
         unsafe { RtlCaptureContext(&mut context) };

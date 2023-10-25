@@ -49,11 +49,11 @@ impl VmExit {
 
         let instruction_error = vmread(vmcs::ro::VM_INSTRUCTION_ERROR) as u32;
 
-        let Some(_error) = VmInstructionError::from_u32(instruction_error) else {
+        let Some(error) = VmInstructionError::from_u32(instruction_error) else {
             //println!("Unknown instruction error: {:#x}", instruction_error);
             return Err(HypervisorError::UnknownVMInstructionError);
         };
-        println!("VM Instruction Error: {}", _error);
+        println!("VM Instruction Error: {}", error);
 
         /* Handle VMEXIT */
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.2 Instructions That Cause VM Exits Unconditionally */
