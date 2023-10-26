@@ -2,10 +2,10 @@ use {
     crate::{
         error::HypervisorError,
         println,
+        utils::alloc::KernelAlloc,
         utils::instructions::{sgdt, sidt},
     },
     alloc::{boxed::Box, vec::Vec},
-    kernel_alloc::KernelAlloc,
     x86::dtables::DescriptorTablePointer,
 };
 
@@ -32,12 +32,10 @@ pub struct DescriptorTables {
 
 impl DescriptorTables {
     /// Captures the currently loaded GDT and IDT for the guest.
-    pub fn initialize_for_guest() -> Result<Box<Self, KernelAlloc>, HypervisorError> {
+    pub fn initialize_for_guest(
+        descriptor_tables: &mut Box<DescriptorTables, KernelAlloc>,
+    ) -> Result<(), HypervisorError> {
         println!("Capturing current Global Descriptor Table (GDT) and Interrupt Descriptor Table (IDT) for guest");
-
-        // Create a DescriptorTables instance with the current GDT and IDT.
-        let mut descriptor_tables: Box<DescriptorTables, KernelAlloc> =
-            unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
 
         // Capture the current GDT and IDT.
         descriptor_tables.gdtr = sgdt();
@@ -48,20 +46,20 @@ impl DescriptorTables {
 
         println!("Captured GDT and IDT for guest successfully!");
 
-        Ok(descriptor_tables)
+        Ok(())
     }
 
     /// Initializes and returns the descriptor tables (GDT and IDT) for the host.
-    pub fn initialize_for_host() -> Result<Box<Self, KernelAlloc>, HypervisorError> {
+    pub fn initialize_for_host(
+        descriptor_tables: &mut Box<DescriptorTables, KernelAlloc>,
+    ) -> Result<(), HypervisorError> {
         println!("Initializing descriptor tables for host");
-        let mut tables: Box<DescriptorTables, KernelAlloc> =
-            unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
 
-        tables.copy_current_gdt();
-        tables.copy_current_idt();
+        descriptor_tables.copy_current_gdt();
+        descriptor_tables.copy_current_idt();
 
         println!("Initialized descriptor tables for host");
-        Ok(tables)
+        Ok(())
     }
 
     /// Copies the current GDT.

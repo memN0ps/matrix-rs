@@ -1,8 +1,7 @@
 use {
-    crate::{error::HypervisorError, println},
+    crate::{error::HypervisorError, println, utils::alloc::KernelAlloc},
     alloc::boxed::Box,
     core::mem::size_of,
-    kernel_alloc::KernelAlloc,
 };
 
 pub const KERNEL_STACK_SIZE: usize = 0x6000;
@@ -24,10 +23,8 @@ pub struct VmStack {
 const_assert_eq!(size_of::<VmStack>(), KERNEL_STACK_SIZE);
 
 impl VmStack {
-    pub fn new() -> Result<Box<Self, KernelAlloc>, HypervisorError> {
+    pub fn setup(host_rsp: &mut Box<VmStack, KernelAlloc>) -> Result<(), HypervisorError> {
         println!("Setting up VMCS_HOST_RSP region");
-        let mut host_rsp: Box<VmStack, KernelAlloc> =
-            unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
 
         println!("VMCS_HOST_RSP Virtual Address: {:p}", host_rsp);
 
@@ -37,6 +34,6 @@ impl VmStack {
 
         println!("VMCS_HOST_RSP successful!");
 
-        Ok(host_rsp)
+        Ok(())
     }
 }

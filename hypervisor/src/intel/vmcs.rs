@@ -4,11 +4,11 @@ use {
         intel::support::{vmclear, vmptrld, vmread},
         println,
         utils::addresses::PhysicalAddress,
+        utils::alloc::PhysicalAllocator,
     },
     alloc::boxed::Box,
     bitfield::BitMut,
     core::fmt,
-    kernel_alloc::PhysicalAllocator,
     x86::vmx::vmcs,
 };
 
@@ -26,11 +26,8 @@ impl Vmcs {
     /// Clear the VMCS region and load the VMCS pointer
     /// # VMCS Region
     /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.2 FORMAT OF THE VMCS REGION
-    pub fn new() -> Result<Box<Self, PhysicalAllocator>, HypervisorError> {
+    pub fn setup(vmcs_region: &mut Box<Vmcs, PhysicalAllocator>) -> Result<(), HypervisorError> {
         println!("Setting up VMCS region");
-
-        let mut vmcs_region: Box<Vmcs, PhysicalAllocator> =
-            unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
 
         let vmcs_region_physical_address =
             PhysicalAddress::pa_from_va(vmcs_region.as_ref() as *const _ as _);
@@ -58,7 +55,7 @@ impl Vmcs {
         vmptrld(vmcs_region_physical_address);
         println!("VMPTRLD successful!");
 
-        Ok(vmcs_region)
+        Ok(())
     }
 
     /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID)

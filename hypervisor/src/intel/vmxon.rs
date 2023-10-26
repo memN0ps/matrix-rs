@@ -1,9 +1,12 @@
-// External crate usages
-use {alloc::boxed::Box, bitfield::BitMut, kernel_alloc::PhysicalAllocator};
-
-// Internal crate usages
-use crate::{
-    error::HypervisorError, intel::support::vmxon, println, utils::addresses::PhysicalAddress,
+use {
+    crate::{
+        error::HypervisorError,
+        intel::support::vmxon,
+        println,
+        utils::{addresses::PhysicalAddress, alloc::PhysicalAllocator},
+    },
+    alloc::boxed::Box,
+    bitfield::BitMut,
 };
 
 pub const PAGE_SIZE: usize = 0x1000;
@@ -19,15 +22,12 @@ impl Vmxon {
     /// Execute vmxon instruction to enable vmx operation.
     /// # VMXON Region
     /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.2 FORMAT OF THE VMCS REGION
-    pub fn new() -> Result<Box<Self, PhysicalAllocator>, HypervisorError> {
+    pub fn setup(vmxon_region: &mut Box<Vmxon, PhysicalAllocator>) -> Result<(), HypervisorError> {
         println!("Setting up VMXON region");
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
         println!("Enabling Virtual Machine Extensions (VMX)");
         Self::enable_vmx_operation()?;
-
-        let mut vmxon_region: Box<Vmxon, PhysicalAllocator> =
-            unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
 
         let vmxon_region_physical_address =
             PhysicalAddress::pa_from_va(vmxon_region.as_ref() as *const _ as _);
@@ -49,7 +49,7 @@ impl Vmxon {
         vmxon(vmxon_region_physical_address);
         println!("VMXON successful!");
 
-        Ok(vmxon_region)
+        Ok(())
     }
 
     /// Enable and enter VMX operation by setting and clearing the lock bit, adjusting control registers and executing the vmxon instruction.

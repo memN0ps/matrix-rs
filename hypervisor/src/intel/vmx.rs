@@ -14,11 +14,11 @@ use {
         },
         println,
         utils::addresses::PhysicalAddress,
+        utils::alloc::{KernelAlloc, PhysicalAllocator},
     },
 
     // External crate usages
     alloc::boxed::Box,
-    kernel_alloc::{KernelAlloc, PhysicalAllocator},
     wdk_sys::_CONTEXT,
     x86::{
         controlregs,
@@ -39,36 +39,50 @@ use {
 /// Custom memory allocator Boxed pointers for the Vmxon, Vmcs, MsrBitmap and HostRsp structures are stored in the Vmx struct to ensure they are not dropped.
 #[repr(C, align(4096))]
 pub struct Vmx {
-    /// The virtual address of the Vmxon naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode)
+    /// The virtual address of the Vmxon naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode).
     pub vmxon_region: Box<Vmxon, PhysicalAllocator>,
 
-    /// The virtual address of the Vmcs naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode)
+    /// The virtual address of the Vmcs naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode).
     pub vmcs_region: Box<Vmcs, PhysicalAllocator>,
 
-    // The virtual address of the MSR Bitmap naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode)
+    /// The virtual address of the MSR Bitmap naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode).
     pub msr_bitmap: Box<MsrBitmap, PhysicalAllocator>,
 
-    /// The virtual address of the Guest DescriptorTables containing the Descriptor Tables (GDT, IDT)
+    /// The virtual address of the Guest Descriptor Tables containing the GDT and IDT (ExAllocatePool / ExAllocatePoolWithTag).
     pub guest_descriptor_table: Box<DescriptorTables, KernelAlloc>,
 
-    /// The virtual address of the Host DescriptorTables containing the Descriptor Tables (GDT, IDT)
+    /// The virtual address of the Host Descriptor Tables containing the GDT and IDT (ExAllocatePool / ExAllocatePoolWithTag).
     pub host_descriptor_table: Box<DescriptorTables, KernelAlloc>,
 
-    /// The virtual address of the VMCS_HOST_RSP naturally aligned 4-KByte region of memory (ExAllocatePool / ExAllocatePoolWithTag)
+    /// The virtual address of the VMCS_HOST_RSP naturally aligned 4-KByte region of memory (ExAllocatePool / ExAllocatePoolWithTag).
     pub host_rsp: Box<VmStack, KernelAlloc>,
 }
 
 impl Vmx {
-    pub fn new(context: _CONTEXT) -> Result<Box<Self>, HypervisorError> {
+    /// The `Vmx` struct encapsulates the structures necessary for VMX virtualization.
+    /// Memory Allocation Considerations:
+    /// - Boxed pointers for the Vmxon, Vmcs, MsrBitmap, and HostRsp structures are stored within the Vmx struct to ensure they aren't dropped prematurely.
+    /// - Avoid using ExAllocatePool at high IRQL, which can lead to heap corruption.
+    /// - Initial memory allocation should be done early using ExAllocatePoolWithTag, and direct calls to it should then be avoided.
+    /// - For subsequent allocations, a custom allocator that uses the pre-allocated memory should be utilized.
+    /// - Rust's automatic memory management can be a pitfall; dropping a `Box` at high IRQL might trigger unintended deallocations.
+    pub fn new() -> Result<Box<Self>, HypervisorError> {
         println!("Setting up VMX");
 
+        // Allocate memory for the hypervisor's needs
+        let vmxon_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
+        let vmcs_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
+        let msr_bitmap = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
+        let mut guest_descriptor_table =
+            unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
+        let mut host_descriptor_table =
+            unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
+        let host_rsp = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
+
         // To capture the current GDT and IDT for the guest the order is important so we can setup up a new GDT and IDT for the host.
-        let vmxon_region = Vmxon::new()?;
-        let vmcs_region = Vmcs::new()?;
-        let msr_bitmap = MsrBitmap::new()?;
-        let guest_descriptor_table = DescriptorTables::initialize_for_guest()?;
-        let host_descriptor_table = DescriptorTables::initialize_for_host()?;
-        let host_rsp = VmStack::new()?;
+        // This is done here instead of `setup_virtualization` because it uses a vec to allocate memory for the new GDT
+        DescriptorTables::initialize_for_guest(&mut guest_descriptor_table)?;
+        DescriptorTables::initialize_for_host(&mut host_descriptor_table)?;
 
         println!("Creating Vmx instance");
 
@@ -81,19 +95,32 @@ impl Vmx {
             host_rsp,
         };
 
-        let mut instance = Box::new(instance);
+        let instance = Box::new(instance);
+
+        println!("VMX setup successful!");
+
+        Ok(instance)
+    }
+
+    pub fn setup_virtualization(&mut self, context: &_CONTEXT) -> Result<(), HypervisorError> {
+        println!("Virtualization setup");
+
+        Vmxon::setup(&mut self.vmxon_region)?;
+        Vmcs::setup(&mut self.vmcs_region)?;
+        MsrBitmap::setup(&mut self.msr_bitmap)?;
+        VmStack::setup(&mut self.host_rsp)?;
 
         // Set the self_data pointer to the instance. This can be used in the vmexit_handler to retrieve the instance.
         // instance.host_rsp.self_data = &mut *instance as *mut _ as _;
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
         println!("Setting up Guest Registers State");
-        instance.setup_guest_registers_state(context);
+        self.setup_guest_registers_state(&context);
         println!("Guest Registers State successful!");
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
         println!("Setting up Host Registers State");
-        instance.setup_host_registers_state(context);
+        self.setup_host_registers_state(&context);
         println!("Host Registers State successful!");
 
         /*
@@ -104,12 +131,11 @@ impl Vmx {
          * - 25.8 VM-ENTRY CONTROL FIELDS
          */
         println!("Setting up VMCS Control Fields");
-        instance.setup_vmcs_control_fields();
+        self.setup_vmcs_control_fields();
         println!("VMCS Control Fields successful!");
 
-        println!("VMX setup successful!");
-
-        Ok(instance)
+        println!("Virtualization setup successful!");
+        Ok(())
     }
 
     /// Initialize the guest state for the currently loaded VMCS.
@@ -129,7 +155,7 @@ impl Vmx {
     ///     - IA32_SYSENTER_EIP
     ///     - LINK_PTR_FULL
     #[rustfmt::skip]
-    fn setup_guest_registers_state(&mut self, context: _CONTEXT) {
+    fn setup_guest_registers_state(&mut self, context: &_CONTEXT) {
         unsafe { vmwrite(guest::CR0, controlregs::cr0().bits() as u64) };
         unsafe { vmwrite(guest::CR3, controlregs::cr3()) };
         unsafe { vmwrite(guest::CR4, controlregs::cr4().bits() as u64) };
@@ -203,7 +229,7 @@ impl Vmx {
     ///     - IA32_SYSENTER_ESP
     ///     - IA32_SYSENTER_EIP
     #[rustfmt::skip]
-    fn setup_host_registers_state(&mut self, context: _CONTEXT) {
+    fn setup_host_registers_state(&mut self, context: &_CONTEXT) {
         unsafe { vmwrite(host::CR0, controlregs::cr0().bits() as u64) };
         unsafe { vmwrite(host::CR3, controlregs::cr3()) };
         unsafe { vmwrite(host::CR4, controlregs::cr4().bits() as u64) };
