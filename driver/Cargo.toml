@@ -13,7 +13,6 @@ wdk = "0.1.0"
 wdk-alloc = "0.1.0"
 wdk-panic = "0.1.0"
 wdk-sys = "0.1.0"
-kernel-alloc = { version = "0.2.1", features = ["pool-tag"] } # https://crates.io/crates/kernel-alloc
 hypervisor = { path = "../hypervisor" }
 
 [build-dependencies]
