@@ -13,10 +13,12 @@ extern crate static_assertions;
 extern crate alloc;
 
 use {
-    crate::utils::processor::{processor_count, ProcessorExecutor},
+    crate::{
+        error::HypervisorError,
+        intel::vcpu::Vcpu,
+        utils::processor::{processor_count, ProcessorExecutor},
+    },
     alloc::vec::Vec,
-    error::HypervisorError,
-    intel::vcpu::Vcpu,
 };
 
 pub mod amd;
@@ -26,17 +28,15 @@ pub mod serial;
 pub mod utils;
 
 pub struct Hypervisor {
+    /// The processors to virtualize.
     processors: Vec<Vcpu>,
 }
 
 impl Hypervisor {
     pub fn new() -> Result<Self, HypervisorError> {
-        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.6 DISCOVERING SUPPORT FOR VMX */
-        Self::has_intel_cpu()?;
-        println!("CPU is Intel");
+        println!("Initializing hypervisor");
 
-        Self::has_vmx_support()?;
-        println!("Virtual Machine Extension (VMX) technology is supported");
+        Self::check_supported_cpu()?;
 
         let mut processors: Vec<Vcpu> = Vec::new();
 
@@ -60,6 +60,18 @@ impl Hypervisor {
 
             core::mem::drop(executor);
         }
+
+        Ok(())
+    }
+
+    /// Check if the CPU is supported
+    fn check_supported_cpu() -> Result<(), HypervisorError> {
+        /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.6 DISCOVERING SUPPORT FOR VMX */
+        Self::has_intel_cpu()?;
+        println!("CPU is Intel");
+
+        Self::has_vmx_support()?;
+        println!("Virtual Machine Extension (VMX) technology is supported");
 
         Ok(())
     }
