@@ -84,8 +84,7 @@ unsafe impl Allocator for KernelAlloc {
     ///
     /// A result containing a non-null pointer to the allocated memory block, or an `AllocError` if the allocation fails.
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        let memory =
-            unsafe { ExAllocatePool(NonPagedPool, layout.size() as _) } as *mut u8;
+        let memory = unsafe { ExAllocatePool(NonPagedPool, layout.size() as _) } as *mut u8;
 
         if memory.is_null() {
             Err(AllocError)
