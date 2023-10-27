@@ -234,10 +234,10 @@ impl Vmx {
         unsafe { vmwrite(host::CR3, controlregs::cr3()) };
         unsafe { vmwrite(host::CR4, controlregs::cr4().bits() as u64) };
 
-        let host_rsp_ptr = &mut self.host_rsp.stack_contents as *mut u8;
-        let host_rsp = unsafe { host_rsp_ptr.offset(STACK_CONTENTS_SIZE as isize) } as u64;
+        let host_rsp_ptr = self.host_rsp.stack_contents.as_mut_ptr();
+        let host_rsp = unsafe { host_rsp_ptr.offset(STACK_CONTENTS_SIZE as isize) };
         vmwrite(host::RIP, vmexit_stub as u64);
-        vmwrite(host::RSP, host_rsp);
+        vmwrite(host::RSP, host_rsp as u64);
 
         const SELECTOR_MASK: u16 = 0xF8;
         vmwrite(host::CS_SELECTOR, context.SegCs & SELECTOR_MASK);
