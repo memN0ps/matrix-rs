@@ -145,13 +145,13 @@ impl SegmentDescriptor {
         // If the segment is present in memory, extract its properties.
         if entry.contains(DescriptorFlags::PRESENT) {
             // Extract base address from the descriptor.
-            let base_low = entry_value.get_bits(0..24);
+            let base_low = entry_value.get_bits(16..40);
             let base_high = entry_value.get_bits(56..64) << 24;
             let mut base_address = base_low | base_high;
 
             // Extract segment limit from the descriptor.
             let segment_limit_low = entry_value.get_bits(0..16);
-            let segment_limit_high = entry_value.get_bits(48..52) << 16;
+            let segment_limit_high = entry_value.get_bits(48..52) << 12;
             let mut segment_limit = segment_limit_low | segment_limit_high;
 
             // For non-user segments (like TSS), the base address can span two GDT entries.
