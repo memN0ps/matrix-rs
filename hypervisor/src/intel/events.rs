@@ -1,10 +1,13 @@
-#![allow(dead_code)]
+//! This module provides utilities and structures to manage event injection in VMX.
+//! It handles the representation, manipulation, and injection of various types of events.
 
 use bitfield::bitfield;
 
 bitfield! {
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.8.3 VM-Entry Controls for Event Injection
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table 25-17. Format of the VM-Entry Interruption-Information Field
+    /// Represents the VM-Entry Interruption-Information Field.
+    ///
+    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.8.3 VM-Entry Controls for Event Injection
+    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: Table 25-17. Format of the VM-Entry Interruption-Information Field
     pub struct EventInjection(u32);
 
     impl Debug;
@@ -32,7 +35,9 @@ bitfield! {
     pub get_valid, set_valid: 31, 31;
 }
 
-/// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table 6-1. Exceptions and Interrupts
+/// Represents the various types of exceptions and interrupts.
+///
+/// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: Table 6-1. Exceptions and Interrupts
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum ExceptionInterrupt {
@@ -108,9 +113,11 @@ enum InterruptionType {
 const VALID: u32 = 1;
 const INVALID: u32 = 0;
 
-/// Intel® 64 and IA-32 Architectures Software Developer's Manual: 27.6 EVENT INJECTION
+/// Provides methods for event injection in VMX.
+///
+/// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 27.6 EVENT INJECTION
 impl EventInjection {
-    /// Inject General Protection (#GP) to the guest (Event Injection)
+    /// Inject General Protection (#GP) to the guest (Event Injection).
     pub fn general_protection() -> u32 {
         let mut event = EventInjection(0);
 
@@ -122,7 +129,7 @@ impl EventInjection {
         event.0
     }
 
-    /// Inject Breakpoint (#BP) to the guest (Event Injection)
+    /// Inject Breakpoint (#BP) to the guest (Event Injection).
     pub fn breakpoint() -> u32 {
         let mut event = EventInjection(0);
 
@@ -133,7 +140,7 @@ impl EventInjection {
         event.0
     }
 
-    /// Inject Page Fault (#PF) to the guest (Event Injection)
+    /// Inject Page Fault (#PF) to the guest (Event Injection).
     pub fn page_fault() -> u32 {
         let mut event = EventInjection(0);
 

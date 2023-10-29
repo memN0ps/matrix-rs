@@ -1,3 +1,7 @@
+//! Module for handling Virtual CPU (VCPU) operations.
+//! This module provides functionality to manage and control a virtualized CPU.
+//! It provides mechanisms to virtualize a CPU, manage its state, and interact with its context.
+
 extern crate alloc;
 
 use {
@@ -13,25 +17,25 @@ use {
 /// Atomic bitset used to track which processors have been virtualized.
 static VIRTUALIZED_BITSET: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 
-/// Represents a Virtual CPU (VCPU).
+/// Represents a Virtual CPU (VCPU) and its associated operations.
 pub struct Vcpu {
-    /// The index of the processor.
+    /// The processor's unique identifier.
     index: u32,
 
-    /// The VMX instance to prevent its premature deallocation.
+    /// The VMX instance associated with this VCPU.
     vmx: Box<Vmx>,
 }
 
 impl Vcpu {
-    /// Creates a new VCPU for the given processor index.
+    /// Creates and initializes a new VCPU instance for the specified processor index.
     ///
     /// # Arguments
     ///
-    /// * `index` - The index of the processor.
+    /// * `index` - Processor's unique identifier.
     ///
     /// # Returns
     ///
-    /// A result containing the created VCPU or an error if the creation fails.
+    /// A `Result` containing the initialized VCPU instance or a `HypervisorError`.
     pub fn new(index: u32) -> Result<Self, HypervisorError> {
         println!("Creating processor {}", index);
 
@@ -40,11 +44,14 @@ impl Vcpu {
         Ok(Self { index, vmx })
     }
 
-    /// Virtualizes the CPU by capturing its context, enabling VMX operation, adjusting control registers, and executing VMXON, VMPTRLD, and VMLAUNCH.
+    /// Virtualizes the current CPU.
+    ///
+    /// Captures the CPU's context, initializes VMX operation, adjusts control registers, and
+    /// executes VMXON, VMCLEAR, VMPTRLD, and VMLAUNCH.
     ///
     /// # Returns
     ///
-    /// A result indicating success or an error if virtualization fails.
+    /// A `Result` indicating the success or failure of the virtualization process.
     pub fn virtualize_cpu(&mut self) -> Result<(), HypervisorError> {
         println!("Virtualizing processor {}", self.index);
 
@@ -75,22 +82,20 @@ impl Vcpu {
         Ok(())
     }
 
-    /// Gets the index of the current processor.
+    /// Retrieves the processor's unique identifier.
     ///
     /// # Returns
     ///
-    /// The index of the processor.
+    /// The processor's unique identifier.
     pub fn id(&self) -> u32 {
         self.index
     }
 
-    /* Global Bitmap vs. Instance Variable approach. Which one is better and why? */
-
-    /// Checks whether the current processor is already virtualized.
+    /// Determines if the current processor is already virtualized.
     ///
     /// # Returns
     ///
-    /// A boolean indicating if the current processor is virtualized.
+    /// `true` if the processor is virtualized, otherwise `false`.
     pub fn is_virtualized() -> bool {
         let bit = 1 << current_processor_index();
 
@@ -104,11 +109,11 @@ impl Vcpu {
         VIRTUALIZED_BITSET.fetch_or(bit, core::sync::atomic::Ordering::Relaxed);
     }
 
-    /// Prints the context of the processor for debugging purposes.
+    /// Outputs the processor's context for debugging purposes.
     ///
     /// # Arguments
     ///
-    /// * `context` - The context of the processor.
+    /// * `context` - The context of the processor to be printed.
     fn print_context(context: &_CONTEXT) {
         /*
         println!("P1Home: {:#x}", context.P1Home);

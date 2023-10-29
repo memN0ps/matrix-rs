@@ -1,4 +1,12 @@
-// Credits to @memN0ps and @not-matthias: https://github.com/not-matthias/kernel-alloc-rs/blob/master/src/lib.rs (WDK)
+//! Memory allocation utilities for kernel space.
+//!
+//! This module provides memory allocators tailored for kernel usage:
+//! - `PhysicalAllocator`: Allocates contiguous physical memory.
+//! - `KernelAlloc`: Standard kernel memory allocator leveraging WDK functions.
+//!
+//! Both allocators interface directly with the Windows Driver Kit (WDK) to ensure
+//! safe and efficient memory operations.
+
 use {
     core::alloc::{AllocError, Allocator, Layout},
     core::ptr::NonNull,
@@ -13,22 +21,23 @@ use {
     },
 };
 
-/// Represents a physical memory allocator for the kernel.
+/// Physical memory allocator for kernel space.
 ///
-/// This allocator uses the `MmAllocateContiguousMemorySpecifyCacheNode` function
-/// from the WDK to allocate contiguous memory.
+/// Leverages `MmAllocateContiguousMemorySpecifyCacheNode` from the WDK to
+/// allocate memory that is physically contiguous.
 pub struct PhysicalAllocator;
 
 unsafe impl Allocator for PhysicalAllocator {
-    /// Allocates a block of memory with the given layout.
+    /// Allocates a contiguous block of physical memory.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
-    /// * `layout` - The desired layout of the memory block.
+    /// * `layout` - Memory layout specifications.
     ///
     /// # Returns
     ///
-    /// A result containing a non-null pointer to the allocated memory block, or an `AllocError` if the allocation fails.
+    /// A result containing a non-null pointer to the memory block if successful.
+    /// Returns an `AllocError` if the allocation fails.
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         let mut boundary: PHYSICAL_ADDRESS = unsafe { core::mem::zeroed() };
         let mut lowest: PHYSICAL_ADDRESS = unsafe { core::mem::zeroed() };
@@ -57,32 +66,33 @@ unsafe impl Allocator for PhysicalAllocator {
         }
     }
 
-    /// Deallocates a previously allocated block of memory.
+    /// Frees an allocated block of physical memory.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
-    /// * `ptr` - A non-null pointer to the memory block to be deallocated.
-    /// * `_layout` - The layout of the memory block. Currently unused.
+    /// * `ptr` - Non-null pointer to the memory to be released.
+    /// * `_layout` - Memory layout (not used in this implementation).
     unsafe fn deallocate(&self, ptr: NonNull<u8>, _layout: Layout) {
         MmFreeContiguousMemory(ptr.as_ptr() as _);
     }
 }
 
-/// Represents the global memory allocator for the kernel.
+/// Standard memory allocator for kernel space.
 ///
-/// This allocator uses the `ExAllocatePool` function from the WDK for memory allocation.
+/// Utilizes `ExAllocatePool` from the WDK for memory operations.
 pub struct KernelAlloc;
 
 unsafe impl Allocator for KernelAlloc {
-    /// Allocates a block of memory with the given layout.
+    /// Allocates a block of kernel memory.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
-    /// * `layout` - The desired layout of the memory block.
+    /// * `layout` - Memory layout specifications.
     ///
     /// # Returns
     ///
-    /// A result containing a non-null pointer to the allocated memory block, or an `AllocError` if the allocation fails.
+    /// A result containing a non-null pointer to the memory block if successful.
+    /// Returns an `AllocError` if the allocation fails.
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         let memory = unsafe { ExAllocatePool(NonPagedPool, layout.size() as _) } as *mut u8;
 
@@ -94,12 +104,12 @@ unsafe impl Allocator for KernelAlloc {
         }
     }
 
-    /// Deallocates a previously allocated block of memory.
+    /// Frees an allocated block of kernel memory.
     ///
-    /// # Arguments
+    /// # Parameters
     ///
-    /// * `ptr` - A non-null pointer to the memory block to be deallocated.
-    /// * `_layout` - The layout of the memory block. Currently unused.
+    /// * `ptr` - Non-null pointer to the memory to be released.
+    /// * `_layout` - Memory layout (not used in this implementation).
     unsafe fn deallocate(&self, ptr: NonNull<u8>, _layout: Layout) {
         ExFreePool(ptr.as_ptr() as _);
     }

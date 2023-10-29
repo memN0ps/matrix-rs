@@ -1,5 +1,5 @@
-// This part is easy and can be used as a crate once uploaded to crates.io so there was no point in rewriting it.
-// Full credits not-matthias: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/utils/processor.rs
+//! This module provides utility functions for processor-related operations.
+
 use {
     crate::println,
     core::mem::MaybeUninit,
@@ -13,25 +13,29 @@ use {
     },
 };
 
-//use crate::println;
 use crate::utils::nt::ZwYieldExecution;
 
-/// The KeQueryActiveProcessorCountEx routine returns the number of active logical processors in a specified group in a multiprocessor system or in the entire system.
+/// Returns the number of active logical processors in a specified group in a multiprocessor system or in the entire system.
 pub fn processor_count() -> u32 {
     unsafe { KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS as _) }
 }
 
-#[allow(dead_code)]
-/// The KeGetCurrentProcessorNumberEx routine gets the processor number of the logical processor that the caller is running on.
+/// Gets the processor number of the logical processor that the caller is running on.
 pub fn current_processor_index() -> u32 {
     unsafe { KeGetCurrentProcessorNumberEx(core::ptr::null_mut()) }
 }
 
-/// Returns the processor number for the specified index.
+/// Converts a systemwide processor index to a group number and a group-relative processor number.
+///
+/// # Arguments
+///
+/// * `index` - The index of the processor to retrieve the processor number for.
+///
+/// # Returns
+///
+/// An `Option` containing the `PROCESSOR_NUMBER` if successful, or `None` if not.
 fn processor_number_from_index(index: u32) -> Option<PROCESSOR_NUMBER> {
     let mut processor_number: MaybeUninit<PROCESSOR_NUMBER> = MaybeUninit::uninit();
-
-    // The KeGetProcessorNumberFromIndex routine converts a systemwide processor index to a group number and a group-relative processor number.
     let status = unsafe { KeGetProcessorNumberFromIndex(index, processor_number.as_mut_ptr()) };
 
     if NT_SUCCESS(status) {
@@ -41,12 +45,21 @@ fn processor_number_from_index(index: u32) -> Option<PROCESSOR_NUMBER> {
     }
 }
 
-/// Switches execution to a specific processor until dropped.
+/// Struct responsible for switching execution to a specific processor until it's dropped.
 pub struct ProcessorExecutor {
     old_affinity: MaybeUninit<GROUP_AFFINITY>,
 }
 
 impl ProcessorExecutor {
+    /// Switches the execution context to a specific processor.
+    ///
+    /// # Arguments
+    ///
+    /// * `i` - The index of the processor to switch to.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing the `ProcessorExecutor` if the switch was successful, or `None` if not.
     pub fn switch_to_processor(i: u32) -> Option<Self> {
         if i > processor_count() {
             println!("Invalid processor index: {}", i);
@@ -65,8 +78,6 @@ impl ProcessorExecutor {
         affinity.Reserved[2] = 0;
 
         println!("Switching execution to processor {}", i);
-
-        //The KeSetSystemGroupAffinityThread routine changes the group number and affinity mask of the calling thread.
         unsafe { KeSetSystemGroupAffinityThread(&mut affinity, old_affinity.as_mut_ptr()) };
 
         println!("Yielding execution");
@@ -79,10 +90,10 @@ impl ProcessorExecutor {
 }
 
 impl Drop for ProcessorExecutor {
+    /// Restores the group affinity of the calling thread to its original value when the `ProcessorExecutor` is dropped.
     fn drop(&mut self) {
         println!("Switching execution back to previous processor");
         unsafe {
-            //The KeRevertToUserGroupAffinityThread routine restores the group affinity of the calling thread to its original value at the time that the thread was created.
             KeRevertToUserGroupAffinityThread(self.old_affinity.as_mut_ptr());
         }
     }

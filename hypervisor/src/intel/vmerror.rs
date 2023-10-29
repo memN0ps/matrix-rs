@@ -1,4 +1,11 @@
-/// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table C-1. Basic Exit Reasons
+//! This module provides utilities and structures related to VMX exit reasons
+//! and VM instruction errors. These enumerations are utilized to understand and
+//! handle the various reasons for VM exits and specific VM instruction errors.
+
+/// Represents the basic VM exit reasons.
+///
+/// These are the reasons for which a VM might exit based on the VMCS exit reason field.
+/// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: Table C-1. Basic Exit Reasons
 #[repr(u16)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum VmxBasicExitReason {
@@ -76,10 +83,12 @@ pub enum VmxBasicExitReason {
     InstructionTimeout = 75,
 }
 
-/// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table C-1. Basic Exit Reasons
 impl VmxBasicExitReason {
-    /// Every VM exit writes a 32-bit exit reason to the VMCS (see Section 25.9.1). Certain VM-entry failures also do this (see Section 27.8).
-    /// The low 16 bits of the exit-reason field form the basic exit reason which provides basic information about the cause of the VM exit or VM-entry failure.
+    /// Converts a 32-bit VM exit reason from the VMCS to the corresponding `VmxBasicExitReason` variant.
+    ///
+    /// Every VM exit writes a 32-bit exit reason to the VMCS. The lower 16 bits of this field form the basic exit reason.
+    ///
+    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.9.1 VM Exit Reason
     pub fn from_u32(value: u32) -> Option<Self> {
         let basic_exit_reason = (value & 0xFFFF) as u16;
         match basic_exit_reason {
@@ -162,6 +171,9 @@ impl VmxBasicExitReason {
 
 /// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table C-1. Basic Exit Reasons
 impl core::fmt::Display for VmxBasicExitReason {
+    /// Provides a descriptive string for a `VmxBasicExitReason` variant.
+    ///
+    /// This implementation aids in debugging by providing a human-readable description of each exit reason.
     #[rustfmt::skip]
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let description = match *self {
@@ -244,8 +256,11 @@ impl core::fmt::Display for VmxBasicExitReason {
     }
 }
 
-/// Intel® 64 and IA-32 Architectures Software Developer's Manual: 31.4 VM INSTRUCTION ERROR NUMBERS
-/// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table 31-1. VM-Instruction Error Numbers
+/// Represents the VM instruction error numbers.
+///
+/// These error numbers correspond to specific errors that can occur when executing VMX instructions.
+/// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 31.4 VM INSTRUCTION ERROR NUMBERS
+/// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: Table 31-1. VM-Instruction Error Numbers
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum VmInstructionError {
@@ -280,6 +295,8 @@ pub enum VmInstructionError {
 /// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table 31-1. VM-Instruction Error Numbers
 impl VmInstructionError {
     /// Converts a u32 value to the corresponding `VmInstructionError` variant.
+    ///
+    /// This method helps in interpreting the error numbers provided by VMX instructions.
     pub fn from_u32(value: u32) -> Option<Self> {
         use VmInstructionError::*;
         match value {
@@ -316,6 +333,10 @@ impl VmInstructionError {
 /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 31.4 VM INSTRUCTION ERROR NUMBERS
 /// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table 31-1. VM-Instruction Error Numbers
 impl core::fmt::Display for VmInstructionError {
+    /// Provides a descriptive string for a `VmInstructionError` variant.
+    ///
+    /// This implementation aids in debugging by providing a human-readable description of each instruction error.
+    #[rustfmt::skip]
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         use VmInstructionError::*;
         let description = match *self {
@@ -330,28 +351,18 @@ impl core::fmt::Display for VmInstructionError {
             VmptrldInvalidAddress => "9: VMPTRLD with invalid physical address",
             VmptrldWithVmxonPointer => "10: VMPTRLD with VMXON pointer",
             VmptrldIncorrectVmcsRevision => "11: VMPTRLD with incorrect VMCS revision identifier",
-            VmreadVmwriteUnsupportedVmcsComponent => {
-                "12: VMREAD/VMWRITE from/to unsupported VMCS component"
-            }
+            VmreadVmwriteUnsupportedVmcsComponent => "12: VMREAD/VMWRITE from/to unsupported VMCS component",
             VmwriteReadonlyVmcsComponent => "13: VMWRITE to read-only VMCS component",
             VmxonInRoot => "15: VMXON executed in VMX root operation",
-            VmEntryInvalidExecutiveVmcsPointer => {
-                "16: VM entry with invalid executive-VMCS pointer"
-            }
+            VmEntryInvalidExecutiveVmcsPointer => "16: VM entry with invalid executive-VMCS pointer",
             VmEntryNonLaunchedExecutiveVmcs => "17: VM entry with non-launched executive VMCS",
-            VmEntryExecutiveVmcsPointerNotVmxonPointer => {
-                "18: VM entry with executive-VMCS pointer not VMXON pointer"
-            }
+            VmEntryExecutiveVmcsPointerNotVmxonPointer => "18: VM entry with executive-VMCS pointer not VMXON pointer",
             VmcallNonClearVmcs => "19: VMCALL with non-clear VMCS",
             VmcallInvalidVmExitControlFields => "20: VMCALL with invalid VM-exit control fields",
             VmcallIncorrectMsegRevision => "22: VMCALL with incorrect MSEG revision identifier",
-            VmxoffUnderDualMonitorTreatment => {
-                "23: VMXOFF under dual-monitor treatment of SMIs and SMM"
-            }
+            VmxoffUnderDualMonitorTreatment => "23: VMXOFF under dual-monitor treatment of SMIs and SMM",
             VmcallInvalidSmmMonitorFeatures => "24: VMCALL with invalid SMM-monitor features",
-            VmEntryInvalidVmExecutionControlFieldsExecutiveVmcs => {
-                "25: VM entry with invalid VM-execution control fields in executive VMCS"
-            }
+            VmEntryInvalidVmExecutionControlFieldsExecutiveVmcs => "25: VM entry with invalid VM-execution control fields in executive VMCS",
             VmEntryEventsBlockedByMovSs => "26: VM entry with events blocked by MOV SS.",
             InvalidOperandToInveptInvvpid => "28: Invalid operand to INVEPT/INVVPID.",
         };

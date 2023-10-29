@@ -1,3 +1,5 @@
+//! This crate provides an interface to a hypervisor.
+
 #![no_std]
 #![feature(allocator_api)]
 #![feature(new_uninit)]
@@ -27,12 +29,18 @@ pub mod intel;
 pub mod serial;
 pub mod utils;
 
+/// The main struct representing the hypervisor.
 pub struct Hypervisor {
     /// The processors to virtualize.
     processors: Vec<Vcpu>,
 }
 
 impl Hypervisor {
+    /// Creates a new hypervisor instance.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` which is `Ok` if hypervisor initialization was successful, or `Err` if there was an error.
     pub fn new() -> Result<Self, HypervisorError> {
         println!("Initializing hypervisor");
 
@@ -48,6 +56,11 @@ impl Hypervisor {
         Ok(Hypervisor { processors })
     }
 
+    /// Virtualizes the system's processors.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` which is `Ok` if the virtualization was successful, or `Err` if there was an error.
     pub fn virtualize_system(&mut self) -> Result<(), HypervisorError> {
         println!("Virtualizing processors");
 
@@ -64,7 +77,11 @@ impl Hypervisor {
         Ok(())
     }
 
-    /// Check if the CPU is supported
+    /// Check if the CPU is supported.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` which is `Ok` if the CPU is supported, or `Err` if it's not.
     fn check_supported_cpu() -> Result<(), HypervisorError> {
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.6 DISCOVERING SUPPORT FOR VMX */
         Self::has_intel_cpu()?;
@@ -77,6 +94,10 @@ impl Hypervisor {
     }
 
     /// Check to see if CPU is Intel (“GenuineIntel”).
+    ///
+    /// # Returns
+    ///
+    /// A `Result` which is `Ok` if the CPU is Intel, or `Err` if it's not.
     fn has_intel_cpu() -> Result<(), HypervisorError> {
         let cpuid = x86::cpuid::CpuId::new();
         if let Some(vi) = cpuid.get_vendor_info() {
@@ -87,7 +108,11 @@ impl Hypervisor {
         Err(HypervisorError::CPUUnsupported)
     }
 
-    /// Check processor supports for Virtual Machine Extension (VMX) technology - CPUID.1:ECX.VMX\[bit 5] = 1
+    /// Check processor support for Virtual Machine Extension (VMX) technology.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` which is `Ok` if VMX technology is supported, or `Err` if it's not.
     fn has_vmx_support() -> Result<(), HypervisorError> {
         let cpuid = x86::cpuid::CpuId::new();
         if let Some(fi) = cpuid.get_feature_info() {
@@ -99,6 +124,11 @@ impl Hypervisor {
     }
 
     /*
+    /// Reverts the virtualization of the system's processors.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` which is `Ok` if the devirtualization was successful, or `Err` if there was an error.
     pub fn devirtualize(&mut self) -> Result<(), HypervisorError> {
         println!("Devirtualizing processors");
 

@@ -1,7 +1,13 @@
+//! A module responsible for managing the VMXON region and enabling VMX operations.
+//!
+//! This module provides functionality to set up the VMXON region in memory and
+//! enable VMX operations. It also offers utility functions for adjusting control
+//! registers to facilitate VMX operations.
+
 use {
     crate::{
         error::HypervisorError,
-        intel::support::vmxon,
+        intel::{support::vmxon, vmcs::Vmcs},
         println,
         utils::{addresses::PhysicalAddress, alloc::PhysicalAllocator},
     },
@@ -11,7 +17,13 @@ use {
 
 pub const PAGE_SIZE: usize = 0x1000;
 
-/// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.11.5 VMXON Region
+/// A representation of the VMXON region in memory.
+///
+/// The VMXON region is essential for enabling VMX operations on the CPU.
+/// This structure offers methods for setting up the VMXON region, enabling VMX operations,
+/// and performing related tasks.
+///
+/// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.11.5 VMXON Region
 #[repr(C, align(4096))]
 pub struct Vmxon {
     pub revision_id: u32,
@@ -19,9 +31,13 @@ pub struct Vmxon {
 }
 
 impl Vmxon {
-    /// Execute vmxon instruction to enable vmx operation.
-    /// # VMXON Region
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.2 FORMAT OF THE VMCS REGION
+    /// Sets up the VMXON region and enables VMX operations.
+    ///
+    /// # Arguments
+    /// * `vmxon_region` - A mutable reference to the VMXON region in memory.
+    ///
+    /// # Returns
+    /// A result indicating success or an error.
     pub fn setup(vmxon_region: &mut Box<Vmxon, PhysicalAllocator>) -> Result<(), HypervisorError> {
         println!("Setting up VMXON region");
 
@@ -42,17 +58,17 @@ impl Vmxon {
             vmxon_region_physical_address
         );
 
-        vmxon_region.revision_id = Self::get_vmcs_revision_id();
+        vmxon_region.revision_id = Vmcs::get_vmcs_revision_id();
         vmxon_region.as_mut().revision_id.set_bit(31, false);
 
         // Enable VMX operation.
         vmxon(vmxon_region_physical_address);
-        println!("VMXON successful!");
+        println!("VMXON setup successful!");
 
         Ok(())
     }
 
-    /// Enable and enter VMX operation by setting and clearing the lock bit, adjusting control registers and executing the vmxon instruction.
+    /// Enables VMX operation by setting appropriate bits and executing the VMXON instruction.
     fn enable_vmx_operation() -> Result<(), HypervisorError> {
         let mut cr4 = unsafe { x86::controlregs::cr4() };
         cr4.set(x86::controlregs::Cr4::CR4_ENABLE_VMX, true);
@@ -69,7 +85,7 @@ impl Vmxon {
         Ok(())
     }
 
-    /// Check if we need to set bits in IA32_FEATURE_CONTROL
+    /// Sets the lock bit in IA32_FEATURE_CONTROL if necessary.
     fn set_lock_bit() -> Result<(), HypervisorError> {
         const VMX_LOCK_BIT: u64 = 1 << 0;
         const VMXON_OUTSIDE_SMX: u64 = 1 << 2;
@@ -90,13 +106,13 @@ impl Vmxon {
         Ok(())
     }
 
-    /// Adjust set and clear the mandatory bits in CR0 and CR4
+    /// Adjusts control registers by setting mandatory bits.
     fn adjust_control_registers() {
         Self::set_cr0_bits();
         Self::set_cr4_bits();
     }
 
-    /// Set the mandatory bits in CR0 and clear bits that are mandatory zero
+    /// Modifies CR0 to set and clear mandatory bits.
     fn set_cr0_bits() {
         let ia32_vmx_cr0_fixed0 = unsafe { x86::msr::rdmsr(x86::msr::IA32_VMX_CR0_FIXED0) };
         let ia32_vmx_cr0_fixed1 = unsafe { x86::msr::rdmsr(x86::msr::IA32_VMX_CR0_FIXED1) };
@@ -109,7 +125,7 @@ impl Vmxon {
         unsafe { x86::controlregs::cr0_write(cr0) };
     }
 
-    /// Set the mandatory bits in CR4 and clear bits that are mandatory zero
+    /// Modifies CR4 to set and clear mandatory bits.
     fn set_cr4_bits() {
         let ia32_vmx_cr4_fixed0 = unsafe { x86::msr::rdmsr(x86::msr::IA32_VMX_CR4_FIXED0) };
         let ia32_vmx_cr4_fixed1 = unsafe { x86::msr::rdmsr(x86::msr::IA32_VMX_CR4_FIXED1) };
@@ -120,10 +136,5 @@ impl Vmxon {
         cr4 &= x86::controlregs::Cr4::from_bits_truncate(ia32_vmx_cr4_fixed1 as usize);
 
         unsafe { x86::controlregs::cr4_write(cr4) };
-    }
-
-    /// Get the Virtual Machine Control Structure revision identifier (VMCS revision ID)
-    fn get_vmcs_revision_id() -> u32 {
-        unsafe { (x86::msr::rdmsr(x86::msr::IA32_VMX_BASIC) as u32) & 0x7FFF_FFFF }
     }
 }

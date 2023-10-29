@@ -1,3 +1,6 @@
+//! This module defines and manages the descriptor tables (GDT and IDT) for both the host and guest.
+//! It provides utilities to capture, initialize, and manage these tables.
+
 use {
     crate::{
         error::HypervisorError,
@@ -14,19 +17,19 @@ use {
 #[repr(C, align(4096))]
 pub struct DescriptorTables {
     /// Global Descriptor Table (GDT) for the host.
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.5.1 Segment Descriptor Tables
+    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.5.1 Segment Descriptor Tables
     pub global_descriptor_table: Vec<u64>,
 
     /// GDTR holds the address and size of the GDT.
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 2.4.1 Global Descriptor Table Register (GDTR)
+    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 2.4.1 Global Descriptor Table Register (GDTR)
     pub gdtr: DescriptorTablePointer<u64>,
 
     /// Interrupt Descriptor Table (IDT) for the host.
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 6.10 INTERRUPT DESCRIPTOR TABLE (IDT)
+    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 6.10 INTERRUPT DESCRIPTOR TABLE (IDT)
     pub interrupt_descriptor_table: Vec<u64>,
 
     /// IDTR holds the address and size of the IDT.
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 2.4.3 IDTR Interrupt Descriptor Table Register
+    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 2.4.3 IDTR Interrupt Descriptor Table Register
     pub idtr: DescriptorTablePointer<u64>,
 }
 
@@ -106,7 +109,7 @@ impl DescriptorTables {
         println!("Copied current IDT");
     }
 
-    /// Get the table as slice from the pointer.
+    /// Gets the table as a slice from the pointer.
     pub fn from_pointer(pointer: &DescriptorTablePointer<u64>) -> &[u64] {
         unsafe {
             core::slice::from_raw_parts(

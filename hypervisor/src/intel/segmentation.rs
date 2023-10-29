@@ -1,3 +1,7 @@
+//! This module provides utilities and structures to manage segment descriptors
+//! in the GDT (Global Descriptor Table) and LDT (Local Descriptor Table).
+//! It handles the extraction, representation, and manipulation of segment descriptors.
+
 use {
     crate::intel::descriptor::DescriptorTables,
     bit_field::BitField,
@@ -9,64 +13,52 @@ use {
 bitflags! {
     /// Access rights for VMCS guest register states.
     ///
-    /// Represents the segment access rights format as described in
-    /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.4.1 Guest Register State and
-    /// Table 24-2. Format of Access Rights.
+    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.4.1 Guest Register State
+    /// and Table 24-2. Format of Access Rights.
     pub struct SegmentAccessRights: u32 {
         /// Accessed flag.
-        ///
-        /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5.1 Code- and Data-Segment Descriptor Types
-        const ACCESSED          = 1 << 0;
+        /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5.1 Code- and Data-Segment Descriptor Types
+        const ACCESSED = 1 << 0;
 
         /// Readable (for code segments) or Writable (for data segments).
-        ///
-        /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5.1 Code- and Data-Segment Descriptor Types
-        const RW                = 1 << 1;
+        /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5.1 Code- and Data-Segment Descriptor Types
+        const RW = 1 << 1;
 
         /// Conforming bit for code segments.
-        ///
-        /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5.1 Code- and Data-Segment Descriptor Types
-        const CONFORMING        = 1 << 2;
+        /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5.1 Code- and Data-Segment Descriptor Types
+        const CONFORMING = 1 << 2;
 
         /// Executable bit. Must be set for code segments.
-        ///
-        /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5.1 Code- and Data-Segment Descriptor Types
-        const EXECUTABLE        = 1 << 3;
+        /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5.1 Code- and Data-Segment Descriptor Types
+        const EXECUTABLE = 1 << 3;
 
         /// Descriptor type (0 = system; 1 = code or data).
-        ///
-        /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
-        const CODE_DATA         = 1 << 4;
+        /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
+        const CODE_DATA = 1 << 4;
 
         /// Segment present.
-        ///
-        /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
-        const PRESENT           = 1 << 7;
+        /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
+        const PRESENT = 1 << 7;
 
         /// Long mode active (for CS only).
-        ///
-        /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5.1 Code- and Data-Segment Descriptor Types
-        const LONG_MODE         = 1 << 13;
+        /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5.1 Code- and Data-Segment Descriptor Types
+        const LONG_MODE = 1 << 13;
 
         /// Default operation size (0 = 16-bit segment; 1 = 32-bit segment).
-        ///
-        /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
-        const DB                = 1 << 14;
+        /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
+        const DB = 1 << 14;
 
         /// Granularity.
-        ///
-        /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
-        const GRANULARITY       = 1 << 15;
+        /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
+        const GRANULARITY = 1 << 15;
 
         /// Segment unusable (0 = usable; 1 = unusable).
-        ///
-        /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.4.1 Guest Register State
-        const UNUSABLE          = 1 << 16;
+        /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.4.1 Guest Register State
+        const UNUSABLE = 1 << 16;
 
         /// Privilege level mask (bits 5-6).
-        ///
-        /// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
-        const DPL_MASK          = 3 << 5;
+        /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
+        const DPL_MASK = 3 << 5;
     }
 }
 
@@ -97,8 +89,8 @@ impl SegmentAccessRights {
 /// Represents the details of a segment descriptor in the GDT or LDT.
 /// Segment descriptors are used to define the characteristics of a segment.
 ///
-/// Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
-/// - Figure 3-8. Segment Descriptor
+/// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
+/// and Figure 3-8. Segment Descriptor
 pub struct SegmentDescriptor {
     /// Selector provides an index into the GDT or LDT, pointing to the segment descriptor.
     pub selector: SegmentSelector,
