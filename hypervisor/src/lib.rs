@@ -26,7 +26,6 @@ use {
 pub mod amd;
 pub mod error;
 pub mod intel;
-pub mod serial;
 pub mod utils;
 
 /// The main struct representing the hypervisor.
@@ -42,7 +41,7 @@ impl Hypervisor {
     ///
     /// A `Result` which is `Ok` if hypervisor initialization was successful, or `Err` if there was an error.
     pub fn new() -> Result<Self, HypervisorError> {
-        println!("Initializing hypervisor");
+        log::info!("Initializing hypervisor");
 
         Self::check_supported_cpu()?;
 
@@ -51,7 +50,7 @@ impl Hypervisor {
         for i in 0..processor_count() {
             processors.push(Vcpu::new(i)?);
         }
-        println!("Found {} processors", processors.len());
+        log::info!("Found {} processors", processors.len());
 
         Ok(Hypervisor { processors })
     }
@@ -62,7 +61,7 @@ impl Hypervisor {
     ///
     /// A `Result` which is `Ok` if the virtualization was successful, or `Err` if there was an error.
     pub fn virtualize_system(&mut self) -> Result<(), HypervisorError> {
-        println!("Virtualizing processors");
+        log::info!("Virtualizing processors");
 
         for processor in self.processors.iter_mut() {
             let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
@@ -70,6 +69,32 @@ impl Hypervisor {
             };
 
             processor.virtualize_cpu()?;
+
+            core::mem::drop(executor);
+        }
+
+        Ok(())
+    }
+
+    /// Reverts the virtualization of the system's processors.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` which is `Ok` if the devirtualization was successful, or `Err` if there was an error.
+    pub fn devirtualize_system(&mut self) -> Result<(), HypervisorError> {
+        log::info!("Devirtualizing processors");
+
+        let mut status = true;
+
+        for processor in self.processors.iter_mut() {
+            let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
+                return Err(HypervisorError::ProcessorSwitchFailed);
+            };
+
+            if !processor.devirtualize_cpu() {
+                log::info!("Failed to devirtualize processor {}", processor.id());
+                status = false;
+            }
 
             core::mem::drop(executor);
         }
@@ -85,10 +110,10 @@ impl Hypervisor {
     fn check_supported_cpu() -> Result<(), HypervisorError> {
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.6 DISCOVERING SUPPORT FOR VMX */
         Self::has_intel_cpu()?;
-        println!("CPU is Intel");
+        log::info!("CPU is Intel");
 
         Self::has_vmx_support()?;
-        println!("Virtual Machine Extension (VMX) technology is supported");
+        log::info!("Virtual Machine Extension (VMX) technology is supported");
 
         Ok(())
     }
@@ -122,27 +147,4 @@ impl Hypervisor {
         }
         Err(HypervisorError::VMXUnsupported)
     }
-
-    /*
-    /// Reverts the virtualization of the system's processors.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` which is `Ok` if the devirtualization was successful, or `Err` if there was an error.
-    pub fn devirtualize(&mut self) -> Result<(), HypervisorError> {
-        println!("Devirtualizing processors");
-
-        for processor in self.processors.iter_mut() {
-            let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
-                return Err(HypervisorError::ProcessorSwitchFailed);
-            };
-
-            processor.devirtualize_cpu()?;
-
-            core::mem::drop(executor);
-        }
-
-        Ok(())
-    }
-    */
 }
