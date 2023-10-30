@@ -1,10 +1,15 @@
+//! A hypervisor kernel driver.
+//!
+//! This crate provides a basic hypervisor kernel driver. It interfaces with the
+//! system to virtualize processors and manage hypervisor-related activities.
+
 #![no_std]
 
-/* Add a panic handler in lib.rs */
+// Set up a panic handler for non-test configurations.
 #[cfg(not(test))]
 extern crate wdk_panic;
 
-/* Add a global allocator in lib.rs */
+// Set up a global allocator for non-test configurations.
 #[cfg(not(test))]
 use wdk_alloc::WDKAllocator;
 
@@ -12,49 +17,103 @@ use wdk_alloc::WDKAllocator;
 #[global_allocator]
 static GLOBAL_ALLOCATOR: WDKAllocator = WDKAllocator;
 
-use hypervisor::{println, Hypervisor};
+use {
+    hypervisor::Hypervisor,
+    log::LevelFilter,
+    log::{self},
+};
+
 use wdk_sys::{DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL};
 
-//static mut HYPERVISOR: Option<Hypervisor> = None;
-
-/* WDF expects a symbol with the name DriverEntry */
+/// The main entry point for the driver.
+///
+/// This function is invoked by the system when the driver is loaded. It initializes
+/// logging, sets the unload callback, and attempts to virtualize the processors.
+///
+/// # Parameters
+///
+/// * `driver`: Reference to the system's DRIVER_OBJECT for this driver.
+/// * `_registry_path`: Unused. Path to the driver's registry key.
+///
+/// # Returns
+///
+/// * `STATUS_SUCCESS` if the initialization was successful.
+/// * `STATUS_UNSUCCESSFUL` if there was an error during initialization.
+///
+/// Reference: WDF expects a symbol with the name DriverEntry.
 #[export_name = "DriverEntry"]
 pub unsafe extern "system" fn driver_entry(
     driver: &mut DRIVER_OBJECT,
     _registry_path: PCUNICODE_STRING,
 ) -> NTSTATUS {
-    /* Post-vmlaunch, the kernel logger triggers erratic crashes, consuming significant debug time. Transitioning to a serial port logger for writing to the host OS via VMware Workstation. */
+    // Due to post-vmlaunch issues with the kernel logger, we transition to using a serial port logger.
+    // This logger writes to the host OS via VMware Workstation.
 
-    println!("Driver Entry called");
+    // Initialize the COM2 port logger with level filter set to Info.
+    com_logger::builder()
+        .base(0x2f8)
+        .filter(LevelFilter::Info)
+        .setup();
+
+    log::info!("Driver Entry called");
 
     driver.DriverUnload = Some(driver_unload);
 
-    let Ok(mut hypervisor) = Hypervisor::new() else {
-        println!("Failed to build hypervisor");
+    if virtualize().is_none() {
+        log::error!("Failed to virtualize processors");
         return STATUS_UNSUCCESSFUL;
-    };
-
-    match hypervisor.virtualize_system() {
-        Ok(_) => println!("Successfully virtualized system!"),
-        Err(err) => {
-            println!("Failed to virtualize system: {}", err);
-            return STATUS_UNSUCCESSFUL;
-        }
     }
 
     STATUS_SUCCESS
 }
 
+/// The unload callback for the driver.
+///
+/// This function is invoked by the system just before the driver is unloaded. It
+/// handles any necessary cleanup, such as devirtualizing the system.
+///
+/// # Parameters
+///
+/// * `_driver`: Pointer to the system's DRIVER_OBJECT for this driver.
 pub extern "C" fn driver_unload(_driver: *mut DRIVER_OBJECT) {
-    println!("Driver unloaded successfully!");
-    /*
+    log::info!("Driver unloaded successfully!");
     if let Some(mut hypervisor) = unsafe { HYPERVISOR.take() } {
-
-        match hypervisor.devirtualize() {
-            Ok(_) => println!("Devirtualized successfully!"),
-            Err(err) => println!("Failed to dervirtualize {}", err),
+        match hypervisor.devirtualize_system() {
+            Ok(_) => log::info!("Devirtualized successfully!"),
+            Err(err) => log::info!("Failed to dervirtualize {}", err),
         }
-
     }
-    */
+}
+
+/// The main hypervisor object.
+///
+/// This static mutable option holds the global instance of the hypervisor used by this driver.
+static mut HYPERVISOR: Option<Hypervisor> = None;
+
+/// Attempts to virtualize the system.
+///
+/// This function initializes a new hypervisor and then attempts to virtualize all
+/// processors on the system.
+///
+/// # Returns
+///
+/// * `Some(())` if the system was successfully virtualized.
+/// * `None` if there was an error during virtualization.
+fn virtualize() -> Option<()> {
+    let Ok(mut hypervisor) = Hypervisor::new() else {
+        log::info!("Failed to build hypervisor");
+        return None;
+    };
+
+    match hypervisor.virtualize_system() {
+        Ok(_) => log::info!("Successfully virtualized system!"),
+        Err(err) => {
+            log::info!("Failed to virtualize system: {}", err);
+            return None;
+        }
+    }
+
+    unsafe { HYPERVISOR = Some(hypervisor) };
+
+    Some(())
 }
