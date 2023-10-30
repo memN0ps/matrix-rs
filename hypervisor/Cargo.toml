@@ -20,6 +20,9 @@ elain = "0.3.0" # https://crates.io/crates/elain
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] } # https://crates.io/crates/lazy_static
 obfstr = "0.4.3" # https://crates.io/crates/obfstr/
 static_assertions = "1.1.0" # https://crates.io/crates/static_assertions
+log = "0.4.20" # https://crates.io/crates/log
+kernel-log = "0.1.2" # https://crates.io/crates/kernel-log
+com_logger = "0.1.1" # https://crates.io/crates/com_logger
 
 [build-dependencies]
 wdk-build = "0.1.0"

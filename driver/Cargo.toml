@@ -14,6 +14,9 @@ wdk-alloc = "0.1.0"
 wdk-panic = "0.1.0"
 wdk-sys = "0.1.0"
 hypervisor = { path = "../hypervisor" }
+log = "0.4.20" # https://crates.io/crates/log
+kernel-log = "0.1.2" # https://crates.io/crates/kernel-log
+com_logger = "0.1.1" # https://crates.io/crates/com_logger
 
 [build-dependencies]
 wdk-build = "0.1.0"
