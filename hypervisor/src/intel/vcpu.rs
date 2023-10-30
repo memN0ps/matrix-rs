@@ -7,7 +7,7 @@ extern crate alloc;
 use {
     super::vmx::Vmx,
     crate::{
-        error::HypervisorError, intel::vmlaunch::launch_vm, println,
+        error::HypervisorError, intel::vmlaunch::launch_vm,
         utils::processor::current_processor_index,
     },
     alloc::boxed::Box,
@@ -16,6 +16,9 @@ use {
 
 /// Atomic bitset used to track which processors have been virtualized.
 static VIRTUALIZED_BITSET: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+/// CPUID leaf used to devirtualize a processor.
+pub const CPUID_DEVIRTUALIZE: u32 = 0x4321_1234;
 
 /// Represents a Virtual CPU (VCPU) and its associated operations.
 pub struct Vcpu {
@@ -37,7 +40,7 @@ impl Vcpu {
     ///
     /// A `Result` containing the initialized VCPU instance or a `HypervisorError`.
     pub fn new(index: u32) -> Result<Self, HypervisorError> {
-        println!("Creating processor {}", index);
+        log::info!("Creating processor {}", index);
 
         let vmx = Vmx::new()?;
 
@@ -53,10 +56,10 @@ impl Vcpu {
     ///
     /// A `Result` indicating the success or failure of the virtualization process.
     pub fn virtualize_cpu(&mut self) -> Result<(), HypervisorError> {
-        println!("Virtualizing processor {}", self.index);
+        //log::info!("Virtualizing processor {}", self.index);
 
         // Capture the current processor's context. The Guest will resume from this point since we capture and write this context to the guest state for each vcpu.
-        println!("Capturing context");
+        //log::info!("Capturing context");
         let mut context = unsafe { core::mem::zeroed::<_CONTEXT>() };
 
         unsafe { RtlCaptureContext(&mut context) };
@@ -64,22 +67,50 @@ impl Vcpu {
         // Determine if we're operating as the Host (root) or Guest (non-root). Only proceed with system virtualization if operating as the Host.
         if !Self::is_virtualized() {
             // If we are here as Guest (non-root) then that will lead to undefined behavior (UB).
-            println!("Preparing for virtualization");
+            log::info!("Preparing for virtualization");
 
             Self::set_virtualized();
             self.vmx.setup_virtualization(&context)?;
-            println!("Virtualization complete for processor {}", self.index);
+            log::info!("Virtualization complete for processor {}", self.index);
 
-            println!("Dumping VMCS: {:#x?}", self.vmx.vmcs_region);
-            println!("Dumping _CONTEXT: ");
+            log::info!("Dumping VMCS: {:#x?}", self.vmx.vmcs_region);
+            log::info!("Dumping _CONTEXT: ");
             Self::print_context(&context);
 
-            println!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
+            log::info!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
             unsafe { launch_vm() };
             // unreachable code: we should not be here
         }
 
         Ok(())
+    }
+
+    /// Attempts to devirtualize the current processor.
+    ///
+    /// This function checks if the processor has already been devirtualized by
+    /// querying the `CPUID_DEVIRTUALIZE` leaf. If the processor has been
+    /// devirtualized, it logs a message and returns `true`. Otherwise, it logs
+    /// an appropriate trace message and returns `true` (indicating no action was needed).
+    ///
+    /// # Returns
+    ///
+    /// * `true` if the processor is already devirtualized or if the devirtualization
+    ///   operation was successful.
+    /// * `false` otherwise (this path is not present in the current implementation).
+    pub fn devirtualize_cpu(&self) -> bool {
+        // Check if the processor has already been devirtualized.
+        let result = x86::cpuid::cpuid!(CPUID_DEVIRTUALIZE);
+        if result.ecx != 0xDEADBEEF {
+            log::trace!(
+                "Ecx is not 0xDEADBEEF. Nothing to do. Ecx: {:x}",
+                result.ecx
+            );
+            return true;
+        }
+
+        log::info!("Processor {} has been devirtualized", self.index);
+
+        true
     }
 
     /// Retrieves the processor's unique identifier.
@@ -116,63 +147,63 @@ impl Vcpu {
     /// * `context` - The context of the processor to be printed.
     fn print_context(context: &_CONTEXT) {
         /*
-        println!("P1Home: {:#x}", context.P1Home);
-        println!("P2Home: {:#x}", context.P2Home);
-        println!("P3Home: {:#x}", context.P3Home);
-        println!("P4Home: {:#x}", context.P4Home);
-        println!("P5Home: {:#x}", context.P5Home);
-        println!("P6Home: {:#x}", context.P6Home);
-        println!("ContextFlags: {:#x}", context.ContextFlags);
-        println!("MxCsr: {:#x}", context.MxCsr);
+        log::info!("P1Home: {:#x}", context.P1Home);
+        log::info!("P2Home: {:#x}", context.P2Home);
+        log::info!("P3Home: {:#x}", context.P3Home);
+        log::info!("P4Home: {:#x}", context.P4Home);
+        log::info!("P5Home: {:#x}", context.P5Home);
+        log::info!("P6Home: {:#x}", context.P6Home);
+        log::info!("ContextFlags: {:#x}", context.ContextFlags);
+        log::info!("MxCsr: {:#x}", context.MxCsr);
         */
 
-        println!("SegCs: {:#x}", context.SegCs);
-        println!("SegDs: {:#x}", context.SegDs);
-        println!("SegEs: {:#x}", context.SegEs);
-        println!("SegFs: {:#x}", context.SegFs);
-        println!("SegGs: {:#x}", context.SegGs);
-        println!("SegSs: {:#x}", context.SegSs);
-        println!("EFlags: {:#x}", context.EFlags);
-        println!("Dr0: {:#x}", context.Dr0);
-        println!("Dr1: {:#x}", context.Dr1);
-        println!("Dr2: {:#x}", context.Dr2);
-        println!("Dr3: {:#x}", context.Dr3);
-        println!("Dr6: {:#x}", context.Dr6);
-        println!("Dr7: {:#x}", context.Dr7);
-        println!("Rax: {:#x}", context.Rax);
-        println!("Rcx: {:#x}", context.Rcx);
-        println!("Rdx: {:#x}", context.Rdx);
-        println!("Rbx: {:#x}", context.Rbx);
-        println!("Rsp: {:#x}", context.Rsp);
-        println!("Rbp: {:#x}", context.Rbp);
-        println!("Rsi: {:#x}", context.Rsi);
-        println!("Rdi: {:#x}", context.Rdi);
-        println!("R8: {:#x}", context.R8);
-        println!("R9: {:#x}", context.R9);
-        println!("R10: {:#x}", context.R10);
-        println!("R11: {:#x}", context.R11);
-        println!("R12: {:#x}", context.R12);
-        println!("R13: {:#x}", context.R13);
-        println!("R14: {:#x}", context.R14);
-        println!("R15: {:#x}", context.R15);
-        println!("Rip: {:#x}", context.Rip);
+        log::info!("SegCs: {:#x}", context.SegCs);
+        log::info!("SegDs: {:#x}", context.SegDs);
+        log::info!("SegEs: {:#x}", context.SegEs);
+        log::info!("SegFs: {:#x}", context.SegFs);
+        log::info!("SegGs: {:#x}", context.SegGs);
+        log::info!("SegSs: {:#x}", context.SegSs);
+        log::info!("EFlags: {:#x}", context.EFlags);
+        log::info!("Dr0: {:#x}", context.Dr0);
+        log::info!("Dr1: {:#x}", context.Dr1);
+        log::info!("Dr2: {:#x}", context.Dr2);
+        log::info!("Dr3: {:#x}", context.Dr3);
+        log::info!("Dr6: {:#x}", context.Dr6);
+        log::info!("Dr7: {:#x}", context.Dr7);
+        log::info!("Rax: {:#x}", context.Rax);
+        log::info!("Rcx: {:#x}", context.Rcx);
+        log::info!("Rdx: {:#x}", context.Rdx);
+        log::info!("Rbx: {:#x}", context.Rbx);
+        log::info!("Rsp: {:#x}", context.Rsp);
+        log::info!("Rbp: {:#x}", context.Rbp);
+        log::info!("Rsi: {:#x}", context.Rsi);
+        log::info!("Rdi: {:#x}", context.Rdi);
+        log::info!("R8: {:#x}", context.R8);
+        log::info!("R9: {:#x}", context.R9);
+        log::info!("R10: {:#x}", context.R10);
+        log::info!("R11: {:#x}", context.R11);
+        log::info!("R12: {:#x}", context.R12);
+        log::info!("R13: {:#x}", context.R13);
+        log::info!("R14: {:#x}", context.R14);
+        log::info!("R15: {:#x}", context.R15);
+        log::info!("Rip: {:#x}", context.Rip);
 
         /*
         // Note: I'm skipping the __bindgen_anon_1 field as it might be a complex type.
         // If needed, you can add print statements for its subfields.
         for (i, vec_reg) in context.VectorRegister.iter().enumerate() {
-            println!(
+            log::info!(
                 "VectorRegister[{}]: Low: {:#x}, High: {:#x}",
                 i, vec_reg.Low, vec_reg.High
             );
         }
 
-        println!("VectorControl: {:#x}", context.VectorControl);
-        println!("DebugControl: {:#x}", context.DebugControl);
-        println!("LastBranchToRip: {:#x}", context.LastBranchToRip);
-        println!("LastBranchFromRip: {:#x}", context.LastBranchFromRip);
-        println!("LastExceptionToRip: {:#x}", context.LastExceptionToRip);
-        println!("LastExceptionFromRip: {:#x}", context.LastExceptionFromRip);
+        log::info!("VectorControl: {:#x}", context.VectorControl);
+        log::info!("DebugControl: {:#x}", context.DebugControl);
+        log::info!("LastBranchToRip: {:#x}", context.LastBranchToRip);
+        log::info!("LastBranchFromRip: {:#x}", context.LastBranchFromRip);
+        log::info!("LastExceptionToRip: {:#x}", context.LastExceptionToRip);
+        log::info!("LastExceptionFromRip: {:#x}", context.LastExceptionFromRip);
         */
     }
 }
