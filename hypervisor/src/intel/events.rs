@@ -1,6 +1,8 @@
 //! This module provides utilities and structures to manage event injection in VMX.
 //! It handles the representation, manipulation, and injection of various types of events.
 
+#![allow(dead_code)]
+
 use bitfield::bitfield;
 
 bitfield! {
