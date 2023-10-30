@@ -9,7 +9,6 @@ use {
     crate::{
         error::HypervisorError,
         intel::descriptor::DescriptorTables,
-        println,
         utils::alloc::{KernelAlloc, PhysicalAllocator},
     },
 
@@ -52,7 +51,7 @@ impl Vmx {
     ///
     /// Returns a `Result` with a boxed `Vmx` instance or an `HypervisorError`.
     pub fn new() -> Result<Box<Self>, HypervisorError> {
-        println!("Setting up VMX");
+        log::info!("Setting up VMX");
 
         // Allocate memory for the hypervisor's needs
         let vmxon_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
@@ -69,7 +68,7 @@ impl Vmx {
         DescriptorTables::initialize_for_guest(&mut guest_descriptor_table)?;
         DescriptorTables::initialize_for_host(&mut host_descriptor_table)?;
 
-        println!("Creating Vmx instance");
+        log::info!("Creating Vmx instance");
 
         let instance = Self {
             vmxon_region,
@@ -82,7 +81,7 @@ impl Vmx {
 
         let instance = Box::new(instance);
 
-        println!("VMX setup successful!");
+        log::info!("VMX setup successful!");
 
         Ok(instance)
     }
@@ -98,7 +97,7 @@ impl Vmx {
     ///
     /// Returns a `Result` indicating the success or failure of the setup process.
     pub fn setup_virtualization(&mut self, context: &_CONTEXT) -> Result<(), HypervisorError> {
-        println!("Virtualization setup");
+        log::info!("Virtualization setup");
 
         Vmxon::setup(&mut self.vmxon_region)?;
         Vmcs::setup(&mut self.vmcs_region)?;
@@ -109,14 +108,14 @@ impl Vmx {
         // instance.host_rsp.self_data = &mut *instance as *mut _ as _;
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
-        println!("Setting up Guest Registers State");
+        log::info!("Setting up Guest Registers State");
         Vmcs::setup_guest_registers_state(&context, &self.guest_descriptor_table);
-        println!("Guest Registers State successful!");
+        log::info!("Guest Registers State successful!");
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
-        println!("Setting up Host Registers State");
+        log::info!("Setting up Host Registers State");
         Vmcs::setup_host_registers_state(&context, &self.host_descriptor_table, &self.host_rsp);
-        println!("Host Registers State successful!");
+        log::info!("Host Registers State successful!");
 
         /*
          * VMX controls:
@@ -125,11 +124,11 @@ impl Vmx {
          * - 25.7 VM-EXIT CONTROL FIELDS
          * - 25.8 VM-ENTRY CONTROL FIELDS
          */
-        println!("Setting up VMCS Control Fields");
+        log::info!("Setting up VMCS Control Fields");
         Vmcs::setup_vmcs_control_fields(&self.msr_bitmap);
-        println!("VMCS Control Fields successful!");
+        log::info!("VMCS Control Fields successful!");
 
-        println!("Virtualization setup successful!");
+        log::info!("Virtualization setup successful!");
         Ok(())
     }
 }

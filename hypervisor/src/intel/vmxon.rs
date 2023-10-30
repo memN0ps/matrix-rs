@@ -8,7 +8,6 @@ use {
     crate::{
         error::HypervisorError,
         intel::{support::vmxon, vmcs::Vmcs},
-        println,
         utils::{addresses::PhysicalAddress, alloc::PhysicalAllocator},
     },
     alloc::boxed::Box,
@@ -39,10 +38,10 @@ impl Vmxon {
     /// # Returns
     /// A result indicating success or an error.
     pub fn setup(vmxon_region: &mut Box<Vmxon, PhysicalAllocator>) -> Result<(), HypervisorError> {
-        println!("Setting up VMXON region");
+        log::info!("Setting up VMXON region");
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
-        println!("Enabling Virtual Machine Extensions (VMX)");
+        log::info!("Enabling Virtual Machine Extensions (VMX)");
         Self::enable_vmx_operation()?;
 
         let vmxon_region_physical_address =
@@ -52,8 +51,8 @@ impl Vmxon {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
-        println!("VMXON Region Virtual Address: {:p}", vmxon_region);
-        println!(
+        log::info!("VMXON Region Virtual Address: {:p}", vmxon_region);
+        log::info!(
             "VMXON Region Physical Addresss: 0x{:x}",
             vmxon_region_physical_address
         );
@@ -63,7 +62,7 @@ impl Vmxon {
 
         // Enable VMX operation.
         vmxon(vmxon_region_physical_address);
-        println!("VMXON setup successful!");
+        log::info!("VMXON setup successful!");
 
         Ok(())
     }
@@ -75,11 +74,11 @@ impl Vmxon {
         unsafe { x86::controlregs::cr4_write(cr4) };
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
-        println!("Setting Lock Bit set via IA32_FEATURE_CONTROL");
+        log::info!("Setting Lock Bit set via IA32_FEATURE_CONTROL");
         Self::set_lock_bit()?;
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.8 RESTRICTIONS ON VMX OPERATION */
-        println!("Adjusting Control Registers");
+        log::info!("Adjusting Control Registers");
         Self::adjust_control_registers();
 
         Ok(())

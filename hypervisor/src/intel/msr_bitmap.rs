@@ -3,7 +3,7 @@
 //! in a virtualized environment.
 
 use {
-    crate::{error::HypervisorError, println, utils::alloc::PhysicalAllocator},
+    crate::{error::HypervisorError, utils::alloc::PhysicalAllocator},
     alloc::boxed::Box,
 };
 
@@ -49,13 +49,13 @@ impl MsrBitmap {
     pub fn setup(
         msr_bitmap: &mut Box<MsrBitmap, PhysicalAllocator>,
     ) -> Result<(), HypervisorError> {
-        println!("Setting up MSR-Bitmap");
+        log::info!("Setting up MSR-Bitmap");
 
         // TODO, if needed
 
-        println!("MSR-Bitmap Virtual Address: {:p}", msr_bitmap);
+        log::info!("MSR-Bitmap Virtual Address: {:p}", msr_bitmap);
 
-        println!("MSR-Bitmap setup successful!");
+        log::info!("MSR-Bitmap setup successful!");
 
         Ok(())
     }

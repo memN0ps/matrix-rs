@@ -2,7 +2,7 @@
 //! Provides mechanisms to manage and configure the virtual machine's stack, including setup, allocation, and other related operations.
 
 use {
-    crate::{error::HypervisorError, println, utils::alloc::KernelAlloc},
+    crate::{error::HypervisorError, utils::alloc::KernelAlloc},
     alloc::boxed::Box,
     core::mem::size_of,
 };
@@ -45,15 +45,15 @@ impl VmStack {
     ///
     /// A `Result` indicating the success or failure of the setup process.
     pub fn setup(host_rsp: &mut Box<VmStack, KernelAlloc>) -> Result<(), HypervisorError> {
-        println!("Setting up VMCS_HOST_RSP region");
-        println!("VMCS_HOST_RSP Virtual Address: {:p}", host_rsp);
+        log::info!("Setting up VMCS_HOST_RSP region");
+        log::info!("VMCS_HOST_RSP Virtual Address: {:p}", host_rsp);
 
         // Initialize the VM stack contents and reserved space.
         host_rsp.stack_contents = [0u8; STACK_CONTENTS_SIZE];
         host_rsp.reserved_1 = u64::MAX;
         host_rsp.padding_1 = u64::MAX;
 
-        println!("VMCS_HOST_RSP setup successful!");
+        log::info!("VMCS_HOST_RSP setup successful!");
 
         Ok(())
     }

@@ -17,7 +17,6 @@ use {
             vmlaunch::vmexit_stub,
             vmstack::{VmStack, STACK_CONTENTS_SIZE},
         },
-        println,
         utils::{
             addresses::PhysicalAddress,
             alloc::{KernelAlloc, PhysicalAllocator},
@@ -68,7 +67,7 @@ impl Vmcs {
     /// # Returns
     /// A result indicating success or an error.
     pub fn setup(vmcs_region: &mut Box<Vmcs, PhysicalAllocator>) -> Result<(), HypervisorError> {
-        println!("Setting up VMCS region");
+        log::info!("Setting up VMCS region");
 
         let vmcs_region_physical_address =
             PhysicalAddress::pa_from_va(vmcs_region.as_ref() as *const _ as _);
@@ -77,8 +76,8 @@ impl Vmcs {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
-        println!("VMCS Region Virtual Address: {:p}", vmcs_region);
-        println!(
+        log::info!("VMCS Region Virtual Address: {:p}", vmcs_region);
+        log::info!(
             "VMCS Region Physical Addresss: 0x{:x}",
             vmcs_region_physical_address
         );
@@ -88,13 +87,13 @@ impl Vmcs {
 
         // Clear the VMCS region.
         vmclear(vmcs_region_physical_address);
-        println!("VMCLEAR successful!");
+        log::info!("VMCLEAR successful!");
 
         // Load current VMCS pointer.
         vmptrld(vmcs_region_physical_address);
-        println!("VMPTRLD successful!");
+        log::info!("VMPTRLD successful!");
 
-        println!("VMCS setup successful!");
+        log::info!("VMCS setup successful!");
 
         Ok(())
     }

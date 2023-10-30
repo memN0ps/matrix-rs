@@ -1,7 +1,6 @@
 //! This module provides utility functions for processor-related operations.
 
 use {
-    crate::println,
     core::mem::MaybeUninit,
     wdk_sys::{
         ntddk::{
@@ -62,7 +61,7 @@ impl ProcessorExecutor {
     /// An `Option` containing the `ProcessorExecutor` if the switch was successful, or `None` if not.
     pub fn switch_to_processor(i: u32) -> Option<Self> {
         if i > processor_count() {
-            println!("Invalid processor index: {}", i);
+            //log::info!("Invalid processor index: {}", i);
             return None;
         }
 
@@ -77,10 +76,10 @@ impl ProcessorExecutor {
         affinity.Reserved[1] = 0;
         affinity.Reserved[2] = 0;
 
-        println!("Switching execution to processor {}", i);
+        //log::info!("Switching execution to processor {}", i);
         unsafe { KeSetSystemGroupAffinityThread(&mut affinity, old_affinity.as_mut_ptr()) };
 
-        println!("Yielding execution");
+        //log::info!("Yielding execution");
         if !NT_SUCCESS(unsafe { ZwYieldExecution() }) {
             return None;
         }
@@ -92,7 +91,7 @@ impl ProcessorExecutor {
 impl Drop for ProcessorExecutor {
     /// Restores the group affinity of the calling thread to its original value when the `ProcessorExecutor` is dropped.
     fn drop(&mut self) {
-        println!("Switching execution back to previous processor");
+        //log::info!("Switching execution back to previous processor");
         unsafe {
             KeRevertToUserGroupAffinityThread(self.old_affinity.as_mut_ptr());
         }
