@@ -110,49 +110,4 @@ impl VmExit {
         rip += len;
         vmwrite(guest::RIP, rip);
     }
-
-    pub fn exit_hypervisor(registers: &mut GuestRegisters) {
-        // Set return values of cpuid as follows:
-        // - rbx = address to return
-        // - rcx = stack pointer to restore
-        //
-        registers.rbx =
-    }
-}
-
-/// Handles VM exits.
-///
-/// This function is triggered upon a VM exit event. It determines the cause of the VM exit
-/// and performs the necessary actions based on the exit reason.
-///
-/// # Parameters
-///
-/// * `registers`: A pointer to `GuestRegisters` that were just saved on the stack in reverse order.
-///   The order is reversed because when pushing something onto the stack, the last item pushed
-///   will be at the top of the stack.
-///
-/// # Returns
-///
-/// Returns a `u8` representation of the `VmExitType`, indicating whether the hypervisor
-/// should continue or exit.
-#[no_mangle]
-pub unsafe extern "C" fn vmexit_handler(registers: *mut GuestRegisters) -> u8 {
-    // Ensure the pointer is not null before dereferencing.
-    if registers.is_null() {
-        //log::info!("Null Guest Registers pointer passed to vmexit_handler.");
-        return VmExitType::ExitHypervisor as u8;
-    }
-
-    // Safely dereference the pointer to access the registers.
-    let registers = &mut *registers;
-
-    let vmexit = VmExit::new();
-
-    // Handle the VM exit.
-    if let Err(_e) = vmexit.handle_vmexit(registers) {
-        //log::info!("Error handling VMEXIT: {:?}", _e);
-        return VmExitType::ExitHypervisor as u8;
-    }
-
-    return VmExitType::Continue as u8;
 }
