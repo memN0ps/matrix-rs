@@ -4,6 +4,7 @@
 //! system to virtualize processors and manage hypervisor-related activities.
 
 #![no_std]
+#![allow(unused_mut)]
 
 // Set up a panic handler for non-test configurations.
 #[cfg(not(test))]
@@ -57,6 +58,7 @@ pub unsafe extern "system" fn driver_entry(
 
     log::info!("Driver Entry called");
 
+    // Remove if manually mapping the kernel driver
     driver.DriverUnload = Some(driver_unload);
 
     if virtualize().is_none() {
@@ -75,13 +77,12 @@ pub unsafe extern "system" fn driver_entry(
 /// # Parameters
 ///
 /// * `_driver`: Pointer to the system's DRIVER_OBJECT for this driver.
+///
+/// Note: Remove if manually mapping the kernel driver
 pub extern "C" fn driver_unload(_driver: *mut DRIVER_OBJECT) {
     log::info!("Driver unloaded successfully!");
     if let Some(mut hypervisor) = unsafe { HYPERVISOR.take() } {
-        match hypervisor.devirtualize_system() {
-            Ok(_) => log::info!("Devirtualized successfully!"),
-            Err(err) => log::info!("Failed to dervirtualize {}", err),
-        }
+        core::mem::drop(hypervisor);
     }
 }
 

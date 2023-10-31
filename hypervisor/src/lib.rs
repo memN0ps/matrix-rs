@@ -148,3 +148,16 @@ impl Hypervisor {
         Err(HypervisorError::VMXUnsupported)
     }
 }
+
+impl Drop for Hypervisor {
+    /// Handles the dropping of the `Hypervisor` instance.
+    ///
+    /// When a `Hypervisor` instance goes out of scope or is explicitly dropped,
+    /// this method attempts to devirtualize the system and logs the result.
+    fn drop(&mut self) {
+        match self.devirtualize_system() {
+            Ok(_) => log::info!("Devirtualized successfully!"),
+            Err(err) => log::info!("Failed to devirtualize {}", err),
+        }
+    }
+}
