@@ -84,7 +84,7 @@ impl Hypervisor {
     pub fn devirtualize_system(&mut self) -> Result<(), HypervisorError> {
         log::info!("Devirtualizing processors");
 
-        let mut status = true;
+        let mut _status = true;
 
         for processor in self.processors.iter_mut() {
             let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
@@ -93,7 +93,7 @@ impl Hypervisor {
 
             if !processor.devirtualize_cpu() {
                 log::info!("Failed to devirtualize processor {}", processor.id());
-                status = false;
+                _status = false;
             }
 
             core::mem::drop(executor);
