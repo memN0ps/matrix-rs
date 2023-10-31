@@ -3,7 +3,11 @@
 
 #![allow(dead_code)]
 
-use bitfield::bitfield;
+use x86::vmx::vmcs::{control, ro};
+use {
+    crate::intel::support::{vmread, vmwrite},
+    bitfield::bitfield,
+};
 
 bitfield! {
     /// Represents the VM-Entry Interruption-Information Field.
@@ -151,5 +155,23 @@ impl EventInjection {
         event.set_valid(VALID);
 
         event.0
+    }
+
+    /// Injects a general protection fault into the guest.
+    ///
+    /// This function is used to signal to the guest that a protection violation
+    /// has occurred, typically due to accessing a reserved MSR.
+    ///
+    /// # Arguments
+    ///
+    /// * `error_code` - The error code to be associated with the fault.
+    ///
+    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.8.3 VM-Entry Controls for Event Injection
+    /// and Table 25-17. Format of the VM-Entry Interruption-Information Field.
+    #[rustfmt::skip]
+    pub fn vmentry_inject_gp(error_code: u32) {
+        vmwrite(control::VMENTRY_EXCEPTION_ERR_CODE, error_code);
+        vmwrite(control::VMENTRY_INTERRUPTION_INFO_FIELD, EventInjection::general_protection());
+        vmwrite(control::VMENTRY_INSTRUCTION_LEN, vmread(ro::VMEXIT_INSTRUCTION_LEN));
     }
 }
