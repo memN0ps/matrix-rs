@@ -7,7 +7,8 @@ extern crate alloc;
 use {
     super::{vmexit::cpuid::CPUID_DEVIRTUALIZE, vmx::Vmx},
     crate::{
-        error::HypervisorError, intel::vmlaunch::launch_vm,
+        error::HypervisorError,
+        intel::{support, vmlaunch::launch_vm},
         utils::processor::current_processor_index,
     },
     alloc::boxed::Box,
@@ -104,6 +105,8 @@ impl Vcpu {
             );
             return true;
         }
+
+        support::vmxoff();
 
         log::info!("Processor {} has been devirtualized", self.index);
 
