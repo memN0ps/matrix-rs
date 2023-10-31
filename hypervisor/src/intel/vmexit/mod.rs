@@ -9,7 +9,6 @@ use {
         error::HypervisorError,
         intel::{
             support::vmread,
-            vmerror::VmInstructionError,
             vmexit::{
                 cpuid::handle_cpuid,
                 msr::{handle_msr_access, MsrAccessType},
@@ -67,14 +66,6 @@ impl VmExit {
             return Err(HypervisorError::UnknownVMExitReason);
         };
         log::info!("Basic Exit Reason: {}", basic_exit_reason);
-
-        let instruction_error = vmread(ro::VM_INSTRUCTION_ERROR) as u32;
-
-        let Some(_error) = VmInstructionError::from_u32(instruction_error) else {
-            //log::info!("Unknown instruction error: {:#x}", instruction_error);
-            return Err(HypervisorError::UnknownVMInstructionError);
-        };
-        //log::info!("VM Instruction Error: {}", error);
 
         // Handle VMEXIT
         // Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.2 Instructions That Cause VM Exits Unconditionally:
