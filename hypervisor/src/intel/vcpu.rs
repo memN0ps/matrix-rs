@@ -5,7 +5,7 @@
 extern crate alloc;
 
 use {
-    super::vmx::Vmx,
+    super::{vmexit::cpuid::CPUID_DEVIRTUALIZE, vmx::Vmx},
     crate::{
         error::HypervisorError, intel::vmlaunch::launch_vm,
         utils::processor::current_processor_index,
@@ -16,9 +16,6 @@ use {
 
 /// Atomic bitset used to track which processors have been virtualized.
 static VIRTUALIZED_BITSET: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
-
-/// CPUID leaf used to devirtualize a processor.
-pub const CPUID_DEVIRTUALIZE: u32 = 0x4321_1234;
 
 /// Represents a Virtual CPU (VCPU) and its associated operations.
 pub struct Vcpu {
