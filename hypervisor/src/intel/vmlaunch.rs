@@ -1,6 +1,12 @@
-use {
-    super::vmexit::VmExit,
-    crate::intel::{support::vmread, vmerror::VmInstructionError},
+//! Assembly routines and external functions for hypervisor operations.
+//!
+//! This module contains inline assembly for VM operations and the declarations
+//! for external C functions related to the hypervisor's VM management.
+
+use crate::intel::{
+    support::vmread,
+    vmerror::VmInstructionError,
+    vmexit::{VmExit, VmExitType},
 };
 
 /// Guest registers.
@@ -23,35 +29,30 @@ pub struct GuestRegisters {
     pub rcx: u64,
     pub rax: u64,
 }
+// Alignment check
 const_assert_eq!(
     core::mem::size_of::<GuestRegisters>(),
-    0x80 /* 16 * 0x80 */
+    0x80 /* 16 * 0x8 */
 );
 
 extern "C" {
     /// Run the VM until the VM-exit occurs.
+    ///
+    /// This function attempts to launch the VM using the `vmlaunch` instruction.
+    /// If the launch fails, it calls the `vmlaunch_failed` function.
     pub fn launch_vm() -> !;
+
+    /// Stub function called upon VM-exit.
+    ///
+    /// This function is responsible for saving the state of the guest that isn't
+    /// automatically saved by the processor, then it calls the Rust VM-exit handler.
     pub fn vmexit_stub();
 }
 
-// Inline assembly for VM operations
+// Inline assembly for VM operations.
 core::arch::global_asm!(
     r#"
-.global launch_vm
-launch_vm:
-    // The host's state is saved in the VMCS before executing `vmlaunch`.
-    // The processor will automatically save and restore the host's state using the VMCS.
-    vmlaunch
-
-    // If vmlaunch fails, call the error handler
-    call    vmlaunch_failed
-
-.global vmexit_stub
-vmexit_stub:
-    // On VM-exit, the processor saves some of the guest's state in the VMCS, but not all.
-    // Manually save the rest of the guest's state to ensure full restoration on `vmresume`.
-
-    // Save general purpose registers
+.macro pushaq
     push    rax
     push    rcx
     push    rdx
@@ -68,32 +69,9 @@ vmexit_stub:
     push    r13
     push    r14
     push    r15
+.endmacro
 
-    // Set rcx to point to the saved guest registers for the vmexit_handler.
-    mov     rcx, rsp
-
-    // Allocate stack space and save XMM registers.
-    sub     rsp, 0x20 + 0x60
-    movaps  [rsp + 0x20], xmm0
-    movaps  [rsp + 0x20 + 0x10], xmm1
-    movaps  [rsp + 0x20 + 0x20], xmm2
-    movaps  [rsp + 0x20 + 0x30], xmm3
-    movaps  [rsp + 0x20 + 0x40], xmm4
-    movaps  [rsp + 0x20 + 0x50], xmm5
-
-    // Handle the VM-exit event
-    call    vmexit_handler
-
-    // Restore XMM registers and adjust the stack pointer
-    movaps  xmm5, [rsp + 0x20 + 0x50]
-    movaps  xmm4, [rsp + 0x20 + 0x40]
-    movaps  xmm3, [rsp + 0x20 + 0x30]
-    movaps  xmm2, [rsp + 0x20 + 0x20]
-    movaps  xmm1, [rsp + 0x20 + 0x10]
-    movaps  xmm0, [rsp + 0x20]
-    add     rsp, 0x20 + 0x60
-
-    // Restore general purpose registers
+.macro popaq
     pop     r15
     pop     r14
     pop     r13
@@ -110,22 +88,90 @@ vmexit_stub:
     pop     rdx
     pop     rcx
     pop     rax
+.endmacro
 
-    // Attempt to resume VM execution
+.global launch_vm
+launch_vm:
+    // Attempt to launch the VM.
+    vmlaunch
+    // If we reach here, vmlaunch failed.
+    call     vmlaunch_failed
+
+.global vmexit_stub
+vmexit_stub:
+    // On VM-exit, save the guest's state that isn't automatically saved by the processor.
+    pushaq
+
+    // Set rcx to point to the saved guest registers for the vmexit_handler.
+    mov     rcx, rsp
+
+    // Save XMM registers (0-5, extend if needed). Allocate space on the stack.
+    sub     rsp, 0x20 + 0x60
+    movaps  [rsp + 0x20], xmm0
+    movaps  [rsp + 0x20 + 0x10], xmm1
+    movaps  [rsp + 0x20 + 0x20], xmm2
+    movaps  [rsp + 0x20 + 0x30], xmm3
+    movaps  [rsp + 0x20 + 0x40], xmm4
+    movaps  [rsp + 0x20 + 0x50], xmm5
+
+    // Call the Rust VM-exit handler.
+    call    vmexit_handler
+
+    // Restore the saved guest state and attempt to resume the VM.
+    movaps  xmm5, [rsp + 0x20 + 0x50]
+    movaps  xmm4, [rsp + 0x20 + 0x40]
+    movaps  xmm3, [rsp + 0x20 + 0x30]
+    movaps  xmm2, [rsp + 0x20 + 0x20]
+    movaps  xmm1, [rsp + 0x20 + 0x10]
+    movaps  xmm0, [rsp + 0x20]
+    add     rsp, 0x20 + 0x60
+
+    // Check the return value of `vmexit_handler` to see if we have to turn off vmx or not.
+    test    al, al
+
+    // Restore the guest's state that isn't automatically restored by the processor.
+    popaq
+
+    // If it's non-zero, exit the hypervisor.
+    jnz     hypervisor_exit
+
+    // Otherwise, attempt to resume the VM.
     vmresume
 
-    // If vmresume fails, call the error handler
-    call vmresume_failed
+    // If vmresume fails, handle the error.
+    call    vmresume_failed
+
+hypervisor_exit:
+    // Update rcx with a magic value, hinting that the hypervisor needs to be unloaded.
+    mov     ecx, 0xDEADBEEF
+
+    // This might fail for now and will need fixing later. We need to do vmxoff here or after returning to the caller?
+    int3
 "#
 );
 
-/// The first parameter is a pointer to GuestRegisters that were just saved on the stack in reverse order.
-/// Reverse order because when you push something on stack the last thing you push will be at the top of the stack
+/// Handles VM exits.
+///
+/// This function is triggered upon a VM exit event. It determines the cause of the VM exit
+/// and performs the necessary actions based on the exit reason.
+///
+/// # Parameters
+///
+/// * `registers`: A pointer to `GuestRegisters` that were just saved on the stack in reverse order.
+///   The order is reversed because when pushing something onto the stack, the last item pushed
+///   will be at the top of the stack.
+///
+/// # Returns
+///
+/// Returns a `u8` representation of the `VmExitType`, indicating whether the hypervisor
+/// should continue or exit.
 #[no_mangle]
-pub unsafe extern "C" fn vmexit_handler(registers: *mut GuestRegisters) {
+pub unsafe extern "C" fn vmexit_handler(registers: *mut GuestRegisters) -> u8 {
     // Ensure the pointer is not null before dereferencing.
     if registers.is_null() {
-        panic!("vmexit_handler received a null pointer for registers.");
+        // Handle this error
+        log::error!("Null Guest Registers pointer passed to vmexit_handler.");
+        return VmExitType::ExitHypervisor as u8;
     }
 
     // Safely dereference the pointer to access the registers.
@@ -134,8 +180,12 @@ pub unsafe extern "C" fn vmexit_handler(registers: *mut GuestRegisters) {
     let vmexit = VmExit::new();
 
     // Handle the VM exit.
-    if let Err(e) = vmexit.handle_vmexit(registers) {
-        panic!("Failed to handle VMEXIT: {:?}", e);
+    match vmexit.handle_vmexit(registers) {
+        Ok(_) => VmExitType::Continue as u8,
+        Err(e) => {
+            log::error!("Error handling VMEXIT: {:?}", e);
+            return VmExitType::ExitHypervisor as u8;
+        }
     }
 }
 
@@ -144,10 +194,16 @@ pub unsafe extern "C" fn vmexit_handler(registers: *mut GuestRegisters) {
 pub extern "C" fn vmlaunch_failed() {
     let instruction_error = vmread(x86::vmx::vmcs::ro::VM_INSTRUCTION_ERROR) as u32;
 
-    let Some(error) = VmInstructionError::from_u32(instruction_error) else {
-        panic!("Unknown instruction error: {:#x}", instruction_error);
+    match VmInstructionError::from_u32(instruction_error) {
+        Some(error) => {
+            log::error!("VMLAUNCH instruction error: {}", error);
+            // TODO: Capture additional state here for debugging
+        }
+        None => log::error!("Unknown instruction error: {:#x}", instruction_error),
     };
-    panic!("VMLAUNCH instruction error: {}", error);
+
+    // Transition to a safe state or halt
+    panic!("VMLAUNCH failed");
 }
 
 /// Handles the failure of the VMRESUME instruction.
@@ -155,9 +211,14 @@ pub extern "C" fn vmlaunch_failed() {
 pub extern "C" fn vmresume_failed() {
     let instruction_error = vmread(x86::vmx::vmcs::ro::VM_INSTRUCTION_ERROR) as u32;
 
-    let Some(error) = VmInstructionError::from_u32(instruction_error) else {
-        panic!("Unknown instruction error: {:#x}", instruction_error);
+    match VmInstructionError::from_u32(instruction_error) {
+        Some(error) => {
+            log::error!("VMRESUME instruction error: {}", error);
+            // TODO: Capture additional state here for debugging
+        }
+        None => log::error!("Unknown instruction error: {:#x}", instruction_error),
     };
 
-    panic!("VMRESUME instruction error: {}", error);
+    // Transition to a safe state or halt
+    panic!("VMRESUME failed");
 }
