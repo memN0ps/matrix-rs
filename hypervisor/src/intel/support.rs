@@ -5,6 +5,11 @@ pub fn vmxon(vmxon_region: u64) {
     unsafe { x86::bits64::vmx::vmxon(vmxon_region).unwrap() };
 }
 
+/// Disable VMX operation.
+pub fn vmxoff() {
+    unsafe { x86::bits64::vmx::vmxoff().unwrap() };
+}
+
 /// Clear VMCS.
 pub fn vmclear(vmcs_region: u64) {
     unsafe { x86::bits64::vmx::vmclear(vmcs_region).unwrap() };
