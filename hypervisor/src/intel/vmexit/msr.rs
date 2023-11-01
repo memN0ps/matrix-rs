@@ -11,9 +11,10 @@ pub enum MsrAccessType {
 /// Handles MSR access based on the provided access type.
 ///
 /// This function checks if the requested MSR address is within a valid
-/// range or a reserved range. For valid MSRs, the function will either
-/// read or write to the MSR based on the access type. For reserved MSRs,
-/// a general protection fault is injected.
+/// range, a reserved range, or a synthetic MSR range used by Hyper-V.
+/// For valid MSRs, the function will either read or write to the MSR based
+/// on the access type. For reserved or synthetic MSRs, a general protection
+/// fault is injected.
 ///
 /// # Arguments
 ///
@@ -28,19 +29,23 @@ pub fn handle_msr_access(registers: &mut GuestRegisters, access_type: MsrAccessT
     const MSR_RANGE_LOW_END: u64 = 0x00001FFF;
     const MSR_RANGE_HIGH_START: u64 = 0xC0000000;
     const MSR_RANGE_HIGH_END: u64 = 0xC0001FFF;
-    const RESERVED_MSR_RANGE_LOW: u64 = 0x40000000;
-    const RESERVED_MSR_RANGE_HI: u64 = 0x400000FF;
+
+    // Hyper-V synthetic MSRs
+    const HYPERV_MSR_START: u64 = 0x40000000;
+    const HYPERV_MSR_END: u64 = 0x400000FF;
 
     let msr_id = registers.rcx;
 
-    // Determine if the MSR address is in a valid or reserved range.
+    // Determine if the MSR address is in a valid, reserved, or synthetic range.
     let is_valid_msr = (msr_id <= MSR_RANGE_LOW_END)
         || ((msr_id >= MSR_RANGE_HIGH_START) && (msr_id <= MSR_RANGE_HIGH_END));
 
-    let is_reserved_msr = (msr_id >= RESERVED_MSR_RANGE_LOW) && (msr_id <= RESERVED_MSR_RANGE_HI);
+    let is_hyperv_synthetic_msr = (msr_id >= HYPERV_MSR_START) && (msr_id <= HYPERV_MSR_END);
 
-    // If the MSR address falls within a reserved range, inject a general protection fault.
-    if is_reserved_msr {
+    // If the MSR address falls within a synthetic or reserved range, inject a general protection fault.
+    if is_hyperv_synthetic_msr {
+        // Inject general protection fault with an error code.
+        // The error code can be zero or you can define a specific one for synthetic MSR access.
         EventInjection::vmentry_inject_gp(0);
         return;
     }
@@ -58,6 +63,8 @@ pub fn handle_msr_access(registers: &mut GuestRegisters, access_type: MsrAccessT
                 unsafe { x86::msr::wrmsr(msr_id as _, msr_value) };
             }
         }
+    } else {
+        // If the MSR is neither a known valid MSR nor a synthetic MSR, inject a general protection fault.
+        EventInjection::vmentry_inject_gp(0);
     }
-    // Note: Optionally, you can handle the case where the MSR is neither valid nor reserved.
 }
