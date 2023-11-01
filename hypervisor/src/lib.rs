@@ -10,9 +10,8 @@
 #![feature(once_cell_try)]
 #![feature(decl_macro)]
 
-#[macro_use]
-extern crate static_assertions;
 extern crate alloc;
+extern crate static_assertions;
 
 use {
     crate::{
@@ -84,17 +83,12 @@ impl Hypervisor {
     pub fn devirtualize_system(&mut self) -> Result<(), HypervisorError> {
         log::info!("Devirtualizing processors");
 
-        let mut _status = true;
-
         for processor in self.processors.iter_mut() {
             let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
                 return Err(HypervisorError::ProcessorSwitchFailed);
             };
 
-            if !processor.devirtualize_cpu() {
-                log::info!("Failed to devirtualize processor {}", processor.id());
-                _status = false;
-            }
+            processor.devirtualize_cpu()?;
 
             core::mem::drop(executor);
         }

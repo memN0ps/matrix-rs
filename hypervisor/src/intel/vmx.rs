@@ -1,46 +1,66 @@
 //! This module provides an implementation for VMX-based virtualization.
 //! It encapsulates the necessary components for VMX initialization and setup,
-//! including the VMXON, VMCS, MSR Bitmap, and other relevant data structures.
+//! including the Vmxon, Vmcs, MsrBitmap, DescriptorTables, and other relevant data structures.
 
+use crate::intel::vmerror::VmInstructionError;
 use {
     // Super imports
-    super::{msr_bitmap::MsrBitmap, vmcs::Vmcs, vmstack::VmStack, vmxon::Vmxon},
+    super::{msr_bitmap::MsrBitmap, vmcs::Vmcs, vmxon::Vmxon},
+
     // Internal crate usages
     crate::{
         error::HypervisorError,
-        intel::descriptor::DescriptorTables,
+        intel::{
+            descriptor::DescriptorTables, support::vmread, vmexit::VmExit, vmlaunch::launch_vm,
+            vmlaunch::GuestRegisters,
+        },
         utils::alloc::{KernelAlloc, PhysicalAllocator},
     },
 
     // External crate usages
     alloc::boxed::Box,
     wdk_sys::_CONTEXT,
+    x86::{current::rflags::RFlags, vmx::vmcs},
 };
 
-/// Represents the VMX structure which encapsulates the necessary components for VMX virtualization.
+/// Represents the VMX structure with essential components for VMX virtualization.
 ///
-/// Memory Allocation Considerations:
-/// - Boxed pointers for the Vmxon, Vmcs, MsrBitmap, and HostRsp structures are stored within the Vmx struct to ensure they aren't dropped prematurely.
-/// - Rust's automatic memory management can be a pitfall; dropping a `Box` at high IRQL might trigger unintended deallocations.
+/// This structure contains the VMXON region, VMCS region, MSR bitmap, descriptor tables, and other vital data required for VMX operations.
+///
+/// # Memory Allocation Considerations
+///
+/// The boxed pointers for certain components within the `Vmx` structure ensure that they remain allocated throughout the VMX lifecycle.
+/// - `PhysicalAllocator` utilizes `MmAllocateContiguousMemorySpecifyCacheNode` for memory operations.
+/// - `KernelAlloc` utilizes `ExAllocatePool` or `ExAllocatePoolWithTag` for memory operations.
+///
+/// Care is taken to prevent premature deallocations, especially at high IRQLs.
 #[repr(C, align(4096))]
 pub struct Vmx {
-    /// The virtual address of the Vmxon naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode).
+    /// Virtual address of the VMXON region, aligned to a 4-KByte boundary.
+    /// Allocated using `MmAllocateContiguousMemorySpecifyCacheNode`.
     pub vmxon_region: Box<Vmxon, PhysicalAllocator>,
 
-    /// The virtual address of the Vmcs naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode).
+    /// Virtual address of the VMCS region, aligned to a 4-KByte boundary.
+    /// Allocated using `MmAllocateContiguousMemorySpecifyCacheNode`.
     pub vmcs_region: Box<Vmcs, PhysicalAllocator>,
 
-    /// The virtual address of the MSR Bitmap naturally aligned 4-KByte region of memory (MmAllocateContiguousMemorySpecifyCacheNode).
+    /// Virtual address of the MSR bitmap, aligned to a 4-KByte boundary.
+    /// Allocated using `MmAllocateContiguousMemorySpecifyCacheNode`.
     pub msr_bitmap: Box<MsrBitmap, PhysicalAllocator>,
 
-    /// The virtual address of the Guest Descriptor Tables containing the GDT and IDT (ExAllocatePool / ExAllocatePoolWithTag).
+    /// Virtual address of the guest's descriptor tables, including GDT and IDT.
+    /// Allocated using `ExAllocatePool` or `ExAllocatePoolWithTag`.
     pub guest_descriptor_table: Box<DescriptorTables, KernelAlloc>,
 
-    /// The virtual address of the Host Descriptor Tables containing the GDT and IDT (ExAllocatePool / ExAllocatePoolWithTag).
+    /// Virtual address of the host's descriptor tables, including GDT and IDT.
+    /// Allocated using `ExAllocatePool` or `ExAllocatePoolWithTag`.
     pub host_descriptor_table: Box<DescriptorTables, KernelAlloc>,
 
-    /// The virtual address of the VMCS_HOST_RSP naturally aligned 4-KByte region of memory (ExAllocatePool / ExAllocatePoolWithTag).
-    pub host_rsp: Box<VmStack, KernelAlloc>,
+    /// Registers capturing the guest's state during a VM exit.
+    pub registers: GuestRegisters,
+
+    /// Flag indicating the VM's launch status.
+    pub launched: bool,
 }
 
 impl Vmx {
@@ -61,12 +81,14 @@ impl Vmx {
             unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
         let mut host_descriptor_table =
             unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
-        let host_rsp = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
 
         // To capture the current GDT and IDT for the guest the order is important so we can setup up a new GDT and IDT for the host.
         // This is done here instead of `setup_virtualization` because it uses a vec to allocate memory for the new GDT
         DescriptorTables::initialize_for_guest(&mut guest_descriptor_table)?;
         DescriptorTables::initialize_for_host(&mut host_descriptor_table)?;
+
+        let registers = GuestRegisters::default();
+        let launched = false;
 
         log::info!("Creating Vmx instance");
 
@@ -76,7 +98,8 @@ impl Vmx {
             msr_bitmap,
             guest_descriptor_table,
             host_descriptor_table,
-            host_rsp,
+            registers,
+            launched,
         };
 
         let instance = Box::new(instance);
@@ -88,8 +111,8 @@ impl Vmx {
 
     /// Sets up the virtualization environment using the VMX capabilities.
     ///
-    /// This function orchestrates the setup for VMX virtualization by initializing the VMXON, VMCS,
-    /// MSR Bitmap, and other relevant data structures. It also configures the guest and host state
+    /// This function orchestrates the setup for VMX virtualization by initializing the VMXON, Vmcs,
+    /// MsrBitmap, and other relevant data structures. It also configures the guest and host state
     /// in the VMCS as well as the VMCS control fields.
     ///
     /// # Arguments
@@ -102,19 +125,19 @@ impl Vmx {
         Vmxon::setup(&mut self.vmxon_region)?;
         Vmcs::setup(&mut self.vmcs_region)?;
         MsrBitmap::setup(&mut self.msr_bitmap)?;
-        VmStack::setup(&mut self.host_rsp)?;
-
-        // Set the self_data pointer to the instance. This can be used in the vmexit_handler to retrieve the instance.
-        // instance.host_rsp.self_data = &mut *instance as *mut _ as _;
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
         log::info!("Setting up Guest Registers State");
-        Vmcs::setup_guest_registers_state(&context, &self.guest_descriptor_table);
+        Vmcs::setup_guest_registers_state(
+            &context,
+            &self.guest_descriptor_table,
+            &mut self.registers,
+        );
         log::info!("Guest Registers State successful!");
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
         log::info!("Setting up Host Registers State");
-        Vmcs::setup_host_registers_state(&context, &self.host_descriptor_table, &self.host_rsp);
+        Vmcs::setup_host_registers_state(&context, &self.host_descriptor_table);
         log::info!("Host Registers State successful!");
 
         /*
@@ -130,5 +153,63 @@ impl Vmx {
 
         log::info!("Virtualization setup successful!");
         Ok(())
+    }
+
+    /// Executes the Virtual Machine (VM) and handles VM-exits.
+    ///
+    /// This method will continuously execute the VM until a VM-exit event occurs. Upon VM-exit,
+    /// it updates the VM state, interprets the VM-exit reason, and handles it appropriately.
+    /// The loop continues until an unhandled or error-causing VM-exit is encountered.
+    pub fn run(&mut self) {
+        log::info!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
+
+        loop {
+            // Run the VM until the VM-exit occurs.
+            let flags = unsafe { launch_vm(&mut self.registers, u64::from(self.launched)) };
+
+            // Verify that the `launch_vm` was executed successfully, otherwise panic.
+            Self::vm_succeed(RFlags::from_raw(flags));
+
+            self.launched = true;
+
+            // VM-exit occurred. Copy the guest register values from VMCS so that
+            // `self.registers` is complete and up to date.
+            self.registers.rip = vmread(vmcs::guest::RIP);
+            self.registers.rsp = vmread(vmcs::guest::RSP);
+            self.registers.rflags = vmread(vmcs::guest::RFLAGS);
+
+            // Handle VM-exit by translating it to the `VmExitReason` type.
+            let vmexit = VmExit::new();
+
+            // Handle the VM exit.
+            if let Err(e) = vmexit.handle_vmexit(&mut self.registers) {
+                log::error!("Error handling VMEXIT: {:?}", e);
+                break;
+            }
+        }
+    }
+
+    /// Verifies that the `launch_vm` function executed successfully.
+    ///
+    /// This method checks the RFlags for indications of failure from the `launch_vm` function.
+    /// If a failure is detected, it will panic with a detailed error message.
+    ///
+    /// # Arguments
+    ///
+    /// * `flags`: The RFlags value post-execution of the `launch_vm` function.
+    ///
+    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual:
+    /// - 31.2 CONVENTIONS
+    /// - 31.4 VM INSTRUCTION ERROR NUMBERS
+    fn vm_succeed(flags: RFlags) {
+        if flags.contains(RFlags::FLAGS_ZF) {
+            let instruction_error = vmread(vmcs::ro::VM_INSTRUCTION_ERROR) as u32;
+            match VmInstructionError::from_u32(instruction_error) {
+                Some(error) => panic!("VM instruction failed due to error: {}", error),
+                None => panic!("Unknown VM instruction error: {:#x}", instruction_error),
+            };
+        } else if flags.contains(RFlags::FLAGS_CF) {
+            panic!("VM instruction failed due to carry flag being set");
+        }
     }
 }

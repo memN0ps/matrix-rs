@@ -4,7 +4,7 @@
 //! The handlers interpret and respond to different VM exit reasons, ensuring the safe and correct execution of the virtual machine.
 
 use {
-    super::{support::vmwrite, vmerror::VmxBasicExitReason, vmlaunch::GuestRegisters},
+    super::{support::vmwrite, vmerror::VmxBasicExitReason},
     crate::{
         error::HypervisorError,
         intel::{
@@ -13,6 +13,7 @@ use {
                 cpuid::handle_cpuid,
                 msr::{handle_msr_access, MsrAccessType},
             },
+            vmlaunch::GuestRegisters,
         },
     },
     x86::vmx::vmcs::{guest, ro},

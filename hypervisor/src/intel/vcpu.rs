@@ -5,12 +5,8 @@
 extern crate alloc;
 
 use {
-    super::{vmexit::cpuid::CPUID_DEVIRTUALIZE, vmx::Vmx},
-    crate::{
-        error::HypervisorError,
-        intel::{support, vmlaunch::launch_vm},
-        utils::processor::current_processor_index,
-    },
+    super::vmx::Vmx,
+    crate::{error::HypervisorError, intel::support, utils::processor::current_processor_index},
     alloc::boxed::Box,
     wdk_sys::{ntddk::RtlCaptureContext, _CONTEXT},
 };
@@ -75,42 +71,41 @@ impl Vcpu {
             log::info!("Dumping _CONTEXT: ");
             Self::print_context(&context);
 
-            log::info!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
-            unsafe { launch_vm() };
-            // unreachable code: we should not be here
+            self.vmx.run();
+
+            // if we are here then something has failed and we want to gracefully exit;
+            self.devirtualize_cpu()?;
         }
 
         Ok(())
     }
 
-    /// Attempts to devirtualize the current processor.
+    /// Devirtualizes the current CPU.
     ///
-    /// This function checks if the processor has already been devirtualized by
-    /// querying the `CPUID_DEVIRTUALIZE` leaf. If the processor has been
-    /// devirtualized, it logs a message and returns `true`. Otherwise, it logs
-    /// an appropriate trace message and returns `true` (indicating no action was needed).
+    /// Attempts to turn off VMX operation for the processor on which it's called. If the processor is
+    /// already in a non-root operation (devirtualized), the function will return early without performing
+    /// the devirtualization again.
     ///
     /// # Returns
     ///
-    /// * `true` if the processor is already devirtualized or if the devirtualization
-    ///   operation was successful.
-    /// * `false` otherwise (this path is not present in the current implementation).
-    pub fn devirtualize_cpu(&self) -> bool {
-        // Check if the processor has already been devirtualized.
-        let result = x86::cpuid::cpuid!(CPUID_DEVIRTUALIZE);
-        if result.ecx != 0xDEADBEEF {
-            log::trace!(
-                "Ecx is not 0xDEADBEEF. Nothing to do. Ecx: {:x}",
-                result.ecx
-            );
-            return true;
+    /// A `Result` indicating the success or failure of the operation. Returns `Ok(())` if the processor
+    /// was successfully devirtualized or was already in a devirtualized state. Returns an `Err` if the
+    /// `vmxoff` operation fails.
+    ///
+    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 30.3 VMXOFF—Leave VMX Operation.
+    /// - Describes the `VMXOFF` instruction which is used to devirtualize a processor.
+    pub fn devirtualize_cpu(&self) -> Result<(), HypervisorError> {
+        // Determine if the processor is already devirtualized.
+        if !Self::is_virtualized() {
+            log::info!("Processor {} is already devirtualized", self.index);
+            return Ok(());
         }
 
-        support::vmxoff();
-
+        // Attempt to devirtualize the processor using the VMXOFF instruction.
+        support::vmxoff()?;
         log::info!("Processor {} has been devirtualized", self.index);
 
-        true
+        Ok(())
     }
 
     /// Retrieves the processor's unique identifier.

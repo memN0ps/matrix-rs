@@ -52,4 +52,7 @@ pub enum HypervisorError {
 
     #[error("Unknown VM instruction error")]
     UnknownVMInstructionError,
+
+    #[error("VM Fail Invalid")]
+    VmFailInvalid,
 }

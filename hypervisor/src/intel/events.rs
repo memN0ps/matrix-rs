@@ -3,10 +3,10 @@
 
 #![allow(dead_code)]
 
-use x86::vmx::vmcs::{control, ro};
 use {
     crate::intel::support::{vmread, vmwrite},
     bitfield::bitfield,
+    x86::vmx::vmcs,
 };
 
 bitfield! {
@@ -170,8 +170,8 @@ impl EventInjection {
     /// and Table 25-17. Format of the VM-Entry Interruption-Information Field.
     #[rustfmt::skip]
     pub fn vmentry_inject_gp(error_code: u32) {
-        vmwrite(control::VMENTRY_EXCEPTION_ERR_CODE, error_code);
-        vmwrite(control::VMENTRY_INTERRUPTION_INFO_FIELD, EventInjection::general_protection());
-        vmwrite(control::VMENTRY_INSTRUCTION_LEN, vmread(ro::VMEXIT_INSTRUCTION_LEN));
+        vmwrite(vmcs::control::VMENTRY_EXCEPTION_ERR_CODE, error_code);
+        vmwrite(vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD, EventInjection::general_protection());
+        vmwrite(vmcs::control::VMENTRY_INSTRUCTION_LEN, vmread(vmcs::ro::VMEXIT_INSTRUCTION_LEN));
     }
 }

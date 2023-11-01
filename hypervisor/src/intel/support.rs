@@ -1,4 +1,5 @@
 use super::vmcs::Vmcs;
+use crate::error::HypervisorError;
 
 /// Enable VMX operation.
 pub fn vmxon(vmxon_region: u64) {
@@ -6,8 +7,11 @@ pub fn vmxon(vmxon_region: u64) {
 }
 
 /// Disable VMX operation.
-pub fn vmxoff() {
-    unsafe { x86::bits64::vmx::vmxoff().unwrap() };
+pub fn vmxoff() -> Result<(), HypervisorError> {
+    match unsafe { x86::bits64::vmx::vmxoff() } {
+        Ok(_) => Ok(()),
+        Err(_) => Err(HypervisorError::VMXOFFFailed),
+    }
 }
 
 /// Clear VMCS.
