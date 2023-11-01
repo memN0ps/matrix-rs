@@ -224,10 +224,13 @@ This project has been inspired, influenced, and supported by numerous individual
   - [BottlEye](https://secret.club/2020/07/06/bottleye.html)
   - [How Anti-Cheats Detect System Emulation](https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html)
   - [BattlEye Hypervisor Detection](https://secret.club/2020/01/12/battleye-hypervisor-detection.html)
+- **Drew**: [HowToHypervise](https://howtohypervise.blogspot.com/)
 - **Back Engineering Labs**: [AMD-V Hypervisor Development](https://blog.back.engineering/04/08/2022/)
 - **MellowNight**: [AetherVisor](https://mellownight.github.io/AetherVisor)
 - **Momo5502**: [Detecting Hypervisor-Assisted Hooking](https://momo5502.com/posts/2022-05-02-detecting-hypervisor-assisted-hooking/)
 - **Joanna Rutkowska**: [Introducing Blue Pill](https://blog.invisiblethings.org/2006/06/22/introducing-blue-pill.html)
+- **gerhart01**: [HyperResearchesHistory](https://github.com/gerhart01/Hyper-V-Internals/blob/master/HyperResearchesHistory.md)
+- **gerhart01**: [HvInternals](https://hvinternals.blogspot.com/)
 - **Intel Corporation**: [Intel Software Developer's Manual](https://www.intel.com/)
 - **Advanced Micro Devices, Inc. (AMD)**: [AMD Software Developer's Manual](https://www.amd.com/)
 
