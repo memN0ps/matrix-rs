@@ -178,6 +178,10 @@ impl Vmx {
             self.registers.rsp = vmread(vmcs::guest::RSP);
             self.registers.rflags = vmread(vmcs::guest::RFLAGS);
 
+            log::info!("VMEXIT occurred at RIP: {:#x}", self.registers.rip);
+            log::info!("VMEXIT occurred at RSP: {:#x}", self.registers.rsp);
+            log::info!("RFLAGS: {:#x}", self.registers.rflags);
+
             // Handle VM-exit by translating it to the `VmExitReason` type.
             let vmexit = VmExit::new();
 
