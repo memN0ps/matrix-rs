@@ -56,14 +56,10 @@ impl VmExit {
     /// - APPENDIX C VMX BASIC EXIT REASONS
     /// - Table C-1. Basic Exit Reasons
     pub fn handle_vmexit(&self, registers: &mut GuestRegisters) -> Result<(), HypervisorError> {
-        //log::info!("VMEXIT occurred at RIP: {:#x}", vmread(guest::RIP));
-        //log::info!("VMEXIT occurred at RSP: {:#x}", vmread(guest::RSP));
-        //log::info!("RFLAGS: {:#x}", vmread(guest::RFLAGS));
-
         let exit_reason = vmread(ro::EXIT_REASON) as u32;
 
         let Some(basic_exit_reason) = VmxBasicExitReason::from_u32(exit_reason) else {
-            //log::info!("Unknown exit reason: {:#x}", exit_reason);
+            log::info!("Unknown exit reason: {:#x}", exit_reason);
             return Err(HypervisorError::UnknownVMExitReason);
         };
         log::info!("Basic Exit Reason: {}", basic_exit_reason);
@@ -78,14 +74,14 @@ impl VmExit {
             VmxBasicExitReason::Cpuid => handle_cpuid(registers),
             VmxBasicExitReason::Rdmsr => handle_msr_access(registers, MsrAccessType::Read),
             VmxBasicExitReason::Wrmsr => handle_msr_access(registers, MsrAccessType::Write),
-            _ => panic!("Unhandled VMEXIT: {}", basic_exit_reason),
-        }
+            _ => return Err(HypervisorError::UnhandledVmExit),
+        };
 
-        //log::info!("Advancing guest RIP...");
-        Self::advance_guest_rip();
-        //log::info!("Guest RIP advanced to: {:#x}", vmread(guest::RIP));
+        log::info!("Advancing guest RIP...");
+        Self::advance_guest_rip(registers);
+        log::info!("Guest RIP advanced to: {:#x}", vmread(guest::RIP));
 
-        //log::info!("VMEXIT handled successfully.");
+        log::info!("VMEXIT handled successfully.");
 
         return Ok(());
     }
@@ -96,10 +92,9 @@ impl VmExit {
     /// to the hypervisor. To ensure that the guest does not re-execute the instruction that
     /// caused the VM exit, the hypervisor needs to advance the guest's RIP to the next instruction.
     #[rustfmt::skip]
-    fn advance_guest_rip() {
-        let mut rip = vmread(guest::RIP);
+    fn advance_guest_rip(registers: &mut GuestRegisters) {
         let len = vmread(ro::VMEXIT_INSTRUCTION_LEN);
-        rip += len;
-        vmwrite(guest::RIP, rip);
+        registers.rip += len;
+        vmwrite(guest::RIP, registers.rip);
     }
 }

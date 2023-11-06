@@ -55,4 +55,7 @@ pub enum HypervisorError {
 
     #[error("VM Fail Invalid")]
     VmFailInvalid,
+
+    #[error("Unhandled VmExit")]
+    UnhandledVmExit,
 }
