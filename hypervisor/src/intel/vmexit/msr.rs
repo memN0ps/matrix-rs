@@ -1,3 +1,7 @@
+//! Provides virtual machine management capabilities, specifically for handling MSR
+//! read and write operations. It ensures that guest MSR accesses are properly
+//! intercepted and handled, with support for injecting faults for unauthorized accesses.
+
 use crate::intel::{events::EventInjection, vmlaunch::GuestRegisters};
 
 /// Enum representing the type of MSR access.
@@ -35,6 +39,7 @@ pub fn handle_msr_access(registers: &mut GuestRegisters, access_type: MsrAccessT
     const HYPERV_MSR_END: u64 = 0x400000FF;
 
     let msr_id = registers.rcx;
+    log::info!("MSR ID: {:#x}", msr_id);
 
     // Determine if the MSR address is in a valid, reserved, or synthetic range.
     let is_valid_msr = (msr_id <= MSR_RANGE_LOW_END)
