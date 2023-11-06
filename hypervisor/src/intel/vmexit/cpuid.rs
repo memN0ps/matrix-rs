@@ -54,6 +54,7 @@ enum FeatureBits {
 /// * `registers` - A mutable reference to the guest's current register state.
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual, Table C-1. Basic Exit Reasons 10.
+#[rustfmt::skip]
 pub fn handle_cpuid(registers: &mut GuestRegisters) {
     let leaf = registers.rax as u32;
     let sub_leaf = registers.rcx as u32;
@@ -63,24 +64,14 @@ pub fn handle_cpuid(registers: &mut GuestRegisters) {
 
     log::info!("Leaf: {:#x} Sub-leaf: {:#x}", leaf, sub_leaf);
 
-    match leaf {
-        // When querying CPU features (leaf 1), do the following to hide hypervisor presence:
-        // - Clear the VMX support bit.
-        // - Clear the hypervisor present bit.
-        x if x == CpuidLeaf::FeatureInformation as u32 => {
-            cpuid_result
-                .ecx
-                .set_bit(FeatureBits::HypervisorVmxSupportBit as usize, false);
-            cpuid_result
-                .ecx
-                .set_bit(FeatureBits::HypervisorPresentBit as usize, false);
-        }
-        x if x == CpuidLeaf::HypervisorInterface as u32 => {
-            // Override CPUID.40000001H.EAX with anything but "Hv#1"
-            cpuid_result.eax = 0;
-        }
-        _ => {}
-    };
+    if leaf == CpuidLeaf::FeatureInformation as u32 {
+        // Hides hypervisor by clearing VMX support and hypervisor present bits in CPU features by overriding CPUID.1H.ECX[Bit 5] and CPUID.1H.ECX[Bit 31] with 0.
+        cpuid_result.ecx.set_bit(FeatureBits::HypervisorVmxSupportBit as usize, false);
+        cpuid_result.ecx.set_bit(FeatureBits::HypervisorPresentBit as usize, false);
+    } else if leaf == CpuidLeaf::HypervisorInterface as u32 {
+        // Obscures hypervisor identity by zeroing out Hypervisor Interface CPUID signature by overriding CPUID.40000001H.EAX with anything but "Hv#1"
+        cpuid_result.eax = 0;
+    }
 
     // Update the guest registers with the modified `CPUID` result
     registers.rax = cpuid_result.eax as u64;
@@ -88,11 +79,5 @@ pub fn handle_cpuid(registers: &mut GuestRegisters) {
     registers.rcx = cpuid_result.ecx as u64;
     registers.rdx = cpuid_result.edx as u64;
 
-    log::info!(
-        "CPUID: RAX: {:#x} RBX: {:#x} RCX: {:#x} RDX: {:#x}",
-        registers.rax,
-        registers.rbx,
-        registers.rcx,
-        registers.rdx
-    );
+    log::info!("CPUID: RAX: {:#x} RBX: {:#x} RCX: {:#x} RDX: {:#x}", registers.rax, registers.rbx, registers.rcx, registers.rdx);
 }
