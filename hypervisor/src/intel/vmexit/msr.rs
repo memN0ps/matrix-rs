@@ -2,7 +2,7 @@
 //! read and write operations. It ensures that guest MSR accesses are properly
 //! intercepted and handled, with support for injecting faults for unauthorized accesses.
 
-use crate::intel::{events::EventInjection, vmlaunch::GuestRegisters};
+use crate::intel::vmlaunch::GuestRegisters;
 
 /// Enum representing the type of MSR access.
 ///
@@ -36,7 +36,7 @@ pub fn handle_msr_access(registers: &mut GuestRegisters, access_type: MsrAccessT
 
     // Hyper-V synthetic MSRs
     const HYPERV_MSR_START: u64 = 0x40000000;
-    const HYPERV_MSR_END: u64 = 0x400000FF;
+    const HYPERV_MSR_END: u64 = 0x4000FFFF;
 
     let msr_id = registers.rcx;
     log::info!("MSR ID: {:#x}", msr_id);
@@ -51,8 +51,9 @@ pub fn handle_msr_access(registers: &mut GuestRegisters, access_type: MsrAccessT
     if is_hyperv_synthetic_msr {
         // Inject general protection fault with an error code.
         // The error code can be zero or you can define a specific one for synthetic MSR access.
-        EventInjection::vmentry_inject_gp(0);
-        return;
+        // Injecting #GP causes "Shutdown occurred" for Vmware Workstation (Uncomment later if needed). Hv can be detected if we don't inject #GP.
+        // EventInjection::vmentry_inject_gp(0);
+        // return;
     }
 
     // If the MSR address is valid, execute the appropriate read or write operation.
@@ -70,6 +71,7 @@ pub fn handle_msr_access(registers: &mut GuestRegisters, access_type: MsrAccessT
         }
     } else {
         // If the MSR is neither a known valid MSR nor a synthetic MSR, inject a general protection fault.
-        EventInjection::vmentry_inject_gp(0);
+        // Injecting #GP causes "Shutdown occurred" for Vmware Workstation. Hv can be detected if we don't inject #GP.
+        // EventInjection::vmentry_inject_gp(0);
     }
 }
