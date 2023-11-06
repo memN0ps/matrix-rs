@@ -22,13 +22,6 @@ use {
 pub mod cpuid;
 pub mod msr;
 
-#[derive(PartialOrd, PartialEq)]
-pub enum VmExitType {
-    ExitHypervisor,
-    IncrementRIP,
-    Continue,
-}
-
 /// Represents a VM exit, which can be caused by various reasons.
 ///
 /// A VM exit transfers control from the guest to the host (hypervisor).
