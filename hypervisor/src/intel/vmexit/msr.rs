@@ -41,23 +41,23 @@ pub fn handle_msr_access(registers: &mut GuestRegisters, access_type: MsrAccessT
     let msr_id = registers.rcx;
     log::info!("MSR ID: {:#x}", msr_id);
 
+    /*
+        // If the MSR address falls within a synthetic or reserved range, inject a general protection fault.
+        if (msr_id >= HYPERV_MSR_START) && (msr_id <= HYPERV_MSR_END) {
+            // Inject general protection fault with an error code.
+            // The error code can be zero or you can define a specific one for synthetic MSR access.
+            // Injecting #GP causes "Shutdown occurred" for Vmware Workstation (Uncomment later if needed). Hv can be detected if we don't inject #GP.
+            EventInjection::vmentry_inject_gp(0);
+            return;
+        }
+    */
+
     // Determine if the MSR address is in a valid, reserved, or synthetic range.
-    let is_valid_msr = (msr_id <= MSR_RANGE_LOW_END)
-        || ((msr_id >= MSR_RANGE_HIGH_START) && (msr_id <= MSR_RANGE_HIGH_END));
-
-    let is_hyperv_synthetic_msr = (msr_id >= HYPERV_MSR_START) && (msr_id <= HYPERV_MSR_END);
-
-    // If the MSR address falls within a synthetic or reserved range, inject a general protection fault.
-    if is_hyperv_synthetic_msr {
-        // Inject general protection fault with an error code.
-        // The error code can be zero or you can define a specific one for synthetic MSR access.
-        // Injecting #GP causes "Shutdown occurred" for Vmware Workstation (Uncomment later if needed). Hv can be detected if we don't inject #GP.
-        // EventInjection::vmentry_inject_gp(0);
-        // return;
-    }
-
     // If the MSR address is valid, execute the appropriate read or write operation.
-    if is_valid_msr {
+    if (msr_id <= MSR_RANGE_LOW_END)
+        || ((msr_id >= MSR_RANGE_HIGH_START) && (msr_id <= MSR_RANGE_HIGH_END))
+        || (msr_id >= HYPERV_MSR_START) && (msr_id <= HYPERV_MSR_END)
+    {
         match access_type {
             MsrAccessType::Read => {
                 let msr_value = unsafe { x86::msr::rdmsr(msr_id as _) };
