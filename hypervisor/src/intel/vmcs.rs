@@ -238,8 +238,8 @@ impl Vmcs {
     /// * `msr_bitmap` - Bitmap for Model-Specific Registers.
     #[rustfmt::skip]
     pub fn setup_vmcs_control_fields(msr_bitmap: &Box<MsrBitmap, PhysicalAllocator>) {
-        const PRIMARY_CTL: u64 = vmcs::control::PrimaryControls::SECONDARY_CONTROLS.bits() as u64;
-        const SECONDARY_CTL: u64 = (vmcs::control::SecondaryControls::ENABLE_RDTSCP.bits() | vmcs::control::SecondaryControls::ENABLE_XSAVES_XRSTORS.bits() |vmcs::control:: SecondaryControls::ENABLE_INVPCID.bits()) as u64;
+        const PRIMARY_CTL: u64 = (vmcs::control::PrimaryControls::SECONDARY_CONTROLS.bits() | vmcs::control::PrimaryControls::USE_MSR_BITMAPS.bits()) as u64;
+        const SECONDARY_CTL: u64 = (vmcs::control::SecondaryControls::ENABLE_RDTSCP.bits() | vmcs::control::SecondaryControls::ENABLE_XSAVES_XRSTORS.bits() | vmcs::control:: SecondaryControls::ENABLE_INVPCID.bits()) as u64;
         const ENTRY_CTL: u64 = vmcs::control::EntryControls::IA32E_MODE_GUEST.bits() as u64;
         const EXIT_CTL: u64 = vmcs::control::ExitControls::HOST_ADDRESS_SPACE_SIZE.bits() as u64;
         const PINBASED_CTL: u64 = 0;
