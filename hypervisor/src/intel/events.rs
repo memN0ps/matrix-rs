@@ -172,6 +172,5 @@ impl EventInjection {
     pub fn vmentry_inject_gp(error_code: u32) {
         vmwrite(vmcs::control::VMENTRY_EXCEPTION_ERR_CODE, error_code);
         vmwrite(vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD, EventInjection::general_protection());
-        vmwrite(vmcs::control::VMENTRY_INSTRUCTION_LEN, vmread(vmcs::ro::VMEXIT_INSTRUCTION_LEN));
     }
 }
