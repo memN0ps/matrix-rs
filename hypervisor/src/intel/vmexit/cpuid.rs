@@ -3,7 +3,11 @@
 
 #![allow(dead_code)]
 
-use {crate::intel::vmlaunch::GuestRegisters, bitfield::BitMut, x86::cpuid::cpuid};
+use {
+    crate::intel::{vmexit::VmExit, vmlaunch::GuestRegisters},
+    bitfield::BitMut,
+    x86::cpuid::cpuid,
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 /// Enum representing the various CPUID leaves for feature and interface discovery.
@@ -80,4 +84,5 @@ pub fn handle_cpuid(registers: &mut GuestRegisters) {
     registers.rdx = cpuid_result.edx as u64;
 
     log::info!("CPUID: RAX: {:#x} RBX: {:#x} RCX: {:#x} RDX: {:#x}", registers.rax, registers.rbx, registers.rcx, registers.rdx);
+    VmExit::advance_guest_rip(registers);
 }

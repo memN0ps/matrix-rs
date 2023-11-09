@@ -3,11 +3,7 @@
 
 #![allow(dead_code)]
 
-use {
-    crate::intel::support::{vmread, vmwrite},
-    bitfield::bitfield,
-    x86::vmx::vmcs,
-};
+use {crate::intel::support::vmwrite, bitfield::bitfield, x86::vmx::vmcs};
 
 bitfield! {
     /// Represents the VM-Entry Interruption-Information Field.

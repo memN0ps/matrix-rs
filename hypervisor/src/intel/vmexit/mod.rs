@@ -70,10 +70,6 @@ impl VmExit {
             _ => return Err(HypervisorError::UnhandledVmExit),
         };
 
-        log::info!("Advancing guest RIP...");
-        Self::advance_guest_rip(registers);
-        log::info!("Guest RIP advanced to: {:#x}", vmread(guest::RIP));
-
         log::info!("VMEXIT handled successfully.");
 
         return Ok(());
@@ -86,8 +82,10 @@ impl VmExit {
     /// caused the VM exit, the hypervisor needs to advance the guest's RIP to the next instruction.
     #[rustfmt::skip]
     fn advance_guest_rip(registers: &mut GuestRegisters) {
+        log::info!("Advancing guest RIP...");
         let len = vmread(ro::VMEXIT_INSTRUCTION_LEN);
         registers.rip += len;
         vmwrite(guest::RIP, registers.rip);
+        log::info!("Guest RIP advanced to: {:#x}", vmread(guest::RIP));
     }
 }
