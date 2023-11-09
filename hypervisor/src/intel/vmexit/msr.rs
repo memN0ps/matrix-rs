@@ -51,7 +51,6 @@ pub fn handle_msr_access(registers: &mut GuestRegisters, access_type: MsrAccessT
     // If the MSR address is valid, execute the appropriate read or write operation.
     if (msr_id <= MSR_RANGE_LOW_END)
         || ((msr_id >= MSR_RANGE_HIGH_START) && (msr_id <= MSR_RANGE_HIGH_END))
-        || (msr_id >= HYPERV_MSR_START) && (msr_id <= HYPERV_MSR_END)
     {
         log::info!("Valid MSR access attempted: {:#x}", msr_id);
         match access_type {
