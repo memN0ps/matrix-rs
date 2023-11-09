@@ -10,13 +10,15 @@
 #[cfg(not(test))]
 extern crate wdk_panic;
 
+/*
 // Set up a global allocator for non-test configurations.
 #[cfg(not(test))]
 use wdk_alloc::WDKAllocator;
+*/
 
 #[cfg(not(test))]
 #[global_allocator]
-static GLOBAL_ALLOCATOR: WDKAllocator = WDKAllocator;
+static GLOBAL: hypervisor::utils::alloc::KernelAlloc = hypervisor::utils::alloc::KernelAlloc;
 
 use {
     hypervisor::Hypervisor,
@@ -24,7 +26,7 @@ use {
     log::{self},
 };
 
-use wdk_sys::{DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL};
+use wdk_sys::{DRIVER_OBJECT, NTSTATUS, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL};
 
 /// The main entry point for the driver.
 ///
@@ -45,7 +47,7 @@ use wdk_sys::{DRIVER_OBJECT, NTSTATUS, PCUNICODE_STRING, STATUS_SUCCESS, STATUS_
 #[export_name = "DriverEntry"]
 pub unsafe extern "system" fn driver_entry(
     driver: &mut DRIVER_OBJECT,
-    _registry_path: PCUNICODE_STRING,
+    _registry_path: PUNICODE_STRING,
 ) -> NTSTATUS {
     // Due to post-vmlaunch issues with the kernel logger, we transition to using a serial port logger.
     // This logger writes to the host OS via VMware Workstation.
