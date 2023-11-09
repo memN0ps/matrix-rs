@@ -68,6 +68,7 @@ pub fn handle_msr_access(registers: &mut GuestRegisters, access_type: MsrAccessT
         // If the MSR is neither a known valid MSR nor a synthetic MSR, inject a general protection fault.
         log::info!("Invalid MSR access attempted: {:#x}", msr_id);
         EventInjection::vmentry_inject_gp(0);
+        return;
     }
 
     VmExit::advance_guest_rip(registers);
