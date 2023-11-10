@@ -1,9 +1,25 @@
 #![allow(dead_code)]
+
 use {
     core::arch::asm,
-    x86::controlregs::{Cr0, Cr4},
-    x86::dtables::DescriptorTablePointer,
+    x86::{
+        controlregs::{Cr0, Cr4, Xcr0},
+        dtables::DescriptorTablePointer,
+    },
 };
+
+/// Write to Extended Control Register XCR0. Only supported if CR4_ENABLE_OS_XSAVE is set.
+pub fn xsetbv(val: Xcr0) {
+    unsafe { x86::controlregs::xcr0_write(val) };
+}
+
+/// Write back all modified cache contents to memory and invalidate the caches.
+#[inline(always)]
+pub fn wbinvd() {
+    unsafe {
+        asm!("wbinvd", options(nostack, nomem));
+    }
+}
 
 /// Returns the timestamp counter value.
 pub fn rdtsc() -> u64 {

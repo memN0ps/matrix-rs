@@ -11,7 +11,9 @@ use {
             support::vmread,
             vmexit::{
                 cpuid::handle_cpuid,
+                invd::handle_invd,
                 msr::{handle_msr_access, MsrAccessType},
+                xsetbv::handle_xsetbv,
             },
             vmlaunch::GuestRegisters,
         },
@@ -20,7 +22,9 @@ use {
 };
 
 pub mod cpuid;
+pub mod invd;
 pub mod msr;
+pub mod xsetbv;
 
 /// Represents a VM exit, which can be caused by various reasons.
 ///
@@ -57,8 +61,7 @@ impl VmExit {
         };
         log::info!("Basic Exit Reason: {}", basic_exit_reason);
 
-        // Handle VMEXIT
-        // Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.2 Instructions That Cause VM Exits Unconditionally:
+        // Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.2 Instructions That Cause VM Exits Unconditionally:
         // - The following instructions cause VM exits when they are executed in VMX non-root operation: CPUID, GETSEC, INVD, and XSETBV.
         // - This is also true of instructions introduced with VMX, which include: INVEPT, INVVPID, VMCALL, VMCLEAR, VMLAUNCH, VMPTRLD, VMPTRST, VMRESUME, VMXOFF, and VMXON.
         //
@@ -67,6 +70,8 @@ impl VmExit {
             VmxBasicExitReason::Cpuid => handle_cpuid(registers),
             VmxBasicExitReason::Rdmsr => handle_msr_access(registers, MsrAccessType::Read),
             VmxBasicExitReason::Wrmsr => handle_msr_access(registers, MsrAccessType::Write),
+            VmxBasicExitReason::Xsetbv => handle_xsetbv(registers),
+            VmxBasicExitReason::Invd => handle_invd(registers),
             _ => return Err(HypervisorError::UnhandledVmExit),
         };
 
