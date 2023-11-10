@@ -41,16 +41,19 @@ pub fn handle_msr_access(registers: &mut GuestRegisters, access_type: MsrAccessT
     let msr_id = registers.rcx;
 
     // If the MSR address falls within a synthetic or reserved range, inject a general protection fault.
-    if (msr_id >= HYPERV_MSR_START) && (msr_id <= HYPERV_MSR_END) {
-        log::info!("Synthetic MSR access attempted: {:#x}", msr_id);
-        EventInjection::vmentry_inject_gp(0);
-        return;
-    }
+    /*
+        if (msr_id >= HYPERV_MSR_START) && (msr_id <= HYPERV_MSR_END) {
+            log::info!("Synthetic MSR access attempted: {:#x}", msr_id);
+            EventInjection::vmentry_inject_gp(0);
+            return;
+        }
+    */
 
     // Determine if the MSR address is in a valid, reserved, or synthetic range.
     // If the MSR address is valid, execute the appropriate read or write operation.
     if (msr_id <= MSR_RANGE_LOW_END)
         || ((msr_id >= MSR_RANGE_HIGH_START) && (msr_id <= MSR_RANGE_HIGH_END))
+        || (msr_id >= HYPERV_MSR_START) && (msr_id <= HYPERV_MSR_END)
     {
         log::info!("Valid MSR access attempted: {:#x}", msr_id);
         match access_type {
