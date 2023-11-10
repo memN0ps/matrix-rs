@@ -23,8 +23,8 @@ pub fn handle_xsetbv(registers: &mut GuestRegisters) {
     // Combine the guest's RAX and RDX registers to form the 64-bit value for the XCR0 register.
     let value = (registers.rax & 0xffff_ffff) | ((registers.rdx & 0xffff_ffff) << 32);
 
-    // Attempt to create an Xcr0 structure from the given bits, panicking if the value is invalid.
-    let value = Xcr0::from_bits(value).expect("Invalid value for XCR0");
+    // Attempt to create an Xcr0 structure from the given bits.
+    let value = Xcr0::from_bits_truncate(value);
 
     log::info!("XSETBV executed with xcr: {:#x}, value: {:#x}", xcr, value);
 
