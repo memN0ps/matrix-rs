@@ -64,6 +64,9 @@ extern "C" {
     ///
     /// * `host_rsp` - A pointer to the end of `stack_contents` in the `VmStack` structure.
     pub fn launch_vm(host_rsp: *mut u64);
+
+    /// Assembly stub for handling VM exits.
+    pub fn vmexit_stub();
 }
 
 // Credits: Thanks @daaximus (daax) <3
@@ -163,15 +166,6 @@ launch_vm:
     // Save host general-purpose registers onto the newly allocated stack.
     save_gpr
 
-    // Configure VMCS_HOST_RSP (0x6C14)
-    mov     r15, 0x6C14
-    vmwrite r15, rsp
-    
-    // Configure VMCS_HOST_RIP (0x6C16)
-    lea     r14, [rip + .vmexit_stub]
-    mov     r15, 0x6C16
-    vmwrite r15, r14
-
     // Attempt to launch the VM with vmlaunch.
     vmlaunch
 
@@ -179,7 +173,8 @@ launch_vm:
     restore_gpr
     call vmlaunch_failed
 
-.vmexit_stub:
+.global vmexit_stub
+vmexit_stub:
     // Save guest general-purpose registers upon VM-exit.
     save_gpr
 
