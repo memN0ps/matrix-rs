@@ -132,7 +132,7 @@ impl Vmx {
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
         log::info!("Setting up Host Registers State");
-        Vmcs::setup_host_registers_state(&context, &self.host_descriptor_table, &mut self.host_rsp);
+        Vmcs::setup_host_registers_state(&context, &self.host_descriptor_table);
         log::info!("Host Registers State successful!");
 
         /*
