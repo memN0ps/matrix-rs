@@ -14,7 +14,8 @@ use {
             msr_bitmap::MsrBitmap,
             segmentation::SegmentDescriptor,
             support::{vmclear, vmptrld, vmread, vmwrite},
-            vmlaunch::GuestRegisters,
+            vmstack::{VmStack, STACK_CONTENTS_SIZE},
+            vmlaunch::vmexit_stub
         },
         utils::{
             addresses::PhysicalAddress,
@@ -102,7 +103,7 @@ impl Vmcs {
     /// * `context` - Context containing the guest's register states.
     /// * `guest_descriptor_table` - Descriptor tables for the guest.
     #[rustfmt::skip]
-    pub fn setup_guest_registers_state(context: &_CONTEXT, guest_descriptor_table: &Box<DescriptorTables, KernelAlloc>, registers: &mut GuestRegisters) {
+    pub fn setup_guest_registers_state(context: &_CONTEXT, guest_descriptor_table: &Box<DescriptorTables, KernelAlloc>) {
         unsafe { vmwrite(vmcs::guest::CR0, controlregs::cr0().bits() as u64) };
         unsafe { vmwrite(vmcs::guest::CR3, controlregs::cr3()) };
         unsafe { vmwrite(vmcs::guest::CR4, controlregs::cr4().bits() as u64) };
@@ -162,24 +163,6 @@ impl Vmcs {
             vmwrite(vmcs::guest::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP));
             vmwrite(vmcs::guest::LINK_PTR_FULL, u64::MAX);
         }
-
-        // Some registers are not managed by VMCS and needed to be manually saved
-        // and loaded by software. General purpose registers are such examples.
-        registers.rax = context.Rax;
-        registers.rbx = context.Rbx;
-        registers.rcx = context.Rcx;
-        registers.rdx = context.Rdx;
-        registers.rdi = context.Rdi;
-        registers.rsi = context.Rsi;
-        registers.rbp = context.Rbp;
-        registers.r8 = context.R8;
-        registers.r9 = context.R9;
-        registers.r10 = context.R10;
-        registers.r11 = context.R11;
-        registers.r12 = context.R12;
-        registers.r13 = context.R13;
-        registers.r14 = context.R14;
-        registers.r15 = context.R15;
     }
 
     /// Initialize the host state for the currently loaded VMCS.
@@ -192,16 +175,16 @@ impl Vmcs {
     /// * `host_descriptor_table` - Descriptor tables for the host.
     /// * `host_rsp` - Stack pointer for the host.
     #[rustfmt::skip]
-    pub fn setup_host_registers_state(context: &_CONTEXT, host_descriptor_table: &Box<DescriptorTables, KernelAlloc>) {
+    pub fn setup_host_registers_state(context: &_CONTEXT, host_descriptor_table: &Box<DescriptorTables, KernelAlloc>, host_rsp: &mut Box<VmStack, KernelAlloc>) {
         unsafe { vmwrite(vmcs::host::CR0, controlregs::cr0().bits() as u64) };
         unsafe { vmwrite(vmcs::host::CR3, controlregs::cr3()) };
         unsafe { vmwrite(vmcs::host::CR4, controlregs::cr4().bits() as u64) };
 
         // The RIP/RSP registers are set within `launch_vm`.
-        //let host_rsp_ptr = host_rsp.stack_contents.as_ptr();
-        //let host_rsp = unsafe { host_rsp_ptr.offset(STACK_CONTENTS_SIZE as isize) };
-        //vmwrite(vmcs::host::RIP, vmexit_stub as u64);
-        //vmwrite(vmcs::host::RSP, host_rsp as u64);
+        let host_rsp_ptr = host_rsp.stack_contents.as_mut_ptr();
+        let host_rsp = unsafe { host_rsp_ptr.offset(STACK_CONTENTS_SIZE as isize) };
+        vmwrite(vmcs::host::RIP, vmexit_stub as u64);
+        vmwrite(vmcs::host::RSP, host_rsp as u64);
 
         const SELECTOR_MASK: u16 = 0xF8;
         vmwrite(vmcs::host::CS_SELECTOR, context.SegCs & SELECTOR_MASK);

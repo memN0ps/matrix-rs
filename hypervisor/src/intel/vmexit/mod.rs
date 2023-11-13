@@ -86,11 +86,12 @@ impl VmExit {
     /// to the hypervisor. To ensure that the guest does not re-execute the instruction that
     /// caused the VM exit, the hypervisor needs to advance the guest's RIP to the next instruction.
     #[rustfmt::skip]
-    fn advance_guest_rip(registers: &mut GuestRegisters) {
+    fn advance_guest_rip() {
+        let mut rip = vmread(guest::RIP);
         log::info!("Advancing guest RIP...");
         let len = vmread(ro::VMEXIT_INSTRUCTION_LEN);
-        registers.rip += len;
-        vmwrite(guest::RIP, registers.rip);
+        rip += len;
+        vmwrite(guest::RIP, rip);
         log::info!("Guest RIP advanced to: {:#x}", vmread(guest::RIP));
     }
 }

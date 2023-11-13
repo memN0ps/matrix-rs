@@ -35,5 +35,5 @@ pub fn handle_xsetbv(registers: &mut GuestRegisters) {
     xsetbv(value);
 
     // Advance the guest's instruction pointer to the next instruction to be executed.
-    VmExit::advance_guest_rip(registers);
+    VmExit::advance_guest_rip();
 }

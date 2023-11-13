@@ -10,5 +10,6 @@ pub mod vmcs;
 pub mod vmerror;
 pub mod vmexit;
 pub mod vmlaunch;
+pub mod vmstack;
 pub mod vmx;
 pub mod vmxon;

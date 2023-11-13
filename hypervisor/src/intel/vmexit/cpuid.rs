@@ -84,5 +84,5 @@ pub fn handle_cpuid(registers: &mut GuestRegisters) {
     registers.rdx = cpuid_result.edx as u64;
 
     log::info!("CPUID: RAX: {:#x} RBX: {:#x} RCX: {:#x} RDX: {:#x}", registers.rax, registers.rbx, registers.rcx, registers.rdx);
-    VmExit::advance_guest_rip(registers);
+    VmExit::advance_guest_rip();
 }

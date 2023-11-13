@@ -74,5 +74,5 @@ pub fn handle_msr_access(registers: &mut GuestRegisters, access_type: MsrAccessT
         return;
     }
 
-    VmExit::advance_guest_rip(registers);
+    VmExit::advance_guest_rip();
 }

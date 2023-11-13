@@ -11,11 +11,11 @@ use crate::{
 /// # Arguments
 ///
 /// * `registers` - General-purpose registers of the guest VM at the VM exit.
-pub fn handle_invd(registers: &mut GuestRegisters) {
+pub fn handle_invd(_registers: &mut GuestRegisters) {
     log::info!("INVD instruction executed by guest VM");
     // Perform WBINVD to write back and invalidate the hypervisor's caches.
     // This ensures that any modified data is written to memory before cache lines are invalidated.
     wbinvd();
     // Advances the guest's instruction pointer to the next instruction to be executed.
-    VmExit::advance_guest_rip(registers);
+    VmExit::advance_guest_rip();
 }

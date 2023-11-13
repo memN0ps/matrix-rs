@@ -2,7 +2,6 @@
 //! It encapsulates the necessary components for VMX initialization and setup,
 //! including the Vmxon, Vmcs, MsrBitmap, DescriptorTables, and other relevant data structures.
 
-use crate::intel::vmerror::VmInstructionError;
 use {
     // Super imports
     super::{msr_bitmap::MsrBitmap, vmcs::Vmcs, vmxon::Vmxon},
@@ -11,8 +10,8 @@ use {
     crate::{
         error::HypervisorError,
         intel::{
-            descriptor::DescriptorTables, support::vmread, vmexit::VmExit, vmlaunch::launch_vm,
-            vmlaunch::GuestRegisters,
+            descriptor::DescriptorTables, vmlaunch::launch_vm,
+            vmstack::{VmStack, STACK_CONTENTS_SIZE}
         },
         utils::alloc::{KernelAlloc, PhysicalAllocator},
     },
@@ -20,7 +19,6 @@ use {
     // External crate usages
     alloc::boxed::Box,
     wdk_sys::_CONTEXT,
-    x86::{current::rflags::RFlags, vmx::vmcs},
 };
 
 /// Represents the VMX structure with essential components for VMX virtualization.
@@ -56,11 +54,9 @@ pub struct Vmx {
     /// Allocated using `ExAllocatePool` or `ExAllocatePoolWithTag`.
     pub host_descriptor_table: Box<DescriptorTables, KernelAlloc>,
 
-    /// Registers capturing the guest's state during a VM exit.
-    pub registers: GuestRegisters,
-
-    /// Flag indicating the VM's launch status.
-    pub launched: bool,
+    /// Virtual address of the host's stack, aligned to a 4-KByte boundary.
+    /// Allocated using `ExAllocatePool` or `ExAllocatePoolWithTag`.
+    pub host_rsp: Box<VmStack, KernelAlloc>,
 }
 
 impl Vmx {
@@ -81,14 +77,14 @@ impl Vmx {
             unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
         let mut host_descriptor_table =
             unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
+        
+        // Allocate memory for the host's stack
+        let host_rsp = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
 
         // To capture the current GDT and IDT for the guest the order is important so we can setup up a new GDT and IDT for the host.
         // This is done here instead of `setup_virtualization` because it uses a vec to allocate memory for the new GDT
         DescriptorTables::initialize_for_guest(&mut guest_descriptor_table)?;
         DescriptorTables::initialize_for_host(&mut host_descriptor_table)?;
-
-        let registers = GuestRegisters::default();
-        let launched = false;
 
         log::info!("Creating Vmx instance");
 
@@ -98,8 +94,7 @@ impl Vmx {
             msr_bitmap,
             guest_descriptor_table,
             host_descriptor_table,
-            registers,
-            launched,
+            host_rsp,
         };
 
         let instance = Box::new(instance);
@@ -125,19 +120,19 @@ impl Vmx {
         Vmxon::setup(&mut self.vmxon_region)?;
         Vmcs::setup(&mut self.vmcs_region)?;
         MsrBitmap::setup(&mut self.msr_bitmap)?;
+        VmStack::setup(&mut self.host_rsp)?;
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
         log::info!("Setting up Guest Registers State");
         Vmcs::setup_guest_registers_state(
             &context,
             &self.guest_descriptor_table,
-            &mut self.registers,
         );
         log::info!("Guest Registers State successful!");
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
         log::info!("Setting up Host Registers State");
-        Vmcs::setup_host_registers_state(&context, &self.host_descriptor_table);
+        Vmcs::setup_host_registers_state(&context, &self.host_descriptor_table, &mut self.host_rsp);
         log::info!("Host Registers State successful!");
 
         /*
@@ -162,58 +157,10 @@ impl Vmx {
     /// The loop continues until an unhandled or error-causing VM-exit is encountered.
     pub fn run(&mut self) {
         log::info!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
+        
+        let host_rsp_ptr = self.host_rsp.stack_contents.as_mut_ptr();
+        let host_rsp = unsafe { host_rsp_ptr.offset(STACK_CONTENTS_SIZE as isize) };
 
-        loop {
-            // Run the VM until the VM-exit occurs.
-            let flags = unsafe { launch_vm(&mut self.registers, u64::from(self.launched)) };
-
-            // Verify that the `launch_vm` was executed successfully, otherwise panic.
-            Self::vm_succeed(RFlags::from_raw(flags));
-
-            self.launched = true;
-
-            // VM-exit occurred. Copy the guest register values from VMCS so that
-            // `self.registers` is complete and up to date.
-            self.registers.rip = vmread(vmcs::guest::RIP);
-            self.registers.rsp = vmread(vmcs::guest::RSP);
-            self.registers.rflags = vmread(vmcs::guest::RFLAGS);
-
-            log::info!("VMEXIT occurred at RIP: {:#x}", self.registers.rip);
-            log::info!("VMEXIT occurred at RSP: {:#x}", self.registers.rsp);
-            log::info!("RFLAGS: {:#x}", self.registers.rflags);
-
-            // Handle VM-exit by translating it to the `VmExitReason` type.
-            let vmexit = VmExit::new();
-
-            // Handle the VM exit.
-            if let Err(e) = vmexit.handle_vmexit(&mut self.registers) {
-                log::error!("Error handling VMEXIT: {:?}", e);
-                break;
-            }
-        }
-    }
-
-    /// Verifies that the `launch_vm` function executed successfully.
-    ///
-    /// This method checks the RFlags for indications of failure from the `launch_vm` function.
-    /// If a failure is detected, it will panic with a detailed error message.
-    ///
-    /// # Arguments
-    ///
-    /// * `flags`: The RFlags value post-execution of the `launch_vm` function.
-    ///
-    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual:
-    /// - 31.2 CONVENTIONS
-    /// - 31.4 VM INSTRUCTION ERROR NUMBERS
-    fn vm_succeed(flags: RFlags) {
-        if flags.contains(RFlags::FLAGS_ZF) {
-            let instruction_error = vmread(vmcs::ro::VM_INSTRUCTION_ERROR) as u32;
-            match VmInstructionError::from_u32(instruction_error) {
-                Some(error) => panic!("VM instruction failed due to error: {}", error),
-                None => panic!("Unknown VM instruction error: {:#x}", instruction_error),
-            };
-        } else if flags.contains(RFlags::FLAGS_CF) {
-            panic!("VM instruction failed due to carry flag being set");
-        }
+        unsafe { launch_vm(host_rsp as *mut u64) };
     }
 }
