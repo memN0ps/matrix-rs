@@ -15,24 +15,37 @@ use {
 enum CpuidLeaf {
     /// CPUID function number to retrieve the processor's vendor identification string.
     VendorInfo = 0x0,
+    
     /// CPUID function for feature information, including hypervisor presence.
     FeatureInformation = 0x1,
+
+    /// CPUID function for extended feature information.
+    ExtendedFeatureInformation = 0x7,
+
     /// Hypervisor vendor information leaf.
     HypervisorVendor = 0x40000000,
+    
     /// Hypervisor interface identification leaf.
     HypervisorInterface = 0x40000001,
+    
     /// Hypervisor system identity information leaf.
     HypervisorSystemIdentity = 0x40000002,
+    
     /// Hypervisor feature identification leaf.
     HypervisorFeatureIdentification = 0x40000003,
+    
     /// Hypervisor implementation recommendations leaf.
     ImplementationRecommendations = 0x40000004,
+    
     /// Hypervisor implementation limits leaf.
     HypervisorImplementationLimits = 0x40000005,
+    
     /// Hardware-specific features in use by the hypervisor leaf.
     ImplementationHardwareFeatures = 0x40000006,
+    
     /// Nested hypervisor feature identification leaf.
     NestedHypervisorFeatureIdentification = 0x40000009,
+    
     /// Nested virtualization features available leaf.
     HypervisorNestedVirtualizationFeatures = 0x4000000A,
 }
@@ -66,23 +79,32 @@ pub fn handle_cpuid(registers: &mut GuestRegisters) {
     // Execute CPUID instruction on the host and retrieve the result
     let mut cpuid_result = cpuid!(leaf, sub_leaf);
 
-    log::info!("Leaf: {:#x} Sub-leaf: {:#x}", leaf, sub_leaf);
+    log::info!("Before modification: CPUID Leaf: {:#x}, EAX: {:#x}, EBX: {:#x}, ECX: {:#x}, EDX: {:#x}", leaf, cpuid_result.eax, cpuid_result.ebx, cpuid_result.ecx, cpuid_result.edx);
 
-    if leaf == CpuidLeaf::FeatureInformation as u32 {
-        // Hides hypervisor by clearing VMX support and hypervisor present bits in CPU features by overriding CPUID.1H.ECX[Bit 5] and CPUID.1H.ECX[Bit 31] with 0.
-        cpuid_result.ecx.set_bit(FeatureBits::HypervisorVmxSupportBit as usize, false);
-        cpuid_result.ecx.set_bit(FeatureBits::HypervisorPresentBit as usize, false);
-    } else if leaf == CpuidLeaf::HypervisorInterface as u32 {
-        // Obscures hypervisor identity by zeroing out Hypervisor Interface CPUID signature by overriding CPUID.40000001H.EAX with anything but "Hv#1"
-        cpuid_result.eax = 0;
+    match leaf {
+        leaf if leaf == CpuidLeaf::FeatureInformation as u32 => {
+            log::info!("CPUID leaf 1 detected.");
+            // Hides hypervisor by clearing VMX support and hypervisor present bits in CPU features.
+            cpuid_result.ecx.set_bit(FeatureBits::HypervisorVmxSupportBit as usize, false);
+            cpuid_result.ecx.set_bit(FeatureBits::HypervisorPresentBit as usize, false);
+        },
+        leaf if leaf == CpuidLeaf::ExtendedFeatureInformation as u32 => {
+            if sub_leaf == 0 {
+                log::info!("CPUID leaf 7, sub-leaf 0 detected.");
+                // Hide the hypervisor present bit in leaf 7, sub-leaf 0.
+                cpuid_result.ebx.set_bit(FeatureBits::HypervisorPresentBit as usize, false);
+            }
+        },
+        _ => { /* CPUID passthrough */ }
     }
 
-    // Update the guest registers with the modified `CPUID` result
+    log::info!("After modification: CPUID Leaf: {:#x}, EAX: {:#x}, EBX: {:#x}, ECX: {:#x}, EDX: {:#x}", leaf, cpuid_result.eax, cpuid_result.ebx, cpuid_result.ecx, cpuid_result.edx);
+
+    // Update the guest registers
     registers.rax = cpuid_result.eax as u64;
     registers.rbx = cpuid_result.ebx as u64;
     registers.rcx = cpuid_result.ecx as u64;
     registers.rdx = cpuid_result.edx as u64;
 
-    log::info!("CPUID: RAX: {:#x} RBX: {:#x} RCX: {:#x} RDX: {:#x}", registers.rax, registers.rbx, registers.rcx, registers.rdx);
     VmExit::advance_guest_rip();
 }
