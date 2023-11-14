@@ -6,28 +6,24 @@ OUTPUT_DIR = { source = "${CARGO_MAKE_CARGO_PROFILE}", default_value = "${CARGO_
 [tasks.rename-dll-to-sys]
 dependencies = ["build"]
 script = '''
-echo "%OUTPUT_DIR%"
-cd "%OUTPUT_DIR%"
-mkdir package
-if exist package\%CARGO_MAKE_CRATE_FS_NAME%.sys (
-  del package\%CARGO_MAKE_CRATE_FS_NAME%.sys
-)
-rename %CARGO_MAKE_CRATE_FS_NAME%.dll %CARGO_MAKE_CRATE_FS_NAME%.sys
-copy %CARGO_MAKE_CRATE_FS_NAME%.sys package\%CARGO_MAKE_CRATE_FS_NAME%.sys
+echo "Output directory: %OUTPUT_DIR%"
+cd "%OUTPUT_DIR%" || exit /b
+mkdir package 2>nul
+copy /Y %CARGO_MAKE_CRATE_FS_NAME%.dll package\%CARGO_MAKE_CRATE_FS_NAME%.sys
+copy /Y %CARGO_MAKE_CRATE_FS_NAME%.dll %CARGO_MAKE_CRATE_FS_NAME%.sys
 '''
 
 [tasks.stampinf]
 dependencies = ["build"]
 script = '''
-copy "%CARGO_MAKE_WORKING_DIRECTORY%\%CARGO_MAKE_CRATE_FS_NAME%.inx" "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf"
+copy /Y "%CARGO_MAKE_WORKING_DIRECTORY%\%CARGO_MAKE_CRATE_FS_NAME%.inx" "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf"
 "C:\Program Files (x86)\Windows Kits\10\bin\x64\stampinf.exe" -f "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf" -d * -a amd64 -c %CARGO_MAKE_CRATE_FS_NAME%.cat -v * -k 1.33 -n
 '''
 
 [tasks.copypdb]
 dependencies = ["build"]
 script = '''
-cd "%OUTPUT_DIR%"
-copy %CARGO_MAKE_CRATE_FS_NAME%.pdb package\%CARGO_MAKE_CRATE_FS_NAME%.pdb
+copy /Y %CARGO_MAKE_CRATE_FS_NAME%.pdb "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.pdb"
 '''
 
 [tasks.inf2cat]
@@ -45,7 +41,7 @@ script = '''
 [tasks.sign]
 dependencies = ["rename-dll-to-sys", "inf2cat", "infverif"]
 script = '''
-call "%VC_BUILD_DIR%"
+call "%VC_BUILD_DIR%" || exit /b
 if not exist DriverCertificate.cer (
   makecert -r -pe -ss PrivateCertStore -n CN=DriverCertificate DriverCertificate.cer
 ) else (
