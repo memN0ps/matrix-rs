@@ -10,10 +10,9 @@ use {
 
 /// The size of the kernel stack in bytes.
 pub const KERNEL_STACK_SIZE: usize = 0x6000;
-/// The size reserved in the host RSP.
-pub const HOST_RSP_RESERVED: usize = (size_of::<*mut u64>() * 2) + size_of::<GuestRegisters>();
-/// The size of the actual stack contents, excluding the reserved space.
-pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - HOST_RSP_RESERVED;
+
+/// The size reserved for host RSP. This includes space allocated for padding and storing host general-purpose registers on the new stack, prior to executing vmlaunch.
+pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - size_of::<GuestRegisters>() - (size_of::<*mut u64>() * 2);
 
 /// Represents the Virtual Machine Stack (VmStack).
 ///
@@ -22,9 +21,6 @@ pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - HOST_RSP_RESERVED;
 pub struct VmStack {
     /// The main contents of the VM stack during VM-exit.
     pub stack_contents: [u8; STACK_CONTENTS_SIZE],
-
-    /// The host registers saved prior to VM-Entry (placeholder).
-    pub _host_registers: GuestRegisters,
 
     /// Padding to ensure the Host RSP remains 16-byte aligned.
     pub padding_1: u64,
@@ -52,7 +48,6 @@ impl VmStack {
 
         // Initialize the VM stack contents and reserved space.
         host_rsp.stack_contents = [0u8; STACK_CONTENTS_SIZE];
-        host_rsp._host_registers = GuestRegisters::default();
         host_rsp.reserved_1 = u64::MAX;
         host_rsp.padding_1 = u64::MAX;
 
