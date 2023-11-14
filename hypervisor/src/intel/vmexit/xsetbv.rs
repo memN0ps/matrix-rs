@@ -3,7 +3,7 @@
 
 use {
     crate::{
-        intel::{vmexit::VmExit, vmlaunch::GuestRegisters},
+        intel::{vmexit::VmExit, vmlaunch::GeneralPurposeRegisters},
         utils::instructions::{cr4, cr4_write, xsetbv},
     },
     x86::controlregs::{Cr4, Xcr0},
@@ -16,7 +16,7 @@ use {
 /// # Arguments
 ///
 /// * `registers` - A mutable reference to the guest VM's general-purpose registers.
-pub fn handle_xsetbv(registers: &mut GuestRegisters) {
+pub fn handle_xsetbv(registers: &mut GeneralPurposeRegisters) {
     // Extract the XCR (extended control register) number from the guest's RCX register.
     let xcr: u32 = registers.rcx as u32;
 

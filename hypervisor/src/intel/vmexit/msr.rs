@@ -2,7 +2,7 @@
 //! read and write operations. It ensures that guest MSR accesses are properly
 //! intercepted and handled, with support for injecting faults for unauthorized accesses.
 
-use crate::intel::{events::EventInjection, vmexit::VmExit, vmlaunch::GuestRegisters};
+use crate::intel::{events::EventInjection, vmexit::VmExit, vmlaunch::GeneralPurposeRegisters};
 
 /// Enum representing the type of MSR access.
 ///
@@ -27,7 +27,7 @@ pub enum MsrAccessType {
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: RDMSR—Read From Model Specific Register or WRMSR—Write to Model Specific Register
 /// and Table C-1. Basic Exit Reasons 31 and 32.
-pub fn handle_msr_access(registers: &mut GuestRegisters, access_type: MsrAccessType) {
+pub fn handle_msr_access(registers: &mut GeneralPurposeRegisters, access_type: MsrAccessType) {
     /// Constants related to MSR addresses and ranges.
     const MSR_MASK_LOW: u64 = u32::MAX as u64;
     const MSR_RANGE_LOW_END: u64 = 0x00001FFF;

@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 
 use {
-    crate::intel::{vmexit::VmExit, vmlaunch::GuestRegisters},
+    crate::intel::{vmexit::VmExit, vmlaunch::GeneralPurposeRegisters},
     bitfield::BitMut,
     x86::cpuid::cpuid,
 };
@@ -72,7 +72,7 @@ enum FeatureBits {
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual, Table C-1. Basic Exit Reasons 10.
 #[rustfmt::skip]
-pub fn handle_cpuid(registers: &mut GuestRegisters) {
+pub fn handle_cpuid(registers: &mut GeneralPurposeRegisters) {
     let leaf = registers.rax as u32;
     let sub_leaf = registers.rcx as u32;
 

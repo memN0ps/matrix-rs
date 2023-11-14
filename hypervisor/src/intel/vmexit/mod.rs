@@ -15,7 +15,7 @@ use {
                 msr::{handle_msr_access, MsrAccessType},
                 xsetbv::handle_xsetbv,
             },
-            vmlaunch::GuestRegisters,
+            vmlaunch::GeneralPurposeRegisters,
         },
     },
     x86::vmx::vmcs::{guest, ro},
@@ -52,7 +52,7 @@ impl VmExit {
     /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.9 VM-EXIT INFORMATION FIELDS
     /// - APPENDIX C VMX BASIC EXIT REASONS
     /// - Table C-1. Basic Exit Reasons
-    pub fn handle_vmexit(&self, registers: &mut GuestRegisters) -> Result<(), HypervisorError> {
+    pub fn handle_vmexit(&self, registers: &mut GeneralPurposeRegisters) -> Result<(), HypervisorError> {
         let exit_reason = vmread(ro::EXIT_REASON) as u32;
 
         let Some(basic_exit_reason) = VmxBasicExitReason::from_u32(exit_reason) else {

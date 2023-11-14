@@ -2,6 +2,8 @@
 //! It encapsulates the necessary components for VMX initialization and setup,
 //! including the Vmxon, Vmcs, MsrBitmap, DescriptorTables, and other relevant data structures.
 
+use crate::intel::vmlaunch::GeneralPurposeRegisters;
+
 use {
     // Super imports
     super::{msr_bitmap::MsrBitmap, vmcs::Vmcs, vmxon::Vmxon},
@@ -56,7 +58,7 @@ pub struct Vmx {
 
     /// Virtual address of the host's stack, aligned to a 4-KByte boundary.
     /// Allocated using `ExAllocatePool` or `ExAllocatePoolWithTag`.
-    pub host_rsp: Box<VmStack, KernelAlloc>,
+    pub vmstack_ptr: Box<VmStack, KernelAlloc>,
 }
 
 impl Vmx {
@@ -94,7 +96,7 @@ impl Vmx {
             msr_bitmap,
             guest_descriptor_table,
             host_descriptor_table,
-            host_rsp,
+            vmstack_ptr: host_rsp,
         };
 
         let instance = Box::new(instance);
@@ -120,7 +122,7 @@ impl Vmx {
         Vmxon::setup(&mut self.vmxon_region)?;
         Vmcs::setup(&mut self.vmcs_region)?;
         MsrBitmap::setup(&mut self.msr_bitmap)?;
-        VmStack::setup(&mut self.host_rsp)?;
+        VmStack::setup(&mut self.vmstack_ptr)?;
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
         log::info!("Setting up Guest Registers State");
@@ -132,7 +134,7 @@ impl Vmx {
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
         log::info!("Setting up Host Registers State");
-        Vmcs::setup_host_registers_state(&context, &self.host_descriptor_table, &mut self.host_rsp);
+        Vmcs::setup_host_registers_state(&context, &self.host_descriptor_table, &mut self.vmstack_ptr);
         log::info!("Host Registers State successful!");
 
         /*
@@ -158,9 +160,16 @@ impl Vmx {
     pub fn run(&mut self) {
         log::info!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
         
-        let host_rsp_ptr = self.host_rsp.stack_contents.as_mut_ptr();
-        let host_rsp = unsafe { host_rsp_ptr.offset(STACK_CONTENTS_SIZE as isize) };
+        // The host_rsp pointer is used to set the current host's stack pointer (RSP) 
+        // before saving the host's general-purpose registers on the new stack, 
+        // and prior to executing vmlaunch.
+        let vmstack_ptr = self.vmstack_ptr.stack_contents.as_mut_ptr();
 
-        unsafe { launch_vm(host_rsp as *mut u64) };
+        // This will point towards the end of the Guest Registers State area.
+        let offset = (STACK_CONTENTS_SIZE + core::mem::size_of::<GeneralPurposeRegisters>()) as isize;
+        
+        let current_host_rsp = unsafe { vmstack_ptr.offset(offset) };
+
+        unsafe { launch_vm(current_host_rsp as *mut u64) };
     }
 }

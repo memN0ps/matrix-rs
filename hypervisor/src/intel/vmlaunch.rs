@@ -5,7 +5,7 @@
 //! VM-entry, VM-exit, and handling VMX-specific instructions.
 //!
 //! Main components include:
-//! - `GuestRegisters`: Represents the state of guest registers during a VM exit.
+//! - `GeneralPurposeRegisters`: Represents the state of guest registers during a VM exit.
 //! - VMX assembly integrations: Assembly routines to interface directly with VMX instructions.
 //!
 //! The module is designed to be used in conjunction with a broader hypervisor framework.
@@ -28,7 +28,7 @@ use {
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4.1 Guest Register State
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
-pub struct GuestRegisters {
+pub struct GeneralPurposeRegisters {
     pub rax: u64,
     pub rcx: u64,
     pub rdx: u64,
@@ -46,9 +46,9 @@ pub struct GuestRegisters {
     pub r14: u64,
     pub r15: u64,
 }
-// Ensure the size of `GuestRegisters` is consistent with expected layout.
+// Ensure the size of `GeneralPurposeRegisters` is consistent with expected layout.
 const_assert_eq!(
-    core::mem::size_of::<GuestRegisters>(),
+    core::mem::size_of::<GeneralPurposeRegisters>(),
     0x80 /* 16 * 0x8 */
 );
 
@@ -214,13 +214,13 @@ vmexit_stub:
 ///
 /// # Arguments
 ///
-/// * `registers` - A pointer to `GuestRegisters` representing the guest's state at VM exit.
+/// * `registers` - A pointer to `GeneralPurposeRegisters` representing the guest's state at VM exit.
 ///
 /// # Panics
 ///
 /// Panics if `registers` is a null pointer.
 #[no_mangle]
-pub unsafe extern "C" fn vmexit_handler(registers: *mut GuestRegisters) {
+pub unsafe extern "C" fn vmexit_handler(registers: *mut GeneralPurposeRegisters) {
     assert!(
         !registers.is_null(),
         "vmexit_handler received a null pointer for registers."

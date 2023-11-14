@@ -2,7 +2,7 @@
 //! Provides mechanisms to manage and configure the virtual machine's stack, including setup, allocation, and other related operations.
 
 use {
-    crate::{error::HypervisorError, intel::vmlaunch::GuestRegisters, utils::alloc::KernelAlloc},
+    crate::{error::HypervisorError, intel::vmlaunch::GeneralPurposeRegisters, utils::alloc::KernelAlloc},
     alloc::boxed::Box,
     core::mem::size_of,
     static_assertions::const_assert_eq,
@@ -12,15 +12,18 @@ use {
 pub const KERNEL_STACK_SIZE: usize = 0x6000;
 
 /// The size reserved for host RSP. This includes space allocated for padding and storing host general-purpose registers on the new stack, prior to executing vmlaunch.
-pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - size_of::<GuestRegisters>() - (size_of::<*mut u64>() * 2);
+pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - size_of::<GeneralPurposeRegisters>() - (size_of::<*mut u64>() * 2);
 
 /// Represents the Virtual Machine Stack (VmStack).
 ///
 /// The structure is designed to align with 4-KByte boundaries and ensures proper setup for the host RSP during VM execution.
 #[repr(C, align(4096))]
 pub struct VmStack {
-    /// The main contents of the VM stack during VM-exit.
+    /// The main contents of the VM stack during VM-exit. VMCS_HOST_RSP points to the end of this array inside VMCS.
     pub stack_contents: [u8; STACK_CONTENTS_SIZE],
+
+    // This is used for storing the host's general-purpose registers on the new stack, prior to executing vmlaunch (unused variable).
+    pub _host_registers: GeneralPurposeRegisters,
 
     /// Padding to ensure the Host RSP remains 16-byte aligned.
     pub padding_1: u64,

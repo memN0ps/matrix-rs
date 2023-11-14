@@ -1,7 +1,7 @@
 //! Manages INVD VM exits to handle guest VM cache invalidation requests securely.
 
 use crate::{
-    intel::{vmexit::VmExit, vmlaunch::GuestRegisters},
+    intel::{vmexit::VmExit, vmlaunch::GeneralPurposeRegisters},
     utils::instructions::wbinvd,
 };
 
@@ -11,7 +11,7 @@ use crate::{
 /// # Arguments
 ///
 /// * `registers` - General-purpose registers of the guest VM at the VM exit.
-pub fn handle_invd(_registers: &mut GuestRegisters) {
+pub fn handle_invd(_registers: &mut GeneralPurposeRegisters) {
     log::info!("INVD instruction executed by guest VM");
     // Perform WBINVD to write back and invalidate the hypervisor's caches.
     // This ensures that any modified data is written to memory before cache lines are invalidated.
