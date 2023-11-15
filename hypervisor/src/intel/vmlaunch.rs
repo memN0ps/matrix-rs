@@ -221,10 +221,9 @@ vmexit_stub:
 /// Panics if `registers` is a null pointer.
 #[no_mangle]
 pub unsafe extern "C" fn vmexit_handler(registers: *mut GeneralPurposeRegisters) {
-    assert!(
-        !registers.is_null(),
-        "vmexit_handler received a null pointer for registers."
-    );
+    if registers.is_null() {
+        panic!("vmexit_handler received a null pointer for registers.");
+    }
 
     let registers = &mut *registers;
     let vmexit = VmExit::new();
