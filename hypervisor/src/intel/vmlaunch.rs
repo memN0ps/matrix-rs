@@ -135,9 +135,6 @@ core::arch::global_asm!(r#"
 .endmacro
 
 .macro restore_xmm
-    // Free the allocated stack space.
-    add rsp, 0x100
-
     // Restore xmm registers.
     movaps xmm0, xmmword ptr [rsp]
     movaps xmm1, xmmword ptr [rsp + 0x10]
@@ -155,6 +152,9 @@ core::arch::global_asm!(r#"
     movaps xmm13, xmmword ptr [rsp + 0xD0]
     movaps xmm14, xmmword ptr [rsp + 0xE0]
     movaps xmm15, xmmword ptr [rsp + 0xF0]
+
+    // Free the allocated stack space.
+    add rsp, 0x100
 .endmacro
 
 .global launch_vm
