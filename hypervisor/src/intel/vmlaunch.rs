@@ -167,6 +167,15 @@ launch_vm:
     // Save host general-purpose registers onto the newly allocated stack.
     save_gpr
 
+    // Set VMCS_HOST_RSP to point to `stack_contents` right after host general-purpose registers.
+    mov rcx, 0x6C14
+    vmwrite rcx, rsp
+
+    // Set VMCS_HOST_RIP to point to `vmexit_stub`, so when a VM-exit occurs, it will be handled.
+    mov rcx, 0x6C16
+    lea rax, [rip + vmexit_stub]
+    vmwrite rcx, rax
+
     // Attempt to launch the VM with vmlaunch.
     vmlaunch
 

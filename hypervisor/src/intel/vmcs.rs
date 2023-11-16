@@ -14,8 +14,6 @@ use {
             msr_bitmap::MsrBitmap,
             segmentation::SegmentDescriptor,
             support::{vmclear, vmptrld, vmread, vmwrite},
-            vmlaunch::vmexit_stub,
-            vmstack::{VmStack, STACK_CONTENTS_SIZE},
         },
         utils::{
             addresses::PhysicalAddress,
@@ -175,16 +173,12 @@ impl Vmcs {
     /// * `host_descriptor_table` - Descriptor tables for the host.
     /// * `host_rsp` - Stack pointer for the host.
     #[rustfmt::skip]
-    pub fn setup_host_registers_state(context: &_CONTEXT, host_descriptor_table: &Box<DescriptorTables, KernelAlloc>, vmstack_ptr: &mut Box<VmStack, KernelAlloc>) {
+    pub fn setup_host_registers_state(context: &_CONTEXT, host_descriptor_table: &Box<DescriptorTables, KernelAlloc>) {
         unsafe { vmwrite(vmcs::host::CR0, controlregs::cr0().bits() as u64) };
         unsafe { vmwrite(vmcs::host::CR3, controlregs::cr3()) };
         unsafe { vmwrite(vmcs::host::CR4, controlregs::cr4().bits() as u64) };
 
         // The RIP/RSP registers are set within `launch_vm`.
-        let vmstack_ptr = vmstack_ptr.stack_contents.as_mut_ptr();
-        let vmcs_host_rsp = unsafe { vmstack_ptr.offset(STACK_CONTENTS_SIZE as isize) };
-        vmwrite(vmcs::host::RIP, vmexit_stub as u64);
-        vmwrite(vmcs::host::RSP, vmcs_host_rsp as u64);
 
         const SELECTOR_MASK: u16 = 0xF8;
         vmwrite(vmcs::host::CS_SELECTOR, context.SegCs & SELECTOR_MASK);
