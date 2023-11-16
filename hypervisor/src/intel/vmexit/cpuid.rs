@@ -15,7 +15,7 @@ use {
 enum CpuidLeaf {
     /// CPUID function number to retrieve the processor's vendor identification string.
     VendorInfo = 0x0,
-    
+
     /// CPUID function for feature information, including hypervisor presence.
     FeatureInformation = 0x1,
 
@@ -24,28 +24,28 @@ enum CpuidLeaf {
 
     /// Hypervisor vendor information leaf.
     HypervisorVendor = 0x40000000,
-    
+
     /// Hypervisor interface identification leaf.
     HypervisorInterface = 0x40000001,
-    
+
     /// Hypervisor system identity information leaf.
     HypervisorSystemIdentity = 0x40000002,
-    
+
     /// Hypervisor feature identification leaf.
     HypervisorFeatureIdentification = 0x40000003,
-    
+
     /// Hypervisor implementation recommendations leaf.
     ImplementationRecommendations = 0x40000004,
-    
+
     /// Hypervisor implementation limits leaf.
     HypervisorImplementationLimits = 0x40000005,
-    
+
     /// Hardware-specific features in use by the hypervisor leaf.
     ImplementationHardwareFeatures = 0x40000006,
-    
+
     /// Nested hypervisor feature identification leaf.
     NestedHypervisorFeatureIdentification = 0x40000009,
-    
+
     /// Nested virtualization features available leaf.
     HypervisorNestedVirtualizationFeatures = 0x4000000A,
 }

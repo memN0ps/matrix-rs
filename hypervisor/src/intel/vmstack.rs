@@ -2,7 +2,9 @@
 //! Provides mechanisms to manage and configure the virtual machine's stack, including setup, allocation, and other related operations.
 
 use {
-    crate::{error::HypervisorError, intel::vmlaunch::GeneralPurposeRegisters, utils::alloc::KernelAlloc},
+    crate::{
+        error::HypervisorError, intel::vmlaunch::GeneralPurposeRegisters, utils::alloc::KernelAlloc,
+    },
     alloc::boxed::Box,
     core::mem::size_of,
     static_assertions::const_assert_eq,
@@ -12,7 +14,8 @@ use {
 pub const KERNEL_STACK_SIZE: usize = 0x6000;
 
 /// The size reserved for host RSP. This includes space allocated for padding and storing host general-purpose registers on the new stack, prior to executing vmlaunch.
-pub const STACK_CONTENTS_SIZE: usize = KERNEL_STACK_SIZE - size_of::<GeneralPurposeRegisters>() - (size_of::<*mut u64>() * 2);
+pub const STACK_CONTENTS_SIZE: usize =
+    KERNEL_STACK_SIZE - size_of::<GeneralPurposeRegisters>() - (size_of::<*mut u64>() * 2);
 
 /// Represents the Virtual Machine Stack (VmStack).
 ///

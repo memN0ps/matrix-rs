@@ -14,8 +14,8 @@ use {
             msr_bitmap::MsrBitmap,
             segmentation::SegmentDescriptor,
             support::{vmclear, vmptrld, vmread, vmwrite},
+            vmlaunch::vmexit_stub,
             vmstack::{VmStack, STACK_CONTENTS_SIZE},
-            vmlaunch::vmexit_stub
         },
         utils::{
             addresses::PhysicalAddress,

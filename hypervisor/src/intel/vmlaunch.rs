@@ -9,7 +9,7 @@
 //! - VMX assembly integrations: Assembly routines to interface directly with VMX instructions.
 //!
 //! The module is designed to be used in conjunction with a broader hypervisor framework.
-//! 
+//!
 //! Credits: Thanks @daaximus (daax) <3
 
 use {
@@ -70,7 +70,8 @@ extern "C" {
 }
 
 // Credits: Thanks @daaximus (daax) <3
-core::arch::global_asm!(r#"
+core::arch::global_asm!(
+    r#"
 // Macro to push all general-purpose registers onto the stack.
 .macro save_gpr
     push	r15

@@ -12,8 +12,9 @@ use {
     crate::{
         error::HypervisorError,
         intel::{
-            descriptor::DescriptorTables, vmlaunch::launch_vm,
-            vmstack::{VmStack, STACK_CONTENTS_SIZE}
+            descriptor::DescriptorTables,
+            vmlaunch::launch_vm,
+            vmstack::{VmStack, STACK_CONTENTS_SIZE},
         },
         utils::alloc::{KernelAlloc, PhysicalAllocator},
     },
@@ -79,7 +80,7 @@ impl Vmx {
             unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
         let mut host_descriptor_table =
             unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
-        
+
         // Allocate memory for the host's stack
         let host_rsp = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
 
@@ -126,15 +127,16 @@ impl Vmx {
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
         log::info!("Setting up Guest Registers State");
-        Vmcs::setup_guest_registers_state(
-            &context,
-            &self.guest_descriptor_table,
-        );
+        Vmcs::setup_guest_registers_state(&context, &self.guest_descriptor_table);
         log::info!("Guest Registers State successful!");
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
         log::info!("Setting up Host Registers State");
-        Vmcs::setup_host_registers_state(&context, &self.host_descriptor_table, &mut self.vmstack_ptr);
+        Vmcs::setup_host_registers_state(
+            &context,
+            &self.host_descriptor_table,
+            &mut self.vmstack_ptr,
+        );
         log::info!("Host Registers State successful!");
 
         /*
@@ -159,15 +161,16 @@ impl Vmx {
     /// The loop continues until an unhandled or error-causing VM-exit is encountered.
     pub fn run(&mut self) {
         log::info!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
-        
-        // The host_rsp pointer is used to set the current host's stack pointer (RSP) 
-        // before saving the host's general-purpose registers on the new stack, 
+
+        // The host_rsp pointer is used to set the current host's stack pointer (RSP)
+        // before saving the host's general-purpose registers on the new stack,
         // and prior to executing vmlaunch.
         let vmstack_ptr = self.vmstack_ptr.stack_contents.as_mut_ptr();
 
         // This will point towards the end of the Guest Registers State area.
-        let offset = (STACK_CONTENTS_SIZE + core::mem::size_of::<GeneralPurposeRegisters>()) as isize;
-        
+        let offset =
+            (STACK_CONTENTS_SIZE + core::mem::size_of::<GeneralPurposeRegisters>()) as isize;
+
         let current_host_rsp = unsafe { vmstack_ptr.offset(offset) };
 
         unsafe { launch_vm(current_host_rsp as *mut u64) };
