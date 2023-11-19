@@ -126,8 +126,6 @@ core::arch::global_asm!(
 
 .global launch_vm
 launch_vm:
-    xchg    bx, bx
-
     // Replace the current stack pointer with `host_rsp` (passed in rdx),
     // which is the end of the `stack_contents` in `VmStack`.
     mov rsp, rdx
@@ -205,8 +203,6 @@ launch_vm:
     call vmlaunch_failed
 
 .Vmexit:
-    xchg    bx, bx
-
     xchg    r15, [rsp]  ;// r15 <= `registers` / [rsp] <= guest r15
     mov     [r15 + registers_rax], rax
     mov     [r15 + registers_rbx], rbx
