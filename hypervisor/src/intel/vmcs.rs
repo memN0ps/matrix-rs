@@ -14,6 +14,7 @@ use {
             msr_bitmap::MsrBitmap,
             segmentation::SegmentDescriptor,
             support::{vmclear, vmptrld, vmread, vmwrite},
+            vmlaunch::GuestRegisters,
         },
         utils::{
             addresses::PhysicalAddress,
@@ -101,7 +102,7 @@ impl Vmcs {
     /// * `context` - Context containing the guest's register states.
     /// * `guest_descriptor_table` - Descriptor tables for the guest.
     #[rustfmt::skip]
-    pub fn setup_guest_registers_state(context: &_CONTEXT, guest_descriptor_table: &Box<DescriptorTables, KernelAlloc>) {
+    pub fn setup_guest_registers_state(context: &_CONTEXT, guest_descriptor_table: &Box<DescriptorTables, KernelAlloc>, guest_registers: &mut GuestRegisters) {
         unsafe { vmwrite(vmcs::guest::CR0, controlregs::cr0().bits() as u64) };
         unsafe { vmwrite(vmcs::guest::CR3, controlregs::cr3()) };
         unsafe { vmwrite(vmcs::guest::CR4, controlregs::cr4().bits() as u64) };
@@ -161,6 +162,43 @@ impl Vmcs {
             vmwrite(vmcs::guest::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP));
             vmwrite(vmcs::guest::LINK_PTR_FULL, u64::MAX);
         }
+
+        let xmm_context = unsafe { context.__bindgen_anon_1.__bindgen_anon_1 };
+
+        // Note: VMCS does not manage all registers; some require manual intervention for saving and loading.
+        // This includes general-purpose registers and xmm registers, which must be explicitly preserved and restored by the software.
+        guest_registers.xmm0 = [xmm_context.Xmm0.Low as u64, xmm_context.Xmm0.High as u64];
+        guest_registers.xmm1 = [xmm_context.Xmm1.Low as u64, xmm_context.Xmm1.High as u64];
+        guest_registers.xmm2 = [xmm_context.Xmm2.Low as u64, xmm_context.Xmm2.High as u64];
+        guest_registers.xmm3 = [xmm_context.Xmm3.Low as u64, xmm_context.Xmm3.High as u64];
+        guest_registers.xmm4 = [xmm_context.Xmm4.Low as u64, xmm_context.Xmm4.High as u64];
+        guest_registers.xmm5 = [xmm_context.Xmm5.Low as u64, xmm_context.Xmm5.High as u64];
+        guest_registers.xmm6 = [xmm_context.Xmm6.Low as u64, xmm_context.Xmm6.High as u64];
+        guest_registers.xmm7 = [xmm_context.Xmm7.Low as u64, xmm_context.Xmm7.High as u64];
+        guest_registers.xmm8 = [xmm_context.Xmm8.Low as u64, xmm_context.Xmm8.High as u64];
+        guest_registers.xmm9 = [xmm_context.Xmm9.Low as u64, xmm_context.Xmm9.High as u64];
+        guest_registers.xmm10 = [xmm_context.Xmm10.Low as u64, xmm_context.Xmm10.High as u64];
+        guest_registers.xmm11 = [xmm_context.Xmm11.Low as u64, xmm_context.Xmm11.High as u64];
+        guest_registers.xmm12 = [xmm_context.Xmm12.Low as u64, xmm_context.Xmm12.High as u64];
+        guest_registers.xmm13 = [xmm_context.Xmm13.Low as u64, xmm_context.Xmm13.High as u64];
+        guest_registers.xmm14 = [xmm_context.Xmm14.Low as u64, xmm_context.Xmm14.High as u64];
+        guest_registers.xmm15 = [xmm_context.Xmm15.Low as u64, xmm_context.Xmm15.High as u64];
+
+        guest_registers.rax = context.Rax;
+        guest_registers.rbx = context.Rbx;
+        guest_registers.rcx = context.Rcx;
+        guest_registers.rdx = context.Rdx;
+        guest_registers.rdi = context.Rdi;
+        guest_registers.rsi = context.Rsi;
+        guest_registers.rbp = context.Rbp;
+        guest_registers.r8 = context.R8;
+        guest_registers.r9 = context.R9;
+        guest_registers.r10 = context.R10;
+        guest_registers.r11 = context.R11;
+        guest_registers.r12 = context.R12;
+        guest_registers.r13 = context.R13;
+        guest_registers.r14 = context.R14;
+        guest_registers.r15 = context.R15;
     }
 
     /// Initialize the host state for the currently loaded VMCS.

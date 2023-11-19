@@ -2,7 +2,7 @@
 //! read and write operations. It ensures that guest MSR accesses are properly
 //! intercepted and handled, with support for injecting faults for unauthorized accesses.
 
-use crate::intel::{events::EventInjection, vmexit::VmExit, vmlaunch::GeneralPurposeRegisters};
+use crate::intel::{events::EventInjection, vmexit::ExitType, vmlaunch::GuestRegisters};
 
 /// Enum representing the type of MSR access.
 ///
@@ -27,7 +27,10 @@ pub enum MsrAccessType {
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: RDMSR—Read From Model Specific Register or WRMSR—Write to Model Specific Register
 /// and Table C-1. Basic Exit Reasons 31 and 32.
-pub fn handle_msr_access(registers: &mut GeneralPurposeRegisters, access_type: MsrAccessType) {
+pub fn handle_msr_access(
+    guest_registers: &mut GuestRegisters,
+    access_type: MsrAccessType,
+) -> ExitType {
     /// Constants related to MSR addresses and ranges.
     const MSR_MASK_LOW: u64 = u32::MAX as u64;
     const MSR_RANGE_LOW_END: u64 = 0x00001FFF;
@@ -38,14 +41,14 @@ pub fn handle_msr_access(registers: &mut GeneralPurposeRegisters, access_type: M
     const HYPERV_MSR_START: u64 = 0x40000000;
     const HYPERV_MSR_END: u64 = 0x4000FFFF;
 
-    let msr_id = registers.rcx;
+    let msr_id = guest_registers.rcx;
 
     // If the MSR address falls within a synthetic or reserved range, inject a general protection fault.
     /*
         if (msr_id >= HYPERV_MSR_START) && (msr_id <= HYPERV_MSR_END) {
             log::info!("Synthetic MSR access attempted: {:#x}", msr_id);
             EventInjection::vmentry_inject_gp(0);
-            return;
+            return ExitType::Continue;
         }
     */
 
@@ -59,11 +62,11 @@ pub fn handle_msr_access(registers: &mut GeneralPurposeRegisters, access_type: M
         match access_type {
             MsrAccessType::Read => {
                 let msr_value = unsafe { x86::msr::rdmsr(msr_id as _) };
-                registers.rdx = msr_value >> 32;
-                registers.rax = msr_value & MSR_MASK_LOW;
+                guest_registers.rdx = msr_value >> 32;
+                guest_registers.rax = msr_value & MSR_MASK_LOW;
             }
             MsrAccessType::Write => {
-                let msr_value = (registers.rdx << 32) | (registers.rax & MSR_MASK_LOW);
+                let msr_value = (guest_registers.rdx << 32) | (guest_registers.rax & MSR_MASK_LOW);
                 unsafe { x86::msr::wrmsr(msr_id as _, msr_value) };
             }
         }
@@ -71,8 +74,8 @@ pub fn handle_msr_access(registers: &mut GeneralPurposeRegisters, access_type: M
         // If the MSR is neither a known valid MSR nor a synthetic MSR, inject a general protection fault.
         log::info!("Invalid MSR access attempted: {:#x}", msr_id);
         EventInjection::vmentry_inject_gp(0);
-        return;
+        return ExitType::Continue;
     }
 
-    VmExit::advance_guest_rip();
+    ExitType::IncrementRIP
 }

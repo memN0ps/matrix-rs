@@ -3,7 +3,7 @@
 
 use {
     crate::{
-        intel::{vmexit::VmExit, vmlaunch::GeneralPurposeRegisters},
+        intel::{vmexit::ExitType, vmlaunch::GuestRegisters},
         utils::instructions::{cr4, cr4_write, xsetbv},
     },
     x86::controlregs::{Cr4, Xcr0},
@@ -16,12 +16,12 @@ use {
 /// # Arguments
 ///
 /// * `registers` - A mutable reference to the guest VM's general-purpose registers.
-pub fn handle_xsetbv(registers: &mut GeneralPurposeRegisters) {
+pub fn handle_xsetbv(guest_registers: &mut GuestRegisters) -> ExitType {
     // Extract the XCR (extended control register) number from the guest's RCX register.
-    let xcr: u32 = registers.rcx as u32;
+    let xcr: u32 = guest_registers.rcx as u32;
 
     // Combine the guest's RAX and RDX registers to form the 64-bit value for the XCR0 register.
-    let value = (registers.rax & 0xffff_ffff) | ((registers.rdx & 0xffff_ffff) << 32);
+    let value = (guest_registers.rax & 0xffff_ffff) | ((guest_registers.rdx & 0xffff_ffff) << 32);
 
     // Attempt to create an Xcr0 structure from the given bits.
     let value = Xcr0::from_bits_truncate(value);
@@ -35,5 +35,5 @@ pub fn handle_xsetbv(registers: &mut GeneralPurposeRegisters) {
     xsetbv(value);
 
     // Advance the guest's instruction pointer to the next instruction to be executed.
-    VmExit::advance_guest_rip();
+    return ExitType::IncrementRIP;
 }

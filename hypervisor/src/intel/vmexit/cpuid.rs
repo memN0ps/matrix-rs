@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 
 use {
-    crate::intel::{vmexit::VmExit, vmlaunch::GeneralPurposeRegisters},
+    crate::intel::{vmexit::ExitType, vmlaunch::GuestRegisters},
     bitfield::BitMut,
     x86::cpuid::cpuid,
 };
@@ -72,9 +72,9 @@ enum FeatureBits {
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual, Table C-1. Basic Exit Reasons 10.
 #[rustfmt::skip]
-pub fn handle_cpuid(registers: &mut GeneralPurposeRegisters) {
-    let leaf = registers.rax as u32;
-    let sub_leaf = registers.rcx as u32;
+pub fn handle_cpuid(guest_registers: &mut GuestRegisters) -> ExitType {
+    let leaf = guest_registers.rax as u32;
+    let sub_leaf = guest_registers.rcx as u32;
 
     // Execute CPUID instruction on the host and retrieve the result
     let mut cpuid_result = cpuid!(leaf, sub_leaf);
@@ -114,10 +114,10 @@ pub fn handle_cpuid(registers: &mut GeneralPurposeRegisters) {
     log::info!("After modification: CPUID Leaf: {:#x}, EAX: {:#x}, EBX: {:#x}, ECX: {:#x}, EDX: {:#x}", leaf, cpuid_result.eax, cpuid_result.ebx, cpuid_result.ecx, cpuid_result.edx);
 
     // Update the guest registers
-    registers.rax = cpuid_result.eax as u64;
-    registers.rbx = cpuid_result.ebx as u64;
-    registers.rcx = cpuid_result.ecx as u64;
-    registers.rdx = cpuid_result.edx as u64;
+    guest_registers.rax = cpuid_result.eax as u64;
+    guest_registers.rbx = cpuid_result.ebx as u64;
+    guest_registers.rcx = cpuid_result.ecx as u64;
+    guest_registers.rdx = cpuid_result.edx as u64;
 
-    VmExit::advance_guest_rip();
+    ExitType::IncrementRIP
 }

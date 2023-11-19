@@ -11,7 +11,7 @@ use {
         error::HypervisorError,
         intel::{
             descriptor::DescriptorTables,
-            vmlaunch::launch_vm,
+            vmlaunch::{launch_vm, GuestRegisters},
             vmstack::{VmStack, STACK_CONTENTS_SIZE},
         },
         utils::alloc::{KernelAlloc, PhysicalAllocator},
@@ -58,6 +58,9 @@ pub struct Vmx {
     /// Virtual address of the host's stack, aligned to a 4-KByte boundary.
     /// Allocated using `ExAllocatePool` or `ExAllocatePoolWithTag`.
     pub host_rsp: Box<VmStack, KernelAlloc>,
+
+    /// The guest's general-purpose registers state.
+    pub guest_registers: GuestRegisters,
 }
 
 impl Vmx {
@@ -82,6 +85,9 @@ impl Vmx {
         // Allocate memory for the host's stack
         let host_rsp = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
 
+        // Initialize the guest's general-purpose registers
+        let guest_registers = GuestRegisters::default();
+
         // To capture the current GDT and IDT for the guest the order is important so we can setup up a new GDT and IDT for the host.
         // This is done here instead of `setup_virtualization` because it uses a vec to allocate memory for the new GDT
         DescriptorTables::initialize_for_guest(&mut guest_descriptor_table)?;
@@ -96,6 +102,7 @@ impl Vmx {
             guest_descriptor_table,
             host_descriptor_table,
             host_rsp,
+            guest_registers,
         };
 
         let instance = Box::new(instance);
@@ -125,7 +132,11 @@ impl Vmx {
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
         log::info!("Setting up Guest Registers State");
-        Vmcs::setup_guest_registers_state(&context, &self.guest_descriptor_table);
+        Vmcs::setup_guest_registers_state(
+            &context,
+            &self.guest_descriptor_table,
+            &mut self.guest_registers,
+        );
         log::info!("Guest Registers State successful!");
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
@@ -159,6 +170,6 @@ impl Vmx {
         let host_rsp = self.host_rsp.stack_contents.as_mut_ptr();
         let vmcs_host_rsp = unsafe { host_rsp.offset(STACK_CONTENTS_SIZE as isize) };
 
-        unsafe { launch_vm(vmcs_host_rsp as *mut u64) };
+        unsafe { launch_vm(&mut self.guest_registers, vmcs_host_rsp as *mut u64) };
     }
 }

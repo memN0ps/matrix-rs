@@ -15,7 +15,7 @@ use {
                 msr::{handle_msr_access, MsrAccessType},
                 xsetbv::handle_xsetbv,
             },
-            vmlaunch::GeneralPurposeRegisters,
+            vmlaunch::GuestRegisters,
         },
     },
     x86::vmx::vmcs::{guest, ro},
@@ -25,6 +25,14 @@ pub mod cpuid;
 pub mod invd;
 pub mod msr;
 pub mod xsetbv;
+
+/// Represents the type of VM exit.
+#[derive(PartialOrd, PartialEq)]
+pub enum ExitType {
+    ExitHypervisor,
+    IncrementRIP,
+    Continue,
+}
 
 /// Represents a VM exit, which can be caused by various reasons.
 ///
@@ -54,8 +62,13 @@ impl VmExit {
     /// - Table C-1. Basic Exit Reasons
     pub fn handle_vmexit(
         &self,
-        registers: &mut GeneralPurposeRegisters,
+        guest_registers: &mut GuestRegisters,
     ) -> Result<(), HypervisorError> {
+        // Upon VM-exit, transfer the guest register values from VMCS to `self.registers` to ensure it reflects the latest and complete state.
+        guest_registers.rip = vmread(guest::RIP);
+        guest_registers.rsp = vmread(guest::RSP);
+        guest_registers.rflags = vmread(guest::RFLAGS);
+
         let exit_reason = vmread(ro::EXIT_REASON) as u32;
 
         let Some(basic_exit_reason) = VmxBasicExitReason::from_u32(exit_reason) else {
@@ -64,23 +77,33 @@ impl VmExit {
         };
         log::info!("Basic Exit Reason: {}", basic_exit_reason);
 
-        log::info!("Guest registers before handling vmexit: {:#x?}", registers);
+        log::info!(
+            "Guest registers before handling vmexit: {:#x?}",
+            guest_registers
+        );
 
         // Intel® 64 and IA-32 Architectures Software Developer's Manual: 26.1.2 Instructions That Cause VM Exits Unconditionally:
         // - The following instructions cause VM exits when they are executed in VMX non-root operation: CPUID, GETSEC, INVD, and XSETBV.
         // - This is also true of instructions introduced with VMX, which include: INVEPT, INVVPID, VMCALL, VMCLEAR, VMLAUNCH, VMPTRLD, VMPTRST, VMRESUME, VMXOFF, and VMXON.
         //
         // 26.1.3 Instructions That Cause VM Exits Conditionally: Certain instructions cause VM exits in VMX non-root operation depending on the setting of the VM-execution controls.
-        match basic_exit_reason {
-            VmxBasicExitReason::Cpuid => handle_cpuid(registers),
-            VmxBasicExitReason::Rdmsr => handle_msr_access(registers, MsrAccessType::Read),
-            VmxBasicExitReason::Wrmsr => handle_msr_access(registers, MsrAccessType::Write),
-            VmxBasicExitReason::Xsetbv => handle_xsetbv(registers),
-            VmxBasicExitReason::Invd => handle_invd(registers),
+        let exit_type = match basic_exit_reason {
+            VmxBasicExitReason::Cpuid => handle_cpuid(guest_registers),
+            VmxBasicExitReason::Rdmsr => handle_msr_access(guest_registers, MsrAccessType::Read),
+            VmxBasicExitReason::Wrmsr => handle_msr_access(guest_registers, MsrAccessType::Write),
+            VmxBasicExitReason::Xsetbv => handle_xsetbv(guest_registers),
+            VmxBasicExitReason::Invd => handle_invd(guest_registers),
             _ => return Err(HypervisorError::UnhandledVmExit),
         };
 
-        log::info!("Guest registers after handling vmexit: {:#x?}", registers);
+        if exit_type == ExitType::IncrementRIP {
+            self.advance_guest_rip(guest_registers);
+        }
+
+        log::info!(
+            "Guest registers after handling vmexit: {:#x?}",
+            guest_registers
+        );
 
         log::info!("VMEXIT handled successfully.");
 
@@ -93,12 +116,11 @@ impl VmExit {
     /// to the hypervisor. To ensure that the guest does not re-execute the instruction that
     /// caused the VM exit, the hypervisor needs to advance the guest's RIP to the next instruction.
     #[rustfmt::skip]
-    fn advance_guest_rip() {
-        let mut rip = vmread(guest::RIP);
+    fn advance_guest_rip(&self, guest_registers: &mut GuestRegisters) {
         log::info!("Advancing guest RIP...");
         let len = vmread(ro::VMEXIT_INSTRUCTION_LEN);
-        rip += len;
-        vmwrite(guest::RIP, rip);
+        guest_registers.rip += len;
+        vmwrite(guest::RIP, guest_registers.rip);
         log::info!("Guest RIP advanced to: {:#x}", vmread(guest::RIP));
     }
 }
