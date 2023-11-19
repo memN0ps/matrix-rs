@@ -10,12 +10,6 @@
 #[cfg(not(test))]
 extern crate wdk_panic;
 
-/*
-// Set up a global allocator for non-test configurations.
-#[cfg(not(test))]
-use wdk_alloc::WDKAllocator;
-*/
-
 #[cfg(not(test))]
 #[global_allocator]
 static GLOBAL: hypervisor::utils::alloc::KernelAlloc = hypervisor::utils::alloc::KernelAlloc;
@@ -44,8 +38,8 @@ use wdk_sys::{DRIVER_OBJECT, NTSTATUS, PUNICODE_STRING, STATUS_SUCCESS, STATUS_U
 /// * `STATUS_UNSUCCESSFUL` if there was an error during initialization.
 ///
 /// Reference: WDF expects a symbol with the name DriverEntry.
-#[export_name = "DriverEntry"]
-pub unsafe extern "system" fn driver_entry(
+#[no_mangle]
+pub extern "system" fn DriverEntry(
     driver: &mut DRIVER_OBJECT,
     _registry_path: PUNICODE_STRING,
 ) -> NTSTATUS {
