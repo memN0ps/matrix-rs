@@ -1,32 +1,54 @@
-[env.development]
-TARGET_PATH = "../target/x86_64-pc-windows-msvc/debug"
+[env]
+VC_BUILD_DIR = "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsamd64_x86.bat"
+CARGO_MAKE_CARGO_BUILD_TEST_FLAGS = "--profile ${CARGO_MAKE_CARGO_PROFILE}"
+OUTPUT_DIR = { source = "${CARGO_MAKE_CARGO_PROFILE}", default_value = "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}\\${CARGO_MAKE_CARGO_PROFILE}", mapping = { "dev" = "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}\\debug" } }
 
-[env.production]
-TARGET_PATH = "../target/x86_64-pc-windows-msvc/release"
-BUILD_FLAGS = "--release"
+[tasks.rename-dll-to-sys]
+dependencies = ["build"]
+script = '''
+echo "Output directory: %OUTPUT_DIR%"
+cd "%OUTPUT_DIR%" || exit /b
+mkdir package 2>nul
+copy /Y %CARGO_MAKE_CRATE_FS_NAME%.dll package\%CARGO_MAKE_CRATE_FS_NAME%.sys
+copy /Y %CARGO_MAKE_CRATE_FS_NAME%.dll %CARGO_MAKE_CRATE_FS_NAME%.sys
+'''
 
-[tasks.build-driver]
-script = [
-    "cargo b %BUILD_FLAGS%"
-]
+[tasks.stampinf]
+dependencies = ["build"]
+script = '''
+copy /Y "%CARGO_MAKE_WORKING_DIRECTORY%\%CARGO_MAKE_CRATE_FS_NAME%.inx" "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf"
+"C:\Program Files (x86)\Windows Kits\10\bin\x64\stampinf.exe" -f "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf" -d * -a amd64 -c %CARGO_MAKE_CRATE_FS_NAME%.cat -v * -k 1.33 -n
+'''
 
-[tasks.rename]
-dependencies = ["build-driver"]
-ignore_errors = true
-script = [
-    "cd %TARGET_PATH%",
-    "rename matrix.dll matrix.sys",
-]
+[tasks.copypdb]
+dependencies = ["build"]
+script = '''
+copy /Y %CARGO_MAKE_CRATE_FS_NAME%.pdb "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.pdb"
+'''
+
+[tasks.inf2cat]
+dependencies = ["stampinf"]
+script = '''
+"C:\Program Files (x86)\Windows Kits\10\bin\x86\inf2cat.exe" /driver:"%OUTPUT_DIR%\package" /os:10_NI_X64,10_VB_X64 /uselocaltime /verbose
+'''
+
+[tasks.infverif]
+dependencies = ["stampinf"]
+script = '''
+"C:\Program Files (x86)\Windows Kits\10\Tools\10.0.22621.0\x64\infverif.exe" /v /w "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf" /msft
+'''
 
 [tasks.sign]
-dependencies = ["build-driver", "rename"]
-script = [
-    # Load the Visual Studio Developer environment
-    "call \"%ProgramFiles%\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat\"",
+dependencies = ["rename-dll-to-sys", "inf2cat", "infverif"]
+script = '''
+call "%VC_BUILD_DIR%" || exit /b
+if not exist DriverCertificate.cer (
+  makecert -r -pe -ss PrivateCertStore -n CN=DriverCertificate DriverCertificate.cer
+) else (
+  echo Certificate already exists.
+)
+signtool sign /a /v /s PrivateCertStore /n DriverCertificate /fd certHash /t http://timestamp.digicert.com "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.cat"
+'''
 
-    # Create a self signed certificate (only if not already done)
-    "if not exist %TARGET_PATH%/DriverCertificate.cer ( makecert -r -pe -ss PrivateCertStore -n CN=DriverCertificate %TARGET_PATH%/DriverCertificate.cer ) else ( echo Certificate already exists. )",
-
-    # Sign the driver
-    "signtool sign /a /v /s PrivateCertStore /n DriverCertificate /fd certHash /t http://timestamp.digicert.com %TARGET_PATH%/matrix.sys"
-]
+[tasks.default]
+alias = "sign"
