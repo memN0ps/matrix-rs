@@ -1,16 +1,16 @@
 ;===================================================================
-; Copyright (c)2023, Microsoft Corporation
-;
-;Module Name:
-;    matrix.INF
+; Matrix Hypervisor KMDF Driver
+; Copyright (c) memN0ps
 ;===================================================================
 
 [Version]
 Signature   = "$WINDOWS NT$"
-Class       = Sample
-ClassGuid   = {78A1C341-4539-11d3-B88D-00C04FAD5171}
+Class       = System
+ClassGuid   = {4D36E97D-E325-11CE-BFC1-08002BE10318}
 Provider    = %ProviderString%
+DriverVer   = 11/22/2023,1.0.0.0
 PnpLockDown = 1
+CatalogFile = matrix.cat
 
 [DestinationDirs]
 DefaultDestDir = 13
@@ -19,37 +19,37 @@ DefaultDestDir = 13
 1 = %DiskId1%,,,""
 
 [SourceDisksFiles]
-matrix.sys  = 1,,
+matrix.sys = 1,,
 
 ; ================= Class section =====================
 
 [ClassInstall32]
-Addreg=SampleClassReg
+Addreg=SystemClassReg
 
-[SampleClassReg]
+[SystemClassReg]
 HKR,,,0,%ClassName%
 HKR,,Icon,,-5
 
 ; ================= Install section =================
 
 [Manufacturer]
-%StdMfg%=Standard,NT$ARCH$.10.0...16299
+%StdMfg%=Standard,NT$ARCH$
 
-[Standard.NT$ARCH$.10.0...16299]
-%ECHO.DeviceDesc%=ECHO_Device, root\matrix
+[Standard.NT$ARCH$]
+%DeviceDesc%=MatrixDevice, root\MEMN0PS_HYPERVISOR
 
-[ECHO_Device.NT$ARCH$]
+[MatrixDevice.NT$ARCH$]
 CopyFiles=Drivers_Dir
 
 [Drivers_Dir]
-matrix.sys
+matrix.sys,,,_x
 
 ; ================= Service installation =================
-[ECHO_Device.NT$ARCH$.Services]
-AddService = matrix, %SPSVCINST_ASSOCSERVICE%, ECHO_Service_Inst
+[MatrixDevice.NT$ARCH$.Services]
+AddService = MatrixService, %SPSVCINST_ASSOCSERVICE%, Matrix_Service_Install
 
-[ECHO_Service_Inst]
-DisplayName    = %ECHO.SVCDESC%
+[Matrix_Service_Install]
+DisplayName    = %ServiceDesc%
 ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
 StartType      = 3               ; SERVICE_DEMAND_START
 ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
@@ -58,9 +58,9 @@ ServiceBinary  = %13%\matrix.sys
 ; ================= Strings =================
 [Strings]
 SPSVCINST_ASSOCSERVICE = 0x00000002
-ProviderString         = "TODO-Set-Provider"
+ProviderString         = "memN0ps"
 StdMfg                 = "(Standard system devices)"
-DiskId1                = "WDF Sample ECHO Installation Disk #1 (DriverSync)"
-ECHO.DeviceDesc        = "Sample WDF ECHO Driver (DriverSync)"
-ECHO.SVCDESC           = "Sample WDF ECHO Service (DriverSync)"
-ClassName              = "Sample Device"
+DiskId1                = "Matrix Hypervisor Installation Disk #1"
+DeviceDesc             = "Matrix Type-2 Hypervisor"
+ServiceDesc            = "Matrix Hypervisor Service"
+ClassName              = "System"

@@ -1,44 +1,51 @@
 [env]
+# Environment variables
 VC_BUILD_DIR = "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsamd64_x86.bat"
 CARGO_MAKE_CARGO_BUILD_TEST_FLAGS = "--profile ${CARGO_MAKE_CARGO_PROFILE}"
+# Output directory configuration
 OUTPUT_DIR = { source = "${CARGO_MAKE_CARGO_PROFILE}", default_value = "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}\\${CARGO_MAKE_CARGO_PROFILE}", mapping = { "dev" = "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}\\debug" } }
 
 [tasks.rename-dll-to-sys]
+# Rename the compiled DLL to a SYS file, preparing it as a driver file.
 dependencies = ["build"]
 script = '''
 echo "Output directory: %OUTPUT_DIR%"
 cd "%OUTPUT_DIR%" || exit /b
 mkdir package 2>nul
 copy /Y %CARGO_MAKE_CRATE_FS_NAME%.dll package\%CARGO_MAKE_CRATE_FS_NAME%.sys
-copy /Y %CARGO_MAKE_CRATE_FS_NAME%.dll %CARGO_MAKE_CRATE_FS_NAME%.sys
 '''
 
 [tasks.stampinf]
+# Stamp the INF file using stampinf.exe, preparing it for driver installation.
 dependencies = ["build"]
 script = '''
 copy /Y "%CARGO_MAKE_WORKING_DIRECTORY%\%CARGO_MAKE_CRATE_FS_NAME%.inx" "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf"
-"C:\Program Files (x86)\Windows Kits\10\bin\x64\stampinf.exe" -f "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf" -d * -a amd64 -c %CARGO_MAKE_CRATE_FS_NAME%.cat -v * -k 1.33 -n
+"C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\stampinf.exe" -f "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf" -d * -a amd64 -c %CARGO_MAKE_CRATE_FS_NAME%.cat -v * -k 1.33 -n
 '''
 
 [tasks.copypdb]
+# Copy the PDB (Program Database) file for debugging purposes.
 dependencies = ["build"]
 script = '''
 copy /Y %CARGO_MAKE_CRATE_FS_NAME%.pdb "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.pdb"
 '''
 
 [tasks.inf2cat]
+# Generate a catalog file for the driver package using inf2cat.exe.
 dependencies = ["stampinf"]
 script = '''
-"C:\Program Files (x86)\Windows Kits\10\bin\x86\inf2cat.exe" /driver:"%OUTPUT_DIR%\package" /os:10_NI_X64,10_VB_X64 /uselocaltime /verbose
+"C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x86\inf2cat.exe" /driver:"%OUTPUT_DIR%\package" /os:10_X64,Server10_X64,10_NI_X64,10_VB_X64 /uselocaltime /verbose
 '''
 
 [tasks.infverif]
+# Validate the INF file using infverif.exe.
 dependencies = ["stampinf"]
 script = '''
 "C:\Program Files (x86)\Windows Kits\10\Tools\10.0.22621.0\x64\infverif.exe" /v /w "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf" /msft
 '''
 
 [tasks.sign]
+# Sign the driver file. Ensure the certificate is in place or create it if not existing.
 dependencies = ["rename-dll-to-sys", "inf2cat", "infverif"]
 script = '''
 call "%VC_BUILD_DIR%" || exit /b
@@ -47,8 +54,11 @@ if not exist DriverCertificate.cer (
 ) else (
   echo Certificate already exists.
 )
+# Sign the .sys and .cat file located in the package directory.
+signtool sign /a /v /s PrivateCertStore /n DriverCertificate /fd certHash /t http://timestamp.digicert.com "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.sys"
 signtool sign /a /v /s PrivateCertStore /n DriverCertificate /fd certHash /t http://timestamp.digicert.com "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.cat"
 '''
 
 [tasks.default]
+# Set the default task to 'sign'.
 alias = "sign"
