@@ -123,15 +123,12 @@ core::arch::global_asm!(
 .set registers_xmm14, 0x170
 .set registers_xmm15, 0x180
 
-
 .global launch_vm
 launch_vm:
-    // Replace the current stack pointer with `host_rsp` (passed in rdx),
-    // which is the end of the `stack_contents` in `VmStack`.
+    // Set host stack pointer (RSP) to the end of stack_contents in VmStack.
     mov rsp, rdx
 
-    // Save host general-purpose registers onto the newly allocated stack.
-    ;// Save current (host) general purpose registers onto stack.
+    // Push host general-purpose registers onto the stack.
     push    rax
     push    rcx
     push    rdx
@@ -148,13 +145,13 @@ launch_vm:
     push    r14
     push    r15
 
-    // Save the guest's general-purpose registers into r15.
-    mov     r15, rcx    ;// r15 <= `registers`
+    // Load pointer to guest's register state into r15.
+    mov     r15, rcx
 
-    // Push guest general-purpose registers onto the stack.
+    // Store the pointer to guest registers onto the stack.
     push    rcx
 
-    ;// Restore guest general purpose registers from `registers`.
+    // Restore guest registers from the provided state.
     mov     rax, [r15 + registers_rax]
     mov     rbx, [r15 + registers_rbx]
     mov     rcx, [r15 + registers_rcx]
@@ -168,6 +165,7 @@ launch_vm:
     mov     r11, [r15 + registers_r11]
     mov     r12, [r15 + registers_r12]
 
+    // Restore guest XMM registers.
     movdqa  xmm0, [r15 + registers_xmm0]
     movdqa  xmm1, [r15 + registers_xmm1]
     movdqa  xmm2, [r15 + registers_xmm2]
@@ -185,25 +183,27 @@ launch_vm:
     movdqa  xmm14, [r15 + registers_xmm14]
     movdqa  xmm15, [r15 + registers_xmm15]
 
-    // Set VMCS_HOST_RSP to point to `stack_contents` right after host general-purpose registers.
-    mov     r14, 0x6C14 ;// VMCS_HOST_RSP
+    // Prepare VMCS for VM launch: set HOST_RSP and HOST_RIP.
+    mov     r14, 0x6C14 // VMCS_HOST_RSP
     vmwrite r14, rsp
-
-    // Set VMCS_HOST_RIP to point to `vmexit_stub`, so when a VM-exit occurs, it will be handled.
     lea     r13, [rip + .Vmexit]
-    mov     r14, 0x6C16 ;// VMCS_HOST_RIP
+    mov     r14, 0x6C16 // VMCS_HOST_RIP
     vmwrite r14, r13
 
+    // Restore additional guest registers.
     mov     r13, [r15 + registers_r13]
     mov     r14, [r15 + registers_r14]
     mov     r15, [r15 + registers_r15]
 
-    // Attempt to launch the VM with vmlaunch.
+    // Launch the VM.
     vmlaunch
     call vmlaunch_failed
 
 .Vmexit:
-    xchg    r15, [rsp]  ;// r15 <= `registers` / [rsp] <= guest r15
+    // Exchange the top of stack with r15 to get pointer to guest registers.
+    xchg    r15, [rsp]
+
+    // Save guest general-purpose registers to their respective locations.
     mov     [r15 + registers_rax], rax
     mov     [r15 + registers_rbx], rbx
     mov     [r15 + registers_rcx], rcx
@@ -219,6 +219,7 @@ launch_vm:
     mov     [r15 + registers_r13], r13
     mov     [r15 + registers_r14], r14
 
+    // Save guest XMM registers.
     movdqa  [r15 + registers_xmm0], xmm0
     movdqa  [r15 + registers_xmm1], xmm1
     movdqa  [r15 + registers_xmm2], xmm2
@@ -239,7 +240,7 @@ launch_vm:
     // Set rcx to point to the saved guest registers for `vmexit_handler`.
     mov rcx, r15
 
-    // Restore r15 but keep registers at the top of stack without changing the stack pointer since the next vmexit will be in same location
+    // Temporarily save and restore r15, keeping guest registers pointer on stack.
     mov     rax, [rsp]
     xchg    r15, [rsp]
     mov     [rcx + registers_r15], rax
@@ -250,13 +251,13 @@ launch_vm:
     // Call the VM exit handler.
     call vmexit_handler
 
-    // Restore stack pointer.
+    // Restore stack pointer after VM exit handling.
     add rsp, 0x20
 
-    // get guest registers and put them in r15
+    // Retrieve pointer to guest registers for restoration.
     mov     r15, [rsp]
 
-    ;// Restore guest general purpose registers from `registers`.
+    // Restore guest registers for next VM entry.
     mov     rax, [r15 + registers_rax]
     mov     rbx, [r15 + registers_rbx]
     mov     rcx, [r15 + registers_rcx]
@@ -292,7 +293,10 @@ launch_vm:
     // Do this last to avoid overwriting r15.
     mov     r15, [r15 + registers_r15]
 
+    // Attempt to resume the guest virtual machine.
     vmresume
+
+    // If VMRESUME fails, handle the failure.
     call vmresume_failed
 "#
 );
