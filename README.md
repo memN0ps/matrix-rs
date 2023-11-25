@@ -2,39 +2,23 @@
 
 Blog: https://memn0ps.github.io/hypervisor-development-in-rust-part-1/
 
-This project is a Rust-based research hypervisor for Intel VT-x and AMD-v (SVM) virtualization, designed to be lightweight and focused on studying the core concepts. While it currently lacks a memory management unit (MMU) for virtualization using Intel's Extended Page Tables (EPT) and AMD's Nested Page Tables (NPT), these features are planned for future implementation.
+This project is a Rust-based research hypervisor (type-2) for Intel VT-x and AMD-v (SVM) virtualization, designed to be lightweight and focused on studying the core concepts. While it currently lacks a memory management unit (MMU) for virtualization using Intel's Extended Page Tables (EPT) and AMD's Nested Page Tables (NPT), these features are planned for future implementation.
 
-Big thanks to [@daax_rynd](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/), [@Intel80x86](https://github.com/SinaKarvandi/Hypervisor-From-Scratch/), [@not_matthias](https://github.com/not-matthias/amd_hypervisor), and [@standa_t](https://github.com/tandasat/Hypervisor-101-in-Rust) for their awesome blogs and code. They've been incredibly helpful!
+Big thanks to [Daax Rynd (@daax_rynd)](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/), [Sina Karvandi (@Intel80x86)](https://github.com/SinaKarvandi/Hypervisor-From-Scratch/), [Matthias (@not_matthias)](https://github.com/not-matthias/amd_hypervisor), [Satoshi Tanda (@standa_t)](https://github.com/tandasat/Hypervisor-101-in-Rust), and [Drew (@drewbervisor)](https://github.com/drew-gpf) for their help, awesome blogs, and code. Their insights have been incredibly helpful!
 
-I was inspired to start this project after seeing [@not_matthias](https://github.com/not-matthias/amd_hypervisor)'s project and reading some insightful articles by [Secret Club](https://secret.club/) and the unveiling of [DarthTon's HyperBone](https://github.com/DarthTon/HyperBone) (based on the legendary [Alex Ionescu's](https://github.com/ionescu007/SimpleVisor) version) on [UnknownCheats](https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html). Here are some of them if you want to check them out:
-
-- [BattlEye Hypervisor Detection](https://secret.club/2020/01/12/battleye-hypervisor-detection.html)
-- [BottlEye](https://secret.club/2020/07/06/bottleye.html)
-- [How Anti-Cheats Detect System Emulation](https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html)
-
-I've also been learning a lot by preparing for the legendary [Satoshi Tanda's Hypervisor Development for Security Researchers training](https://tandasat.github.io/Hypervisor_Development_for_Security_Researchers.html) and exploring other projects and blogs, like [BluePill by @_xeroxz (IDontCode)](https://git.back.engineering/_xeroxz/bluepill) and [AMD-V Hypervisor Development](https://blog.back.engineering/04/08/2022/) by [Back Engineering Labs](https://back.engineering/). They've provided lots of inspiration and knowledge, encouraging me to dive deeper into this field.
+I was inspired to start this project after discovering [@not_matthias](https://github.com/not-matthias/amd_hypervisor)'s work and diving into insightful articles by [Secret Club](https://secret.club/) such as [BattlEye Hypervisor Detection](https://secret.club/2020/01/12/battleye-hypervisor-detection.html), [BottlEye](https://secret.club/2020/07/06/bottleye.html), and [How Anti-Cheats Detect System Emulation](https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html). Moreover, the unveiling of [DarthTon's HyperBone](https://github.com/DarthTon/HyperBone) on [UnknownCheats](https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html), based on a version by the legendary [Alex Ionescu](https://github.com/ionescu007/SimpleVisor), was a huge inspiration.
 
 ## Features
 
-### **Current Developments:**
-- **Type-2 Intel VT-x Hypervisor:**
-   - **Status:** Under Development.
-   - **In Progress:**
-     - Extended Page Tables (EPT).
-     - Various bug fixes.
-   - **Objective:** Actively working to support Intel VT-x virtualization technology.
-
-### **Planned Developments:**
-- **Type-2 AMD-v (SVM) Hypervisor:**
-   - **Status:** Integration planned for future development.
-   - **Objective:** To extend support to AMD-v (SVM) virtualization technology.
-
-### **Overall Goal:**
-   - To combine the above features and create a comprehensive hypervisor solution that supports both Intel VT-x and AMD SVM virtualization technologies.
-
-## Important Notes
-
-- Implementing your own IDT, GDT, and page tables is crucial when developing a hypervisor, especially to protect against potentially malicious guests. [Learn More](https://www.unknowncheats.me/forum/2779560-post4.html). This task is on the TODO list and will be addressed at the end of the development process.
+- **CPUID Vmexit Management**: Efficient handling of CPUID vmexits for optimized virtualization.
+- **RDMSR & WRMSR Vmexits with Synthetic MSR Support**: Supports Read and Write operations for Model-Specific Registers, including handling of synthetic MSRs.
+- **INVD Vmexit Support**: Implements INVD vmexits to manage cache invalidation.
+- **XSETBV Vmexit Handling**: Capable of managing Extended State Save/Restore (xsetbv) vmexits.
+- **GDT and IDT Creation**: Custom implementation of the Global Descriptor Table and Interrupt Descriptor Table is in progress. Implementing your own IDT and GDT is vital in hypervisor development, particularly for safeguarding against malicious guests. [Learn more about this](https://www.unknowncheats.me/forum/2779560-post4.html), courtesy of insights from [namazso](https://github.com/namazso). The development of Page Tables is also planned, with these tasks being prioritized at the end of the development process.
+- **Future Development**:
+  - **VM Exit Instruction Handling**: Planning to handle instructions that trigger VM Exits, including GETSEC and VMX instructions.
+  - **Extended Page Tables (EPT)**: Preparing to implement EPT for advanced memory management.
+  - **Type-2 AMD-v (SVM) Hypervisor Support**: Developing a Type-2 AMD-v (SVM) Hypervisor.
 
 ## Install
 
@@ -212,7 +196,7 @@ sc.exe start matrix
 
 ## Acknowledgments & References
 
-This project has been inspired, influenced, and supported by numerous individuals and resources. A huge shout-out and thank you to everyone listed below:
+Big thanks to the amazing people and resources that have shaped this project. A special shout-out to everyone listed below. While I didn't use all these resources in my work, they've been goldmines of information, super helpful for anyone diving into hypervisor development, including me.
 
 ### Tutorials & Articles
 
