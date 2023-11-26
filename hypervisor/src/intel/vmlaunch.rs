@@ -186,7 +186,7 @@ launch_vm:
     // Prepare VMCS for VM launch: set HOST_RSP and HOST_RIP.
     mov     r14, 0x6C14 // VMCS_HOST_RSP
     vmwrite r14, rsp
-    lea     r13, [rip + .Vmexit]
+    lea     r13, [rip + vmexit_stub]
     mov     r14, 0x6C16 // VMCS_HOST_RIP
     vmwrite r14, r13
 
@@ -199,7 +199,8 @@ launch_vm:
     vmlaunch
     call vmlaunch_failed
 
-.Vmexit:
+.global vmexit_stub
+vmexit_stub:
     // Exchange the top of stack with r15 to get pointer to guest registers.
     xchg    r15, [rsp]
 
