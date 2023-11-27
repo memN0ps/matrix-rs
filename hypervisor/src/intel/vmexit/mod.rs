@@ -13,6 +13,7 @@ use {
                 cpuid::handle_cpuid,
                 invd::handle_invd,
                 msr::{handle_msr_access, MsrAccessType},
+                rdtsc::handle_rdtsc,
                 xsetbv::handle_xsetbv,
             },
             vmlaunch::GuestRegisters,
@@ -24,6 +25,7 @@ use {
 pub mod cpuid;
 pub mod invd;
 pub mod msr;
+pub mod rdtsc;
 pub mod xsetbv;
 
 /// Represents the type of VM exit.
@@ -91,8 +93,9 @@ impl VmExit {
             VmxBasicExitReason::Cpuid => handle_cpuid(guest_registers),
             VmxBasicExitReason::Rdmsr => handle_msr_access(guest_registers, MsrAccessType::Read),
             VmxBasicExitReason::Wrmsr => handle_msr_access(guest_registers, MsrAccessType::Write),
-            VmxBasicExitReason::Xsetbv => handle_xsetbv(guest_registers),
             VmxBasicExitReason::Invd => handle_invd(guest_registers),
+            VmxBasicExitReason::Rdtsc => handle_rdtsc(guest_registers),
+            VmxBasicExitReason::Xsetbv => handle_xsetbv(guest_registers),
             _ => return Err(HypervisorError::UnhandledVmExit),
         };
 
