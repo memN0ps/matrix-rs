@@ -45,7 +45,7 @@ script = '''
 '''
 
 [tasks.sign]
-# Sign the driver file. Ensure the certificate is in place or create it if not existing.
+# Sign the .sys driver file and .cat file located in the package directory. Ensure the certificate is in place or create it if not existing.
 dependencies = ["rename-dll-to-sys", "inf2cat", "infverif"]
 script = '''
 call "%VC_BUILD_DIR%" || exit /b
@@ -54,7 +54,6 @@ if not exist DriverCertificate.cer (
 ) else (
   echo Certificate already exists.
 )
-# Sign the .sys and .cat file located in the package directory.
 signtool sign /a /v /s PrivateCertStore /n DriverCertificate /fd certHash /t http://timestamp.digicert.com "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.sys"
 signtool sign /a /v /s PrivateCertStore /n DriverCertificate /fd certHash /t http://timestamp.digicert.com "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.cat"
 '''
