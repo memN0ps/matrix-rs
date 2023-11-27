@@ -4,17 +4,18 @@ Blog: https://memn0ps.github.io/hypervisor-development-in-rust-part-1/
 
 This project is a Rust-based research hypervisor (type-2) for Intel VT-x and AMD-v (SVM) virtualization, designed to be lightweight and focused on studying the core concepts. While it currently lacks a memory management unit (MMU) for virtualization using Intel's Extended Page Tables (EPT) and AMD's Nested Page Tables (NPT), these features are planned for future implementation.
 
-Big thanks to [Daax Rynd (@daax_rynd)](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/), [Sina Karvandi (@Intel80x86)](https://github.com/SinaKarvandi/Hypervisor-From-Scratch/), [Matthias (@not_matthias)](https://github.com/not-matthias/amd_hypervisor), [Satoshi Tanda (@standa_t)](https://github.com/tandasat/Hypervisor-101-in-Rust), and [Drew (@drewbervisor)](https://github.com/drew-gpf) for their help, awesome blogs, and code.
+Special thanks to [Daax Rynd (@daax_rynd)](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/), [Carl Schou (@vmcall)](https://github.com/vmcall), [Satoshi Tanda (@standa_t)](https://github.com/tandasat/Hypervisor-101-in-Rust), [Drew (@drewbervisor)](https://github.com/drew-gpf), [Sina Karvandi (@Intel80x86)](https://github.com/SinaKarvandi/Hypervisor-From-Scratch/), and [Matthias (@not_matthias)](https://github.com/not-matthias/amd_hypervisor) for their help, awesome blogs, and code.
 
-I was inspired to start this project after discovering [@not_matthias](https://github.com/not-matthias/amd_hypervisor)'s work and diving into a few of the many fantastic articles by [Secret Club](https://secret.club/) such as [BattlEye Hypervisor Detection](https://secret.club/2020/01/12/battleye-hypervisor-detection.html), [BottlEye](https://secret.club/2020/07/06/bottleye.html), and [How Anti-Cheats Detect System Emulation](https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html). Moreover, the release of [DarthTon's HyperBone](https://github.com/DarthTon/HyperBone) on [UnknownCheats](https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html), based on a version by the legendary [Alex Ionescu](https://github.com/ionescu007/SimpleVisor), was a huge inspiration. Working on this project has been a fantastic learning journey, perfectly setting me up for Satoshi Tanda's well-known [Satoshi Tanda's Hypervisor Development for Security Researchers](https://tandasat.github.io/Hypervisor_Development_for_Security_Researchers.html) training.
+I was inspired to start this project after discovering [@not_matthias](https://github.com/not-matthias/amd_hypervisor)'s work and diving into a few of the many fantastic articles by [Secret Club](https://secret.club/) ([@vmcall](https://github.com/vmcall)) such as [BattlEye Hypervisor Detection](https://secret.club/2020/01/12/battleye-hypervisor-detection.html), [BottlEye](https://secret.club/2020/07/06/bottleye.html), and [How Anti-Cheats Detect System Emulation](https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html). Moreover, the release of [DarthTon's HyperBone](https://github.com/DarthTon/HyperBone) on [UnknownCheats](https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html), based on a version by the legendary [Alex Ionescu](https://github.com/ionescu007/SimpleVisor), was a huge inspiration. Working on this project has been a fantastic learning journey, perfectly setting me up for Satoshi Tanda's well-known [Satoshi Tanda's Hypervisor Development for Security Researchers](https://tandasat.github.io/Hypervisor_Development_for_Security_Researchers.html) training.
 
 ## Features
 
 - **CPUID Vmexit Management**: Efficient handling of CPUID vmexits for optimized virtualization.
 - **RDMSR & WRMSR Vmexits with Synthetic MSR Support**: Supports Read and Write operations for Model-Specific Registers, including handling of synthetic MSRs.
 - **INVD Vmexit Support**: Implements INVD vmexits to manage cache invalidation.
+- **RDTSC Vmexit Handling**: Manages the RDTSC instruction vmexits, ensuring accurate time-stamp counter values for the guest.
 - **XSETBV Vmexit Handling**: Capable of managing Extended State Save/Restore (xsetbv) vmexits.
-- **GDT and IDT Creation**: Custom implementation of the Global Descriptor Table and Interrupt Descriptor Table has been completed. Implementing your own IDT and GDT is vital in hypervisor development, particularly for safeguarding against malicious guests. [Learn more about this](https://www.unknowncheats.me/forum/2779560-post4.html), courtesy of this post from [namazso](https://github.com/namazso). The development of Page Tables is also planned, with these tasks being prioritized at the end of the development process.
+- **GDT and IDT Creation**: Custom implementation of the Global Descriptor Table and Interrupt Descriptor Table has been completed. Implementing your own IDT and GDT is vital in hypervisor development, particularly for safeguarding against malicious guests. [Learn more about this](https://www.unknowncheats.me/forum/2779560-post4.html), courtesy of this post from [@namazso](https://github.com/namazso). The development of Page Tables is also planned, with these tasks being prioritized at the end of the development process.
 - **Future Development**:
   - **VM Exit Instruction Handling**: Planning to handle instructions that trigger VM Exits, including GETSEC and VMX instructions (INVEPT, INVVPID, VMCALL, VMCLEAR, VMLAUNCH, VMPTRLD, VMPTRST, VMRESUME, VMXOFF, and VMXON).
   - **Extended Page Tables (EPT)**: Preparing to implement EPT for advanced memory management.
@@ -204,7 +205,7 @@ Big thanks to the amazing people and resources that have shaped this project. A 
   - [7 Days to Virtualization: A Series on Hypervisor Development](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/)
   - [MMU Virtualization via Intel EPT](https://revers.engineering/mmu-virtualization-via-intel-ept-index/)
 - **Sina Karvandi**: [Hypervisor From Scratch](https://rayanfam.com/tutorials/)
-- **Secret Club**:
+- **Secret Club [@vmcall](https://github.com/vmcall)**:
   - [BottlEye](https://secret.club/2020/07/06/bottleye.html)
   - [How Anti-Cheats Detect System Emulation](https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html)
   - [BattlEye Hypervisor Detection](https://secret.club/2020/01/12/battleye-hypervisor-detection.html)
@@ -252,14 +253,15 @@ Big thanks to the amazing people and resources that have shaped this project. A 
 - [UnKnoWnCheaTs](https://www.unknowncheats.me/)
 - [Guided Hacking](https://guidedhacking.com/)
 
-### Special Thanks
+### Thanks
 
 - [Daax Rynd (@daaximus / @daax_rynd)](https://github.com/daaximus)
+- [Carl Schou (@vmcall)](https://github.com/vmcall)
 - [Satoshi Tanda (@standa_t)](https://github.com/tandasat/Hypervisor-101-in-Rust)
 - [Drew (@drewbervisor)](https://github.com/drew-gpf)
 - [@namazso](https://github.com/namazso)
 - [Sina Karvandi (@SinaKarvandi / @Intel80x86)](https://github.com/SinaKarvandi)
-- [@not_matthias](https://twitter.com/not_matthias)
+- [Matthias (@not_matthias)](https://twitter.com/not_matthias)
 - [@felix-rs / @joshuа](https://github.com/felix-rs)
 - `@jessiep_ aka Jess`
 - [@rmccrystal](https://github.com/rmccrystal)
