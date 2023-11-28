@@ -42,9 +42,9 @@ This project is a Rust-based research hypervisor (type-2) for Intel VT-x virtual
 - **Windows Boot Debugging**: Enable debugging for key Windows components - Boot Manager, Boot Loader, and Kernel. This setup triggers a debugger break at three critical startup stages. For detailed instructions, see [Windows Hardware Drivers documentation](https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/bcdedit--bootdebug):
 
 ```powershell
-  bcdedit.exe /bootdebug {bootmgr} on
-  bcdedit.exe /bootdebug on
-  bcdedit.exe /debug on
+bcdedit.exe /bootdebug {bootmgr} on
+bcdedit.exe /bootdebug on
+bcdedit.exe /debug on
 ```
 
 ### Network Debugging with Windbg
