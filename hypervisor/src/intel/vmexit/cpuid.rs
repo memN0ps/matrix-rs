@@ -108,6 +108,9 @@ pub fn handle_cpuid(guest_registers: &mut GuestRegisters) -> ExitType {
             cpuid_result.ecx = 0x00000000; // Reserved field set to zero.
             cpuid_result.edx = 0x00000000; // Reserved field set to zero.
         },
+        leaf if leaf == CpuidLeaf::ExtendedFeatureInformation as u32 => {
+            log::info!("CPUID leaf 7 detected (Extended Feature Information).");
+        },
         _ => { /* Pass through other CPUID leaves unchanged. */ }
     }
 
