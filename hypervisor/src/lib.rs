@@ -22,7 +22,6 @@ use {
     alloc::vec::Vec,
 };
 
-pub mod amd;
 pub mod error;
 pub mod intel;
 pub mod utils;
