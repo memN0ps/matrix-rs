@@ -1,6 +1,6 @@
 # Windows Blue Pill Type-2 Hypervisor in Rust (Codename: Matrix)
 
-![Build Status](https://img.shields.io/github/workflow/status/memN0ps/hypervisor-rs/Rust)
+![Build Status](https://github.com/memN0ps/hypervisor-rs/actions/workflows/github-actions.yml/badge.svg)
 ![License](https://img.shields.io/github/license/memN0ps/hypervisor-rs)
 ![Issues](https://img.shields.io/github/issues/memN0ps/hypervisor-rs)
 ![Forks](https://img.shields.io/github/forks/memN0ps/hypervisor-rs)
