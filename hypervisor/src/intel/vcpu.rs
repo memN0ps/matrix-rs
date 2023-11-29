@@ -12,6 +12,8 @@ use {
         utils::{capture::CONTEXT, processor::is_virtualized},
     },
     alloc::boxed::Box,
+    core::mem::MaybeUninit,
+    wdk_sys::ntddk::RtlCaptureContext,
 };
 
 /// Represents a Virtual CPU (VCPU) and its associated operations.
@@ -54,7 +56,11 @@ impl Vcpu {
 
         // Capture the current processor's context. The Guest will resume from this point since we capture and write this context to the guest state for each vcpu.
         log::info!("Capturing context");
-        let context = CONTEXT::capture();
+        let mut context: MaybeUninit<CONTEXT> = MaybeUninit::uninit();
+
+        unsafe { RtlCaptureContext(context.as_mut_ptr() as _) };
+
+        let context = unsafe { context.assume_init() };
 
         // Determine if we're operating as the Host (root) or Guest (non-root). Only proceed with system virtualization if operating as the Host.
         if !is_virtualized() {

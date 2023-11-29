@@ -2,7 +2,6 @@
 #![allow(non_camel_case_types)]
 
 use static_assertions::const_assert_eq;
-use {core::mem::MaybeUninit, wdk_sys::ntddk::RtlCaptureContext};
 
 #[repr(C)]
 #[repr(align(16))]
@@ -114,14 +113,6 @@ pub struct CONTEXT {
 }
 
 impl CONTEXT {
-    pub fn capture() -> Self {
-        let mut context: MaybeUninit<CONTEXT> = MaybeUninit::uninit();
-
-        unsafe { RtlCaptureContext(context.as_mut_ptr() as _) };
-
-        unsafe { context.assume_init() }
-    }
-
     /// Outputs the processor's context for debugging purposes.
     pub fn dump_context(context: &CONTEXT) {
         /*
