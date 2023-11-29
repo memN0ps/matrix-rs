@@ -3,7 +3,8 @@
 
 use {
     crate::{
-        intel::{vmexit::ExitType, vmlaunch::GuestRegisters},
+        intel::vmexit::ExitType,
+        utils::capture::GuestRegisters,
         utils::instructions::{cr4, cr4_write, xsetbv},
     },
     x86::controlregs::{Cr4, Xcr0},

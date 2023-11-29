@@ -16,8 +16,8 @@ use {
                 rdtsc::handle_rdtsc,
                 xsetbv::handle_xsetbv,
             },
-            vmlaunch::GuestRegisters,
         },
+        utils::capture::GuestRegisters,
     },
     x86::vmx::vmcs::{guest, ro},
 };

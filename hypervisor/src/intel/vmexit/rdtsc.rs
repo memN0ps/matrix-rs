@@ -3,7 +3,7 @@
 //! information is provided to the guest while maintaining the integrity of the hypervisor.
 
 use {
-    crate::intel::{vmexit::ExitType, vmlaunch::GuestRegisters},
+    crate::{intel::vmexit::ExitType, utils::capture::GuestRegisters},
     x86::time::rdtsc,
 };
 

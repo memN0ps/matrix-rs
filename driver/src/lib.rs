@@ -24,9 +24,7 @@ use {
     hypervisor::Hypervisor,
     log::LevelFilter,
     log::{self},
-    wdk_sys::{
-        DRIVER_OBJECT, NTSTATUS, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
-    },
+    wdk_sys::{DRIVER_OBJECT, NTSTATUS, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL},
 };
 
 /// The main entry point for the driver.

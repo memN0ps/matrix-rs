@@ -1,6 +1,7 @@
 //! This module provides utility functions for processor-related operations.
 
 use {
+    crate::utils::nt::ZwYieldExecution,
     core::mem::MaybeUninit,
     wdk_sys::{
         ntddk::{
@@ -12,7 +13,26 @@ use {
     },
 };
 
-use crate::utils::nt::ZwYieldExecution;
+/// Atomic bitset used to track which processors have been virtualized.
+static VIRTUALIZED_BITSET: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+/// Determines if the current processor is already virtualized.
+///
+/// # Returns
+///
+/// `true` if the processor is virtualized, otherwise `false`.
+pub fn is_virtualized() -> bool {
+    let bit = 1 << current_processor_index();
+
+    VIRTUALIZED_BITSET.load(core::sync::atomic::Ordering::Relaxed) & bit != 0
+}
+
+/// Marks the current processor as virtualized.
+pub fn set_virtualized() {
+    let bit = 1 << current_processor_index();
+
+    VIRTUALIZED_BITSET.fetch_or(bit, core::sync::atomic::Ordering::Relaxed);
+}
 
 /// Returns the number of active logical processors in a specified group in a multiprocessor system or in the entire system.
 pub fn processor_count() -> u32 {

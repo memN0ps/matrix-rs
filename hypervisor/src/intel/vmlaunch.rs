@@ -3,70 +3,11 @@
 //! This module provides structures and functions for interacting with Intel's VMX
 //! virtualization extensions. It offers abstractions for the guest's register state,
 //! VM-entry, VM-exit, and handling VMX-specific instructions.
-//!
-//! Main components include:
-//! - `GuestRegisters`: Represents the state of guest registers during a VM exit.
-//! - VMX assembly integrations: Assembly routines to interface directly with VMX instructions.
-//!
-//! The module is designed to be used in conjunction with a broader hypervisor framework.
-//!
-//! Credits: Thanks to @daaximus (daax), @drewbervisor (drew) and @tandasat (Satoshi Tanda) <3
 
-use crate::intel::support::vmread;
-use crate::intel::vmerror::VmInstructionError;
-use {super::vmexit::VmExit, static_assertions::const_assert_eq};
-
-/// Represents the state of guest registers during a VM exit.
-///
-/// This structure is used to capture the state of all general-purpose registers,
-/// of a virtualized guest when a VM exit occurs.
-/// It allows the hypervisor to inspect or modify the guest's state as necessary
-/// before resuming guest execution.
-///
-/// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4.1 Guest Register State
-#[repr(C, align(16))]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct GuestRegisters {
-    pub rax: u64,
-    pub rbx: u64,
-    pub rcx: u64,
-    pub rdx: u64,
-    pub rdi: u64,
-    pub rsi: u64,
-    pub rbp: u64,
-    pub r8: u64,
-    pub r9: u64,
-    pub r10: u64,
-    pub r11: u64,
-    pub r12: u64,
-    pub r13: u64,
-    pub r14: u64,
-    pub r15: u64,
-    pub rip: u64,
-    pub rsp: u64,
-    pub rflags: u64,
-    // XMM registers (each represented as two u64 for 16-byte alignment)
-    pub xmm0: [u64; 2],
-    pub xmm1: [u64; 2],
-    pub xmm2: [u64; 2],
-    pub xmm3: [u64; 2],
-    pub xmm4: [u64; 2],
-    pub xmm5: [u64; 2],
-    pub xmm6: [u64; 2],
-    pub xmm7: [u64; 2],
-    pub xmm8: [u64; 2],
-    pub xmm9: [u64; 2],
-    pub xmm10: [u64; 2],
-    pub xmm11: [u64; 2],
-    pub xmm12: [u64; 2],
-    pub xmm13: [u64; 2],
-    pub xmm14: [u64; 2],
-    pub xmm15: [u64; 2],
-}
-const_assert_eq!(
-    core::mem::size_of::<GuestRegisters>(),
-    0x190 /* 400 bytes */
-);
+use crate::{
+    intel::{support::vmread, vmerror::VmInstructionError, vmexit::VmExit},
+    utils::capture::GuestRegisters,
+};
 
 extern "C" {
     /// Launches the VM using VMX instructions.

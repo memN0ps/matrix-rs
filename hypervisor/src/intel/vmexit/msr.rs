@@ -2,7 +2,10 @@
 //! read and write operations. It ensures that guest MSR accesses are properly
 //! intercepted and handled, with support for injecting faults for unauthorized accesses.
 
-use crate::intel::{events::EventInjection, vmexit::ExitType, vmlaunch::GuestRegisters};
+use crate::{
+    intel::{events::EventInjection, vmexit::ExitType},
+    utils::capture::GuestRegisters,
+};
 
 /// Enum representing the type of MSR access.
 ///

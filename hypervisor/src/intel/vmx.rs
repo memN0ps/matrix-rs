@@ -11,15 +11,18 @@ use {
         error::HypervisorError,
         intel::{
             descriptor::DescriptorTables,
-            vmlaunch::{launch_vm, GuestRegisters},
+            vmlaunch::launch_vm,
             vmstack::{VmStack, STACK_CONTENTS_SIZE},
         },
-        utils::alloc::{KernelAlloc, PhysicalAllocator},
+        utils::capture::GuestRegisters,
+        utils::{
+            alloc::{KernelAlloc, PhysicalAllocator},
+            capture::CONTEXT,
+        },
     },
 
     // External crate usages
     alloc::boxed::Box,
-    wdk_sys::_CONTEXT,
 };
 
 /// Represents the VMX structure with essential components for VMX virtualization.
@@ -122,7 +125,7 @@ impl Vmx {
     /// * `context` - The current execution context.
     ///
     /// Returns a `Result` indicating the success or failure of the setup process.
-    pub fn setup_virtualization(&mut self, context: &_CONTEXT) -> Result<(), HypervisorError> {
+    pub fn setup_virtualization(&mut self, context: &CONTEXT) -> Result<(), HypervisorError> {
         log::info!("Virtualization setup");
 
         Vmxon::setup(&mut self.vmxon_region)?;
