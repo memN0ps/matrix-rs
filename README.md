@@ -101,6 +101,7 @@ Big thanks to the amazing people and resources that have shaped this project. A 
 Special thanks to:
 - [Daax Rynd](https://revers.engineering/)
 - [Satoshi Tanda](https://github.com/tandasat)
+- [Drew (@drew)](https://github.com/drew-gpf)
 - [Matthias @not-matthias](https://github.com/not-matthias/)
 - [@felix-rs / @joshuа](https://github.com/felix-rs)
 - `@jessiep_ aka Jess`
