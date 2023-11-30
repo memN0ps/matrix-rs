@@ -3,6 +3,8 @@
 //! This module provides structures and functions for interacting with Intel's VMX
 //! virtualization extensions. It offers abstractions for the guest's register state,
 //! VM-entry, VM-exit, and handling VMX-specific instructions.
+//!
+//! Credits to Satoshi (https://github.com/tandasat), Daax (https://github.com/daaximus), and Drew (https://github.com/drew-gpf)
 
 use crate::{
     intel::{support::vmread, vmerror::VmInstructionError, vmexit::VmExit},
