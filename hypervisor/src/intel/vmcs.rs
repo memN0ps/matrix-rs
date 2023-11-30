@@ -4,6 +4,7 @@
 //! is vital for VMX operations on the CPU. It also offers utility functions for
 //! adjusting VMCS entries and displaying VMCS state for debugging purposes.
 
+use crate::utils::nt::NTOSKRNL_CR3;
 use {
     // Internal crate usages
     crate::{
@@ -213,7 +214,7 @@ impl Vmcs {
     #[rustfmt::skip]
     pub fn setup_host_registers_state(context: &CONTEXT, host_descriptor_table: &Box<DescriptorTables, KernelAlloc>) {
         unsafe { vmwrite(vmcs::host::CR0, controlregs::cr0().bits() as u64) };
-        unsafe { vmwrite(vmcs::host::CR3, controlregs::cr3()) };
+        unsafe { vmwrite(vmcs::host::CR3, NTOSKRNL_CR3) };
         unsafe { vmwrite(vmcs::host::CR4, controlregs::cr4().bits() as u64) };
 
         // The RIP/RSP registers are set within `launch_vm`.

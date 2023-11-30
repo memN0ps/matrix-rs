@@ -58,4 +58,7 @@ pub enum HypervisorError {
 
     #[error("Unhandled VmExit")]
     UnhandledVmExit,
+
+    #[error("KeRaiseIrqlToDpcLevel function pointer is null")]
+    KeRaiseIrqlToDpcLevelNull,
 }

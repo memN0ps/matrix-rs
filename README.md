@@ -10,9 +10,10 @@ A lightweight Rust-based type-2 research hypervisor for Intel VT-x, focusing on 
 
 ## Features
 
-- Efficient handling of vmexits: `CPUID`, `RDMSR` & `WRMSR`, `INVD`, `RDTSC`, `XSETBV`.
-- Custom GDT and IDT implementation. [Learn more](https://www.unknowncheats.me/forum/2779560-post4.html).
-- Future Development: VM Exit Instruction Handling including `GETSEC` and VMX instructions (`INVEPT`, `INVVPID`, `VMCALL`, `VMCLEAR`, `VMLAUNCH`, `VMPTRLD`, `VMPTRST`, `VMRESUME`, `VMXOFF`, `VMXON`), and Extended Page Tables (EPT).
+- Efficient handling of VM exits: `CPUID`, `RDMSR` & `WRMSR`, `INVD`, `RDTSC`, `XSETBV`.
+- Custom GDT and IDT implementation. This setup is partially complete, with further development on creating new Page Tables in progress. [Learn more](https://www.unknowncheats.me/forum/2779560-post4.html).
+- The CR3 value from `ntoskrnl.exe` (Directory Base Table) is used for the host.
+- Future Development: Enhanced VM Exit Instruction Handling, including `GETSEC` and VMX instructions (`INVEPT`, `INVVPID`, `VMCALL`, `VMCLEAR`, `VMLAUNCH`, `VMPTRLD`, `VMPTRST`, `VMRESUME`, `VMXOFF`, `VMXON`), and implementation of Extended Page Tables (EPT).
 
 ## Installation
 

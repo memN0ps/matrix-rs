@@ -1,7 +1,7 @@
 //! This module provides utility functions for processor-related operations.
 
+use wdk_sys::NTSTATUS;
 use {
-    crate::utils::nt::ZwYieldExecution,
     core::mem::MaybeUninit,
     wdk_sys::{
         ntddk::{
@@ -12,6 +12,12 @@ use {
         ALL_PROCESSOR_GROUPS, GROUP_AFFINITY, NT_SUCCESS, PROCESSOR_NUMBER,
     },
 };
+
+#[link(name = "ntoskrnl")]
+extern "system" {
+    ///undocumented
+    fn ZwYieldExecution() -> NTSTATUS;
+}
 
 /// Atomic bitset used to track which processors have been virtualized.
 static VIRTUALIZED_BITSET: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);

@@ -17,7 +17,10 @@ use {
     crate::{
         error::HypervisorError,
         intel::vcpu::Vcpu,
-        utils::processor::{processor_count, ProcessorExecutor},
+        utils::{
+            nt::update_ntoskrnl_cr3,
+            processor::{processor_count, ProcessorExecutor},
+        },
     },
     alloc::vec::Vec,
 };
@@ -42,6 +45,9 @@ impl Hypervisor {
         log::info!("Initializing hypervisor");
 
         Self::check_supported_cpu()?;
+
+        // Update NTOSKRNL_CR3 to ensure correct CR3 in case of execution within a user-mode process via DPC.
+        update_ntoskrnl_cr3();
 
         let mut processors: Vec<Vcpu> = Vec::new();
 
