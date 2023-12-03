@@ -89,7 +89,7 @@ Big thanks to the amazing people and resources that have shaped this project. A 
 
 ### Community and Technical Resources
 
-- **[Secret Club](https://github.com/thesecretclub)**: Insights into anti-cheat systems and hypervisor detection:
+- **[Secret Club](https://github.com/thesecretclub)**: Insights into anti-cheat systems and hypervisor detection, which also inspired this project:
   - [System emulation detection](https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html) by [@Daax](https://github.com/daaximus), [@iPower](https://github.com/iPower), [@ajkhoury](https://github.com/ajkhoury), [@drew](https://github.com/drew-gpf)
   - [BattlEye hypervisor detection](https://secret.club/2020/01/12/battleye-hypervisor-detection.html) by [@vmcall](https://github.com/vmcall), [@Daax](https://github.com/daaximus)
 
