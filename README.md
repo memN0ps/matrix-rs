@@ -12,7 +12,7 @@ A lightweight Rust-based type-2 research hypervisor for Intel VT-x, focusing on 
 
 - Efficient handling of VM exits: `CPUID`, `RDMSR` & `WRMSR`, `INVD`, `RDTSC`, `XSETBV`.
 - Custom GDT and IDT implementation. This setup is partially complete, with further development on creating new Page Tables in progress. [Learn more](https://www.unknowncheats.me/forum/2779560-post4.html).
-- The CR3 value from `ntoskrnl.exe` (Directory Base Table) is used for the host.
+- The CR3 value from `ntoskrnl.exe` (Directory Base Table) is used for the host CR3.
 - Future Development: Enhanced VM Exit Instruction Handling, including `GETSEC` and VMX instructions (`INVEPT`, `INVVPID`, `VMCALL`, `VMCLEAR`, `VMLAUNCH`, `VMPTRLD`, `VMPTRST`, `VMRESUME`, `VMXOFF`, `VMXON`), and implementation of Extended Page Tables (EPT).
 
 ## Installation
@@ -84,6 +84,8 @@ Big thanks to the amazing people and resources that have shaped this project. A 
   - [Hypervisor Development for Security Researchers](https://tandasat.github.io/Hypervisor_Development_for_Security_Researchers.html)
   - [Hypervisor 101 in Rust](https://github.com/tandasat/Hypervisor-101-in-Rust)
   - Additional Projects: [Hello-VT-rp](https://github.com/tandasat/Hello-VT-rp), [DdiMon](https://github.com/tandasat/DdiMon), [HyperPlatform](https://github.com/tandasat/HyperPlatform), [MiniVisorPkg](https://github.com/tandasat/MiniVisorPkg)
+ 
+- **[Matthias @not-matthias](https://github.com/not-matthias/amd_hypervisor)**: For his impactful work on the [amd_hypervisor](https://github.com/not-matthias/amd_hypervisor) project, which greatly inspired and influenced this research.
 
 ### Community and Technical Resources
 
