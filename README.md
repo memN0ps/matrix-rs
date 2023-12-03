@@ -6,7 +6,7 @@
 ![Forks](https://img.shields.io/github/forks/memN0ps/hypervisor-rs)
 ![Stars](https://img.shields.io/github/stars/memN0ps/hypervisor-rs)
 
-A lightweight Rust-based type-2 research hypervisor for Intel VT-x, focusing on core virtualization concepts.
+A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hypervisor for Intel VT-x, focused on studying the core concepts of virtualization.
 
 ## Features
 
