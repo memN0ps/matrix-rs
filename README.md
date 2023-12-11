@@ -10,10 +10,16 @@ A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hyperv
 
 ## Features
 
-- Efficient handling of VM exits: `CPUID`, `RDMSR` & `WRMSR`, `INVD`, `RDTSC`, `XSETBV`.
-- Custom GDT and IDT implementation. This setup is partially complete, with further development on creating new Page Tables in progress. [Learn more](https://www.unknowncheats.me/forum/2779560-post4.html).
-- The CR3 value from `ntoskrnl.exe` (Directory Base Table) is used for the host CR3.
-- Future Development: Enhanced VM Exit Instruction Handling, including `GETSEC` and VMX instructions (`INVEPT`, `INVVPID`, `VMCALL`, `VMCLEAR`, `VMLAUNCH`, `VMPTRLD`, `VMPTRST`, `VMRESUME`, `VMXOFF`, `VMXON`), and implementation of Extended Page Tables (EPT).
+- Efficient VM exit handling: `CPUID`, `RDMSR` & `WRMSR`, `INVD`, `RDTSC`, `XSETBV`.
+- Custom GDT and IDT setup, partially complete with ongoing development for new Page Tables. [Learn more](https://www.unknowncheats.me/forum/2779560-post4.html).
+- Uses `ntoskrnl.exe` CR3 (Directory Base Table) for the host CR3 configuration.
+- Integrated Extended Page Tables (EPT) with Memory Type Range Registers (MTRR), ensuring optimal memory mapping and type management.
+
+## Planned Enhancements
+
+- Enhanced VM Exit Instruction Handling, including `EptViolation`, `EptMisconfiguration`, `GETSEC`, and VMX instructions like `INVEPT`, `INVVPID`, `VMCALL`, `VMCLEAR`, `VMLAUNCH`, `VMPTRLD`, `VMPTRST`, `VMRESUME`, `VMXOFF`, `VMXON`.
+- Development of EPT hooks for advanced memory control and monitoring in guest VMs.
+- Resolve a critical issue where the hypervisor causes a `CRITICAL_PROCESS_DIED (ef)` BSOD after running for a minute, aiming to enhance system stability and reliability.
 
 ## Installation
 
@@ -68,7 +74,7 @@ sc.exe start matrix
 
 ## Acknowledgments, References, and Motivation
 
-Big thanks to the amazing people and resources that have shaped this project. A special shout-out to everyone listed below.
+Big thanks to the amazing people and resources that have shaped this project. A special shout-out to everyone listed below. While I didn't use all these resources in my work, they've been goldmines of information, super helpful for anyone diving into hypervisor development, including me.
 
 - **[Daax Rynd (@daaximus)](https://github.com/daaximus), [Aidan Khoury (@ajkhoury)](https://github.com/ajkhoury), [Nick Peterson (@everdox)](https://github.com/everdox)**: For their comprehensive series on hypervisor development:
   - [7 Days to Virtualization](https://revers.engineering/7-days-to-virtualization-a-series-on-hypervisor-development/)
@@ -98,6 +104,10 @@ Big thanks to the amazing people and resources that have shaped this project. A 
   - [Maurice Heumann's (@momo5502)](https://github.com/momo5502/) [Detecting Hypervisor-Assisted Hooking](https://momo5502.com/posts/2022-05-02-detecting-hypervisor-assisted-hooking/)
   - [Guided Hacking's](https://guidedhacking.com/) [x64 Virtual Address Translation](https://www.youtube.com/watch?v=W3o5jYHMh8s) on YouTube
   - [UnKnoWnCheaTs](https://unknowncheats.me/) [forum post](https://www.unknowncheats.me/forum/2779560-post4.html) by [@namazso](https://github.com/namazso)
+  - [RVM1.5](https://github.com/rcore-os/RVM1.5), [Barbervisor](https://github.com/Cisco-Talos/Barbervisor), [rustyvisor](https://github.com/iankronquist/rustyvisor), [orange_slice](https://github.com/gamozolabs/orange_slice), [mythril](https://github.com/mythril-hypervisor/mythril), [uhyve](https://github.com/hermit-os/uhyve), [maystorm](https://github.com/neri/maystorm)
+  - [AMD-V Hypervisor Development by Back Engineering](https://blog.back.engineering/04/08/2022), [bluepill by @_xeroxz](https://git.back.engineering/_xeroxz/bluepill)
+  - [How AetherVisor works under the hood by M3ll0wN1ght](https://mellownight.github.io/AetherVisor)
+  - [Rust library to use x86 (amd64) specific functionality and registers (x86 crate for Rust)](https://github.com/gz/rust-x86)
 
 ### Helpers and Collaborators
 
