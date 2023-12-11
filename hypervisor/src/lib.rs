@@ -114,6 +114,9 @@ impl Hypervisor {
         Self::has_vmx_support()?;
         log::info!("Virtual Machine Extension (VMX) technology is supported");
 
+        Self::has_mtrr()?;
+        log::info!("Memory Type Range Registers (MTRRs) are supported");
+
         Ok(())
     }
 
@@ -145,6 +148,21 @@ impl Hypervisor {
             }
         }
         Err(HypervisorError::VMXUnsupported)
+    }
+
+    /// Check processor support for Memory Type Range Registers (MTRRs).
+    ///
+    /// # Returns
+    ///
+    /// A `Result` which is `Ok` if MTRRs are supported, or `Err` if it's not.
+    fn has_mtrr() -> Result<(), HypervisorError> {
+        let cpuid = x86::cpuid::CpuId::new();
+        if let Some(fi) = cpuid.get_feature_info() {
+            if fi.has_mtrr() {
+                return Ok(());
+            }
+        }
+        Err(HypervisorError::MTRRUnsupported)
     }
 }
 

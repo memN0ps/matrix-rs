@@ -8,6 +8,9 @@ pub enum HypervisorError {
     #[error("VMX is not supported")]
     VMXUnsupported,
 
+    #[error("MTRRs are not supported")]
+    MTRRUnsupported,
+
     #[error("VMX locked off in BIOS")]
     VMXBIOSLock,
 
@@ -61,4 +64,7 @@ pub enum HypervisorError {
 
     #[error("KeRaiseIrqlToDpcLevel function pointer is null")]
     KeRaiseIrqlToDpcLevelNull,
+
+    #[error("Invalid EPT PML4 base address")]
+    InvalidEptPml4BaseAddress,
 }

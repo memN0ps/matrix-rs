@@ -11,6 +11,7 @@ use {
         error::HypervisorError,
         intel::{
             descriptor::DescriptorTables,
+            ept::Ept,
             vmlaunch::launch_vm,
             vmstack::{VmStack, STACK_CONTENTS_SIZE},
         },
@@ -27,7 +28,7 @@ use {
 
 /// Represents the VMX structure with essential components for VMX virtualization.
 ///
-/// This structure contains the VMXON region, VMCS region, MSR bitmap, descriptor tables, and other vital data required for VMX operations.
+/// This structure contains the VMXON region, VMCS region, MSR bitmap, descriptor tables, Host RSP, Guest registers and Extened Page Tables (EPT) required for VMX operations.
 ///
 /// # Memory Allocation Considerations
 ///
@@ -62,6 +63,10 @@ pub struct Vmx {
     /// Allocated using `ExAllocatePool` or `ExAllocatePoolWithTag`.
     pub host_rsp: Box<VmStack, KernelAlloc>,
 
+    /// Virtual address of the guest's extended page-table structure, aligned to a 4-KByte boundary.
+    /// Allocated using `MmAllocateContiguousMemorySpecifyCacheNode`.
+    pub ept: Box<Ept, PhysicalAllocator>,
+
     /// The guest's general-purpose registers state.
     pub guest_registers: GuestRegisters,
 }
@@ -73,6 +78,7 @@ impl Vmx {
     /// It ensures that the memory allocations required for VMX are performed safely and efficiently.
     ///
     /// Returns a `Result` with a boxed `Vmx` instance or an `HypervisorError`.
+    #[rustfmt::skip]
     pub fn new() -> Result<Box<Self>, HypervisorError> {
         log::info!("Setting up VMX");
 
@@ -80,21 +86,19 @@ impl Vmx {
         let vmxon_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let vmcs_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let msr_bitmap = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
-        let mut guest_descriptor_table =
-            unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
-        let mut host_descriptor_table =
-            unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
-
-        // Allocate memory for the host's stack
+        let mut guest_descriptor_table = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
+        let mut host_descriptor_table = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
         let host_rsp = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
-
-        // Initialize the guest's general-purpose registers
+        let mut ept: Box<Ept, PhysicalAllocator> = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let guest_registers = GuestRegisters::default();
 
         // To capture the current GDT and IDT for the guest the order is important so we can setup up a new GDT and IDT for the host.
         // This is done here instead of `setup_virtualization` because it uses a vec to allocate memory for the new GDT
         DescriptorTables::initialize_for_guest(&mut guest_descriptor_table)?;
         DescriptorTables::initialize_for_host(&mut host_descriptor_table)?;
+
+        // This is done here instead of `setup_virtualization` because it uses a vec to allocate memory for the `MtrrRangeDescriptor`
+        ept.build_identity_map();
 
         log::info!("Creating Vmx instance");
 
@@ -105,6 +109,7 @@ impl Vmx {
             guest_descriptor_table,
             host_descriptor_table,
             host_rsp,
+            ept,
             guest_registers,
         };
 
@@ -155,7 +160,7 @@ impl Vmx {
          * - 25.8 VM-ENTRY CONTROL FIELDS
          */
         log::info!("Setting up VMCS Control Fields");
-        Vmcs::setup_vmcs_control_fields(&self.msr_bitmap);
+        Vmcs::setup_vmcs_control_fields(&self.msr_bitmap, &self.ept)?;
         log::info!("VMCS Control Fields successful!");
 
         log::info!("Virtualization setup successful!");

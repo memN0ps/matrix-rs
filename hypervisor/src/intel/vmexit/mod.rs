@@ -11,6 +11,7 @@ use {
             support::vmread,
             vmexit::{
                 cpuid::handle_cpuid,
+                ept::{handle_ept_misconfiguration, handle_ept_violation},
                 invd::handle_invd,
                 msr::{handle_msr_access, MsrAccessType},
                 rdtsc::handle_rdtsc,
@@ -23,6 +24,7 @@ use {
 };
 
 pub mod cpuid;
+pub mod ept;
 pub mod invd;
 pub mod msr;
 pub mod rdtsc;
@@ -71,6 +73,10 @@ impl VmExit {
         guest_registers.rsp = vmread(guest::RSP);
         guest_registers.rflags = vmread(guest::RFLAGS);
 
+        log::info!("Guest RIP: {:#x}", guest_registers.rip);
+        log::info!("Guest RSP: {:#x}", guest_registers.rsp);
+        log::info!("Guest RFLAGS: {:#x}", guest_registers.rflags);
+
         let exit_reason = vmread(ro::EXIT_REASON) as u32;
 
         let Some(basic_exit_reason) = VmxBasicExitReason::from_u32(exit_reason) else {
@@ -95,6 +101,8 @@ impl VmExit {
             VmxBasicExitReason::Wrmsr => handle_msr_access(guest_registers, MsrAccessType::Write),
             VmxBasicExitReason::Invd => handle_invd(guest_registers),
             VmxBasicExitReason::Rdtsc => handle_rdtsc(guest_registers),
+            VmxBasicExitReason::EptViolation => handle_ept_violation(guest_registers),
+            VmxBasicExitReason::EptMisconfiguration => handle_ept_misconfiguration(guest_registers),
             VmxBasicExitReason::Xsetbv => handle_xsetbv(guest_registers),
             _ => return Err(HypervisorError::UnhandledVmExit),
         };

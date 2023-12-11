@@ -4,7 +4,6 @@
 //! is vital for VMX operations on the CPU. It also offers utility functions for
 //! adjusting VMCS entries and displaying VMCS state for debugging purposes.
 
-use crate::utils::nt::NTOSKRNL_CR3;
 use {
     // Internal crate usages
     crate::{
@@ -12,6 +11,7 @@ use {
         intel::{
             controls::{adjust_vmx_controls, VmxControl},
             descriptor::DescriptorTables,
+            ept::Ept,
             msr_bitmap::MsrBitmap,
             segmentation::SegmentDescriptor,
             support::{vmclear, vmptrld, vmread, vmwrite},
@@ -21,6 +21,7 @@ use {
             addresses::PhysicalAddress,
             alloc::{KernelAlloc, PhysicalAllocator},
             capture::CONTEXT,
+            nt::NTOSKRNL_CR3,
         },
     },
 
@@ -253,9 +254,12 @@ impl Vmcs {
     /// # Arguments
     /// * `msr_bitmap` - Bitmap for Model-Specific Registers.
     #[rustfmt::skip]
-    pub fn setup_vmcs_control_fields(msr_bitmap: &Box<MsrBitmap, PhysicalAllocator>) {
+    pub fn setup_vmcs_control_fields(msr_bitmap: &Box<MsrBitmap, PhysicalAllocator>, epts: &Box<Ept, PhysicalAllocator>) -> Result<(), HypervisorError> {
         const PRIMARY_CTL: u64 = (vmcs::control::PrimaryControls::SECONDARY_CONTROLS.bits() | vmcs::control::PrimaryControls::USE_MSR_BITMAPS.bits()) as u64;
-        const SECONDARY_CTL: u64 = (vmcs::control::SecondaryControls::ENABLE_RDTSCP.bits() | vmcs::control::SecondaryControls::ENABLE_XSAVES_XRSTORS.bits() | vmcs::control:: SecondaryControls::ENABLE_INVPCID.bits()) as u64;
+        const SECONDARY_CTL: u64 = (vmcs::control::SecondaryControls::ENABLE_RDTSCP.bits()
+            | vmcs::control::SecondaryControls::ENABLE_XSAVES_XRSTORS.bits()
+            | vmcs::control::SecondaryControls::ENABLE_INVPCID.bits()
+            | vmcs::control::SecondaryControls::ENABLE_EPT.bits()) as u64;
         const ENTRY_CTL: u64 = vmcs::control::EntryControls::IA32E_MODE_GUEST.bits() as u64;
         const EXIT_CTL: u64 = vmcs::control::ExitControls::HOST_ADDRESS_SPACE_SIZE.bits() as u64;
         const PINBASED_CTL: u64 = 0;
@@ -272,6 +276,11 @@ impl Vmcs {
         };
 
         vmwrite(vmcs::control::MSR_BITMAPS_ADDR_FULL, PhysicalAddress::pa_from_va(msr_bitmap.as_ref() as *const _ as _));
+
+        let eptp = Ept::create_eptp_with_wb_and_4lvl_walk(PhysicalAddress::pa_from_va(epts.as_ref() as *const _ as _))?;
+        vmwrite(vmcs::control::EPTP_FULL, eptp);
+
+        Ok(())
     }
 
     /// Retrieves the VMCS revision ID.

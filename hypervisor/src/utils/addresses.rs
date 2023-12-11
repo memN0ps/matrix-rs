@@ -17,6 +17,7 @@ use {
 ///
 /// Provides utility methods to work with physical addresses,
 /// including conversions between physical and virtual addresses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PhysicalAddress(PAddr);
 
 impl PhysicalAddress {
