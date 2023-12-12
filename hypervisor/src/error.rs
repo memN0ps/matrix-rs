@@ -67,4 +67,7 @@ pub enum HypervisorError {
 
     #[error("Invalid EPT PML4 base address")]
     InvalidEptPml4BaseAddress,
+
+    #[error("Failed to resolve memory type for given physical address range")]
+    MemoryTypeResolutionError,
 }

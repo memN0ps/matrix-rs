@@ -102,7 +102,7 @@ impl VmExit {
             VmxBasicExitReason::Invd => handle_invd(guest_registers),
             VmxBasicExitReason::Rdtsc => handle_rdtsc(guest_registers),
             VmxBasicExitReason::EptViolation => handle_ept_violation(guest_registers),
-            VmxBasicExitReason::EptMisconfiguration => handle_ept_misconfiguration(guest_registers),
+            VmxBasicExitReason::EptMisconfiguration => handle_ept_misconfiguration(),
             VmxBasicExitReason::Xsetbv => handle_xsetbv(guest_registers),
             _ => return Err(HypervisorError::UnhandledVmExit),
         };

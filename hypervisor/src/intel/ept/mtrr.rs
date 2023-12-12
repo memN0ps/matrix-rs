@@ -59,21 +59,44 @@ impl Mtrr {
         descriptors
     }
 
-    /// Finds the memory type for a given physical address.
+    /// Finds the memory type for a given physical address range based on the MTRR map.
+    ///
+    /// This method examines the MTRR map to find the appropriate memory type for the
+    /// specified physical address range. It respects the precedence of different memory
+    /// types, with Uncacheable (UC) having the highest precedence.
+    /// If no matching range is found, it defaults to WriteBack.
     ///
     /// # Arguments
     /// * `mtrr_map` - The MTRR map to search within.
-    /// * `address` - The physical address for which to find the memory type.
+    /// * `range` - The physical address range for which to find the memory type.
     ///
     /// # Returns
-    /// The memory type for the given address, or `None` if no matching range is found.
-    pub fn find(mtrr_map: &[MtrrRangeDescriptor], address: u64) -> Option<Mtrr> {
+    /// The memory type for the given address range, or a default of WriteBack if no matching range is found.
+    pub fn find(mtrr_map: &[MtrrRangeDescriptor], range: core::ops::Range<u64>) -> Option<Mtrr> {
+        // Initialize a variable to store the memory type, initially set to None.
+        let mut memory_type: Option<Mtrr> = None;
+
+        // Iterate through each MTRR range descriptor in the map.
         for descriptor in mtrr_map {
-            if address >= descriptor.base_address && address < descriptor.end_address {
-                return Some(descriptor.memory_type);
+            // Check if the provided range falls within the current descriptor's range.
+            if range.start >= descriptor.base_address && range.end <= descriptor.end_address {
+                // Based on the memory type of the descriptor, set the memory type.
+                match descriptor.memory_type {
+                    // If Uncacheable, return immediately as it has the highest precedence.
+                    Mtrr::Uncacheable => return Some(Mtrr::Uncacheable),
+
+                    // For other types, set the memory type if it is not already set.
+                    // Or if it's a less strict type compared to the existing one.
+                    Mtrr::WriteCombining => memory_type = Some(Mtrr::WriteCombining),
+                    Mtrr::WriteThrough => memory_type = Some(Mtrr::WriteThrough),
+                    Mtrr::WriteProtected => memory_type = Some(Mtrr::WriteProtected),
+                    Mtrr::WriteBack => memory_type = Some(Mtrr::WriteBack),
+                }
             }
         }
-        None
+
+        // Return the found memory type or default to WriteBack if no specific type was found.
+        memory_type.or(Some(Mtrr::WriteBack))
     }
 
     /// Calculates the end address of an MTRR memory range.

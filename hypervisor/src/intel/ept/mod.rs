@@ -39,7 +39,10 @@ impl Ept {
     /// This method sets up the EPT such that each guest-physical address
     /// maps directly to the same host-physical address. It also configures
     /// memory types based on the current MTRR (Memory Type Range Register) settings.
-    pub fn build_identity_map(&mut self) {
+    ///
+    /// # Returns
+    /// A `Result<(), HypervisorError>` indicating whether the identity map was built successfully.
+    pub fn build_identity_map(&mut self) -> Result<(), HypervisorError> {
         log::info!("Building identity map for EPT");
         // Retrieve the current MTRR settings.
         // This map is used to determine memory types for each physical address.
@@ -76,7 +79,8 @@ impl Ept {
                     // Iterate over all PTEs within the first PT.
                     for pte in &mut self.pt.0.entries {
                         // Determine the memory type for the current address.
-                        let memory_type = Mtrr::find(&mtrr_map, pa).unwrap_or(Mtrr::Uncacheable);
+                        let memory_type = Mtrr::find(&mtrr_map, pa..pa + PAGE_SIZE as u64)
+                            .ok_or(HypervisorError::MemoryTypeResolutionError)?;
 
                         // Configure the PTE.
                         pte.set_readable(true);
@@ -91,7 +95,8 @@ impl Ept {
                 } else {
                     // Handling for subsequent PDEs.
                     // Configure large pages if used.
-                    let memory_type = Mtrr::find(&mtrr_map, pa).unwrap_or(Mtrr::Uncacheable);
+                    let memory_type = Mtrr::find(&mtrr_map, pa..pa + LARGE_PAGE_SIZE as u64)
+                        .ok_or(HypervisorError::MemoryTypeResolutionError)?;
 
                     pde.set_readable(true);
                     pde.set_writable(true);
@@ -107,6 +112,8 @@ impl Ept {
         }
 
         log::info!("Identity map for EPT built successfully!");
+
+        Ok(())
     }
 
     /// Creates an Extended Page Table Pointer (EPTP) with a Write-Back memory type and a 4-level page walk.

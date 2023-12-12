@@ -102,9 +102,12 @@ static mut HYPERVISOR: Option<Hypervisor> = None;
 /// * `Some(())` if the system was successfully virtualized.
 /// * `None` if there was an error during virtualization.
 fn virtualize() -> Option<()> {
-    let Ok(mut hypervisor) = Hypervisor::new() else {
-        log::info!("Failed to build hypervisor");
-        return None;
+    let mut hypervisor = match Hypervisor::new() {
+        Ok(hypervisor) => hypervisor,
+        Err(err) => {
+            log::info!("Failed to initialize hypervisor: {}", err);
+            return None;
+        }
     };
 
     match hypervisor.virtualize_system() {

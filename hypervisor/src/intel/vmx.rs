@@ -98,7 +98,7 @@ impl Vmx {
         DescriptorTables::initialize_for_host(&mut host_descriptor_table)?;
 
         // This is done here instead of `setup_virtualization` because it uses a vec to allocate memory for the `MtrrRangeDescriptor`
-        ept.build_identity_map();
+        ept.build_identity_map()?;
 
         log::info!("Creating Vmx instance");
 
