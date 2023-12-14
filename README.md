@@ -17,7 +17,7 @@ A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hyperv
 
 ## Planned Enhancements
 
-- Enhanced VM Exit Instruction Handling, including `EptViolation`, `EptMisconfiguration`, `GETSEC`, and VMX instructions like `INVEPT`, `INVVPID`, `VMCALL`, `VMCLEAR`, `VMLAUNCH`, `VMPTRLD`, `VMPTRST`, `VMRESUME`, `VMXOFF`, `VMXON`.
+- Enhanced VM Exit Instruction Handling, including `EptViolation`, `GETSEC`, and VMX instructions like `INVEPT`, `INVVPID`, `VMCALL`, `VMCLEAR`, `VMLAUNCH`, `VMPTRLD`, `VMPTRST`, `VMRESUME`, `VMXOFF`, `VMXON`.
 - Development of EPT hooks for advanced memory control and monitoring in guest VMs.
 - Resolve a critical issue where the hypervisor causes a `CRITICAL_PROCESS_DIED (ef)` BSOD after running for a minute, aiming to enhance system stability and reliability.
 
