@@ -1,6 +1,6 @@
-//! This module provides utilities and structures related to VMX exit reasons
-//! and VM instruction errors. These enumerations are utilized to understand and
-//! handle the various reasons for VM exits and specific VM instruction errors.
+//! This module provides utilities and structures related to VMX exit reasons,
+//! VM instruction errors, and VM Exit Qualification errors. These enumerations are utilized to understand and
+//! handle the various reasons for VM exits, specific VM instruction errors, and specific VM Exit Qualification errors.
 
 /// Represents the basic VM exit reasons.
 ///
@@ -367,5 +367,90 @@ impl core::fmt::Display for VmInstructionError {
             InvalidOperandToInveptInvvpid => "28: Invalid operand to INVEPT/INVVPID.",
         };
         write!(f, "{}", description)
+    }
+}
+
+/// Represents the exit qualification for EPT Violations.
+///
+/// This struct interprets the exit qualification for EPT Violations as described in
+/// Intel® 64 and IA-32 Architectures Software Developer's Manual: Table 28-7. Exit Qualification for EPT Violations (Contd.)
+#[derive(Debug, Clone, Copy)]
+pub struct EptViolationExitQualification {
+    pub data_read: bool,
+    pub data_write: bool,
+    pub instruction_fetch: bool,
+    pub readable: bool,
+    pub writable: bool,
+    pub executable: bool,
+    pub user_mode_executable: bool,
+    pub guest_linear_address_valid: bool,
+    pub guest_physical_access: bool,
+    pub supervisor_user_mode: bool,
+    pub linear_address_read_write: bool,
+    pub linear_address_executable: bool,
+    pub nmi_unblocking_due_to_iret: bool,
+    pub shadow_stack_access: bool,
+    pub supervisor_shadow_stack_control: bool,
+    pub caused_by_guest_paging_verification: bool,
+    pub asynchronous_access: bool,
+    // Reserved for future use.
+}
+
+impl EptViolationExitQualification {
+    /// Constructs an `EptViolationExitQualification` from the raw 64-bit exit qualification value.
+    pub fn from_exit_qualification(value: u64) -> Self {
+        EptViolationExitQualification {
+            data_read: value & (1 << 0) != 0,
+            data_write: value & (1 << 1) != 0,
+            instruction_fetch: value & (1 << 2) != 0,
+            readable: value & (1 << 3) != 0,
+            writable: value & (1 << 4) != 0,
+            executable: value & (1 << 5) != 0,
+            user_mode_executable: value & (1 << 6) != 0,
+            guest_linear_address_valid: value & (1 << 7) != 0,
+            guest_physical_access: value & (1 << 8) != 0,
+            supervisor_user_mode: value & (1 << 9) != 0,
+            linear_address_read_write: value & (1 << 10) != 0,
+            linear_address_executable: value & (1 << 11) != 0,
+            nmi_unblocking_due_to_iret: value & (1 << 12) != 0,
+            shadow_stack_access: value & (1 << 13) != 0,
+            supervisor_shadow_stack_control: value & (1 << 14) != 0,
+            caused_by_guest_paging_verification: value & (1 << 15) != 0,
+            asynchronous_access: value & (1 << 16) != 0,
+        }
+    }
+}
+
+impl core::fmt::Display for EptViolationExitQualification {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(
+            f,
+            "EPT Violation Exit Qualification: {{ \
+            Data Read: {}, Data Write: {}, Instruction Fetch: {}, Readable: {}, \
+            Writable: {}, Executable: {}, User Mode Executable: {}, \
+            Guest Linear Address Valid: {}, Guest Physical Access: {}, \
+            Supervisor/User Mode: {}, Linear Address Read/Write: {}, \
+            Linear Address Executable: {}, NMI Unblocking due to IRET: {}, \
+            Shadow Stack Access: {}, Supervisor Shadow Stack Control: {}, \
+            Caused by Guest Paging Verification: {}, Asynchronous Access: {} \
+            }}",
+            self.data_read,
+            self.data_write,
+            self.instruction_fetch,
+            self.readable,
+            self.writable,
+            self.executable,
+            self.user_mode_executable,
+            self.guest_linear_address_valid,
+            self.guest_physical_access,
+            self.supervisor_user_mode,
+            self.linear_address_read_write,
+            self.linear_address_executable,
+            self.nmi_unblocking_due_to_iret,
+            self.shadow_stack_access,
+            self.supervisor_shadow_stack_control,
+            self.caused_by_guest_paging_verification,
+            self.asynchronous_access
+        )
     }
 }

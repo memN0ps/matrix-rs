@@ -1,9 +1,15 @@
-use crate::intel::support::vmread;
-use crate::intel::vmexit::ExitType;
-use crate::utils::capture::GuestRegisters;
-use x86::vmx::vmcs;
+use {
+    crate::{
+        error::HypervisorError,
+        intel::{support::vmread, vmerror::EptViolationExitQualification, vmexit::ExitType},
+        utils::capture::GuestRegisters,
+    },
+    x86::vmx::vmcs,
+};
 
 /// Handle VM exits for EPT violations. Violations are thrown whenever an operation is performed on an EPT entry that does not provide permissions to access that page.
+/// 29.3.3.2 EPT Violations
+/// Table 28-7. Exit Qualification for EPT Violations
 pub fn handle_ept_violation(_guest_registers: &mut GuestRegisters) -> ExitType {
     let guest_physical_address = vmread(vmcs::ro::GUEST_PHYSICAL_ADDR_FULL);
     log::info!(
@@ -11,23 +17,40 @@ pub fn handle_ept_violation(_guest_registers: &mut GuestRegisters) -> ExitType {
         guest_physical_address
     );
 
-    let exit_qualification = vmread(vmcs::ro::EXIT_QUALIFICATION);
+    let exit_qualification_value = vmread(vmcs::ro::EXIT_QUALIFICATION);
+
+    // Create an instance of EptViolationExitQualification from the raw exit qualification value
+    let ept_violation_qualification =
+        EptViolationExitQualification::from_exit_qualification(exit_qualification_value);
+
+    // Log the detailed information about the EPT violation
     log::info!(
-        "EPT Violation: Exit Qualification: {:#x}",
-        exit_qualification
+        "Exit Qualification for EPT Violations: {}",
+        ept_violation_qualification
     );
 
-    //ept_handle_page_hook_exit(exit_qualification, guest_physical_address);
+    unsafe {
+        core::arch::asm!("int3");
+    }
 
-    ExitType::IncrementRIP
+    let exit_type =
+        match ept_handle_page_hook_exit(exit_qualification_value, guest_physical_address) {
+            Ok(_) => ExitType::IncrementRIP,
+            Err(e) => {
+                log::error!("Error handling page hook exit: {}", e);
+                ExitType::ExitHypervisor
+            }
+        };
+
+    exit_type
 }
 
-/*
-fn ept_handle_page_hook_exit(exit_qualification: u64, guest_physical_address: u64) -> bool {
-
-    return true;
+fn ept_handle_page_hook_exit(
+    exit_qualification: u64,
+    guest_physical_address: u64,
+) -> Result<(), HypervisorError> {
+    Ok(())
 }
-*/
 
 /// Handles an EPT misconfiguration VM exit.
 ///
