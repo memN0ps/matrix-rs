@@ -57,7 +57,7 @@ impl PhysicalAddress {
     }
 
     /// Converts a physical address to its corresponding virtual address.
-    fn va_from_pa(pa: u64) -> u64 {
+    pub fn va_from_pa(pa: u64) -> u64 {
         let mut physical_address: PHYSICAL_ADDRESS = unsafe { core::mem::zeroed() };
         (physical_address.QuadPart) = pa as i64;
 
