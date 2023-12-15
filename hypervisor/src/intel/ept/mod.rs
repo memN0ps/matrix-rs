@@ -4,7 +4,7 @@
 //! Guest-physical addresses are translated by traversing a set of EPT paging structures to produce physical addresses that are used to access memory.
 
 use {
-    crate::{error::HypervisorError, intel::ept::mtrr::Mtrr, utils::addresses::PhysicalAddress},
+    crate::{error::HypervisorError, intel::ept::mtrr::Mtrr},
     bitfield::bitfield,
     core::ptr::addr_of,
     x86::current::paging::{BASE_PAGE_SHIFT, LARGE_PAGE_SIZE},
@@ -56,9 +56,7 @@ impl Ept {
         self.pml4.0.entries[0].set_readable(true);
         self.pml4.0.entries[0].set_writable(true);
         self.pml4.0.entries[0].set_executable(true);
-        self.pml4.0.entries[0].set_pfn(PhysicalAddress::pa_from_va(
-            addr_of!(self.pdpt) as u64 >> BASE_PAGE_SHIFT,
-        ));
+        self.pml4.0.entries[0].set_pfn(addr_of!(self.pdpt) as u64 >> BASE_PAGE_SHIFT);
 
         // Iterate over all PDPT entries to configure them.
         for (i, pdpte) in self.pdpt.0.entries.iter_mut().enumerate() {
@@ -66,9 +64,7 @@ impl Ept {
             pdpte.set_readable(true);
             pdpte.set_writable(true);
             pdpte.set_executable(true);
-            pdpte.set_pfn(PhysicalAddress::pa_from_va(
-                addr_of!(self.pd[i]) as u64 >> BASE_PAGE_SHIFT,
-            ));
+            pdpte.set_pfn(addr_of!(self.pd[i]) as u64 >> BASE_PAGE_SHIFT);
 
             // Configure each PDE within the current PD.
             for pde in &mut self.pd[i].0.entries {
@@ -78,9 +74,7 @@ impl Ept {
                     pde.set_readable(true);
                     pde.set_writable(true);
                     pde.set_executable(true);
-                    pde.set_pfn(PhysicalAddress::pa_from_va(
-                        addr_of!(self.pt) as u64 >> BASE_PAGE_SHIFT,
-                    ));
+                    pde.set_pfn(addr_of!(self.pt) as u64 >> BASE_PAGE_SHIFT);
 
                     // Iterate over all PTEs within the first PT.
                     for pte in &mut self.pt.0.entries {
@@ -93,7 +87,7 @@ impl Ept {
                         pte.set_writable(true);
                         pte.set_executable(true);
                         pte.set_memory_type(memory_type as u64);
-                        pte.set_pfn(PhysicalAddress::pa_from_va(pa >> BASE_PAGE_SHIFT));
+                        pte.set_pfn(pa >> BASE_PAGE_SHIFT);
 
                         // Move to the next page.
                         pa += PAGE_SIZE as u64;
@@ -109,7 +103,7 @@ impl Ept {
                     pde.set_executable(true);
                     pde.set_memory_type(memory_type as u64);
                     pde.set_large(true);
-                    pde.set_pfn(PhysicalAddress::pa_from_va(pa >> BASE_PAGE_SHIFT));
+                    pde.set_pfn(pa >> BASE_PAGE_SHIFT);
 
                     // Move to the next large page.
                     pa += LARGE_PAGE_SIZE as u64;
