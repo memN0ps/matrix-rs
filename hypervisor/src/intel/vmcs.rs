@@ -254,7 +254,7 @@ impl Vmcs {
     /// # Arguments
     /// * `msr_bitmap` - Bitmap for Model-Specific Registers.
     #[rustfmt::skip]
-    pub fn setup_vmcs_control_fields(msr_bitmap: &Box<MsrBitmap, PhysicalAllocator>, epts: &Box<Ept, PhysicalAllocator>) -> Result<(), HypervisorError> {
+    pub fn setup_vmcs_control_fields(msr_bitmap: &Box<MsrBitmap, PhysicalAllocator>, ept: &Box<Ept, PhysicalAllocator>) -> Result<(), HypervisorError> {
         const PRIMARY_CTL: u64 = (vmcs::control::PrimaryControls::SECONDARY_CONTROLS.bits() | vmcs::control::PrimaryControls::USE_MSR_BITMAPS.bits()) as u64;
         const SECONDARY_CTL: u64 = (vmcs::control::SecondaryControls::ENABLE_RDTSCP.bits()
             | vmcs::control::SecondaryControls::ENABLE_XSAVES_XRSTORS.bits()
@@ -277,7 +277,9 @@ impl Vmcs {
 
         vmwrite(vmcs::control::MSR_BITMAPS_ADDR_FULL, PhysicalAddress::pa_from_va(msr_bitmap.as_ref() as *const _ as _));
 
-        let eptp = Ept::create_eptp_with_wb_and_4lvl_walk(PhysicalAddress::pa_from_va(epts.as_ref() as *const _ as _))?;
+        let eptp = Ept::create_eptp_with_wb_and_4lvl_walk(PhysicalAddress::pa_from_va(ept.as_ref() as *const _ as _))?;
+        log::info!("EPTP: 0x{:x}", eptp);
+
         vmwrite(vmcs::control::EPTP_FULL, eptp);
 
         Ok(())
