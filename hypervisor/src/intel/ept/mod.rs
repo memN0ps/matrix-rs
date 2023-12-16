@@ -74,7 +74,7 @@ impl Ept {
                     pml2e.set_readable(true);
                     pml2e.set_writable(true);
                     pml2e.set_executable(true);
-                    pml2e.set_pfn(pa >> BASE_PAGE_SHIFT);
+                    pml2e.set_pfn(PhysicalAddress::pa_from_va(addr_of!(self.pml1) as u64 >> BASE_PAGE_SHIFT));
 
                     // Iterate over all PTEs within the first PT.
                     for pml1e in &mut self.pml1.0.entries {
