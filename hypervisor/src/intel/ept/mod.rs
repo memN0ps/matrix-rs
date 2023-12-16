@@ -4,7 +4,7 @@
 //! Guest-physical addresses are translated by traversing a set of EPT paging structures to produce physical addresses that are used to access memory.
 
 use {
-    crate::{error::HypervisorError, intel::ept::mtrr::Mtrr},
+    crate::{error::HypervisorError, intel::ept::mtrr::Mtrr, utils::addresses::PhysicalAddress},
     bitfield::bitfield,
     core::ptr::addr_of,
     x86::current::paging::{BASE_PAGE_SHIFT, LARGE_PAGE_SIZE},
@@ -26,11 +26,11 @@ pub struct Ept {
     /// Page Map Level 4 (PML4) Table.
     pml4: Pml4,
     /// Page Directory Pointer Table (PDPT).
-    pdpt: Pdpt,
+    pml3: Pdpt,
     /// Array of Page Directory Table (PDT).
-    pd: [Pd; 512],
+    pml2: [Pd; 512],
     /// Page Table (PT).
-    pt: Pt,
+    pml1: Pt,
 }
 
 impl Ept {
@@ -56,38 +56,38 @@ impl Ept {
         self.pml4.0.entries[0].set_readable(true);
         self.pml4.0.entries[0].set_writable(true);
         self.pml4.0.entries[0].set_executable(true);
-        self.pml4.0.entries[0].set_pfn(addr_of!(self.pdpt) as u64 >> BASE_PAGE_SHIFT);
+        self.pml4.0.entries[0].set_pfn(PhysicalAddress::pa_from_va(addr_of!(self.pml3) as u64 >> BASE_PAGE_SHIFT));
 
         // Iterate over all PDPT entries to configure them.
-        for (i, pdpte) in self.pdpt.0.entries.iter_mut().enumerate() {
+        for (i, pml3e) in self.pml3.0.entries.iter_mut().enumerate() {
             // Configure the PDPT entry.
-            pdpte.set_readable(true);
-            pdpte.set_writable(true);
-            pdpte.set_executable(true);
-            pdpte.set_pfn(addr_of!(self.pd[i]) as u64 >> BASE_PAGE_SHIFT);
+            pml3e.set_readable(true);
+            pml3e.set_writable(true);
+            pml3e.set_executable(true);
+            pml3e.set_pfn(PhysicalAddress::pa_from_va(addr_of!(self.pml2[i]) as u64 >> BASE_PAGE_SHIFT));
 
             // Configure each PDE within the current PD.
-            for pde in &mut self.pd[i].0.entries {
+            for pml2e in &mut self.pml2[i].0.entries {
                 if pa == 0 {
                     // Special handling for the first PDE.
                     // This is typically where the first PT is set up.
-                    pde.set_readable(true);
-                    pde.set_writable(true);
-                    pde.set_executable(true);
-                    pde.set_pfn(addr_of!(self.pt) as u64 >> BASE_PAGE_SHIFT);
+                    pml2e.set_readable(true);
+                    pml2e.set_writable(true);
+                    pml2e.set_executable(true);
+                    pml2e.set_pfn(pa >> BASE_PAGE_SHIFT);
 
                     // Iterate over all PTEs within the first PT.
-                    for pte in &mut self.pt.0.entries {
+                    for pml1e in &mut self.pml1.0.entries {
                         // Determine the memory type for the current address.
                         let memory_type = Mtrr::find(&mtrr_map, pa..pa + PAGE_SIZE as u64)
                             .ok_or(HypervisorError::MemoryTypeResolutionError)?;
 
                         // Configure the PTE.
-                        pte.set_readable(true);
-                        pte.set_writable(true);
-                        pte.set_executable(true);
-                        pte.set_memory_type(memory_type as u64);
-                        pte.set_pfn(pa >> BASE_PAGE_SHIFT);
+                        pml1e.set_readable(true);
+                        pml1e.set_writable(true);
+                        pml1e.set_executable(true);
+                        pml1e.set_memory_type(memory_type as u64);
+                        pml1e.set_pfn(pa >> BASE_PAGE_SHIFT);
 
                         // Move to the next page.
                         pa += PAGE_SIZE as u64;
@@ -98,12 +98,12 @@ impl Ept {
                     let memory_type = Mtrr::find(&mtrr_map, pa..pa + LARGE_PAGE_SIZE as u64)
                         .ok_or(HypervisorError::MemoryTypeResolutionError)?;
 
-                    pde.set_readable(true);
-                    pde.set_writable(true);
-                    pde.set_executable(true);
-                    pde.set_memory_type(memory_type as u64);
-                    pde.set_large(true);
-                    pde.set_pfn(pa >> BASE_PAGE_SHIFT);
+                    pml2e.set_readable(true);
+                    pml2e.set_writable(true);
+                    pml2e.set_executable(true);
+                    pml2e.set_memory_type(memory_type as u64);
+                    pml2e.set_large(true);
+                    pml2e.set_pfn(pa >> BASE_PAGE_SHIFT);
 
                     // Move to the next large page.
                     pa += LARGE_PAGE_SIZE as u64;
