@@ -394,6 +394,7 @@ impl fmt::Debug for Vmcs {
             .field("CR0 Read Shadow: ", &vmread(vmcs::control::CR0_READ_SHADOW))
             .field("CR4 Read Shadow: ", &vmread(vmcs::control::CR4_READ_SHADOW))
             .field("MSR Bitmaps Address: ", &vmread(vmcs::control::MSR_BITMAPS_ADDR_FULL))
+            .field("EPT Pointer: ", &vmread(vmcs::control::EPTP_FULL))
             .finish_non_exhaustive()
     }
 }
