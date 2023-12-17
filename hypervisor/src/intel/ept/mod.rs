@@ -7,12 +7,10 @@ use {
     crate::{error::HypervisorError, intel::ept::mtrr::Mtrr, utils::addresses::PhysicalAddress},
     bitfield::bitfield,
     core::ptr::addr_of,
-    x86::current::paging::{BASE_PAGE_SHIFT, LARGE_PAGE_SIZE},
+    x86::current::paging::{BASE_PAGE_SHIFT, BASE_PAGE_SIZE, LARGE_PAGE_SIZE},
 };
 
 pub mod mtrr;
-
-pub const PAGE_SIZE: usize = 0x1000;
 
 /// Represents the entire Extended Page Table structure.
 ///
@@ -85,7 +83,7 @@ impl Ept {
                     // Iterate over all PTEs within the first PT.
                     for pml1e in &mut self.pml1.0.entries {
                         // Determine the memory type for the current address.
-                        let memory_type = Mtrr::find(&mtrr_map, pa..pa + PAGE_SIZE as u64)
+                        let memory_type = Mtrr::find(&mtrr_map, pa..pa + BASE_PAGE_SIZE as u64)
                             .ok_or(HypervisorError::MemoryTypeResolutionError)?;
 
                         // Configure the PTE.
@@ -96,7 +94,7 @@ impl Ept {
                         pml1e.set_pfn(pa >> BASE_PAGE_SHIFT);
 
                         // Move to the next page.
-                        pa += PAGE_SIZE as u64;
+                        pa += BASE_PAGE_SIZE as u64;
                     }
                 } else {
                     // Handling for subsequent PDEs.
@@ -134,6 +132,8 @@ impl Ept {
     /// # Returns
     /// A `Result<u64, HypervisorError>` containing the configured EPTP value. Returns an error if
     /// the base address is not properly aligned.
+    ///
+    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.6.11 Extended-Page-Table Pointer (EPTP)
     pub fn create_eptp_with_wb_and_4lvl_walk(
         ept_pml4_base_addr: u64,
     ) -> Result<u64, HypervisorError> {

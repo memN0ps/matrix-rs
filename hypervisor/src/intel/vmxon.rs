@@ -12,9 +12,8 @@ use {
     },
     alloc::boxed::Box,
     bitfield::BitMut,
+    x86::current::paging::BASE_PAGE_SIZE,
 };
-
-pub const PAGE_SIZE: usize = 0x1000;
 
 /// A representation of the VMXON region in memory.
 ///
@@ -26,7 +25,7 @@ pub const PAGE_SIZE: usize = 0x1000;
 #[repr(C, align(4096))]
 pub struct Vmxon {
     pub revision_id: u32,
-    pub data: [u8; PAGE_SIZE - 4],
+    pub data: [u8; BASE_PAGE_SIZE - 4],
 }
 
 impl Vmxon {

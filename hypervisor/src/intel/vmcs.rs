@@ -31,6 +31,7 @@ use {
     core::fmt,
     x86::{
         controlregs,
+        current::paging::BASE_PAGE_SIZE,
         dtables::{self},
         msr::{self},
         segmentation::SegmentSelector,
@@ -38,8 +39,6 @@ use {
         vmx::vmcs::{self},
     },
 };
-
-pub const PAGE_SIZE: usize = 0x1000;
 
 /// Represents the VMCS region in memory.
 ///
@@ -52,7 +51,7 @@ pub const PAGE_SIZE: usize = 0x1000;
 pub struct Vmcs {
     pub revision_id: u32,
     pub abort_indicator: u32,
-    pub reserved: [u8; PAGE_SIZE - 8],
+    pub reserved: [u8; BASE_PAGE_SIZE - 8],
 }
 
 impl Vmcs {
