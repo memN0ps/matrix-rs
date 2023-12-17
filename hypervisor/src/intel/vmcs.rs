@@ -278,8 +278,6 @@ impl Vmcs {
         vmwrite(vmcs::control::MSR_BITMAPS_ADDR_FULL, PhysicalAddress::pa_from_va(msr_bitmap.as_ref() as *const _ as _));
 
         let eptp = Ept::create_eptp_with_wb_and_4lvl_walk(PhysicalAddress::pa_from_va(ept.as_ref() as *const _ as _))?;
-        log::info!("EPTP: 0x{:x}", eptp);
-
         vmwrite(vmcs::control::EPTP_FULL, eptp);
 
         Ok(())
