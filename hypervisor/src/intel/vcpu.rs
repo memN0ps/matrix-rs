@@ -8,8 +8,11 @@ use {
     super::vmx::Vmx,
     crate::{
         error::HypervisorError,
-        intel::support,
-        utils::{capture::CONTEXT, processor::is_virtualized},
+        intel::{invept::invept_all_contexts, invvpid::invvpid_all_contexts, support},
+        utils::{
+            capture::CONTEXT,
+            processor::{is_virtualized, set_virtualized},
+        },
     },
     alloc::boxed::Box,
     core::mem::MaybeUninit,
@@ -66,10 +69,16 @@ impl Vcpu {
         if !is_virtualized() {
             // If we are here as Guest (non-root) then that will lead to undefined behavior (UB).
             log::info!("Preparing for virtualization");
-            crate::utils::processor::set_virtualized();
+            set_virtualized();
 
             self.vmx.setup_virtualization(&context)?;
             log::info!("Virtualization complete for processor {}", self.index);
+
+            Self::invalidate_contexts();
+            log::info!(
+                "Processor contexts invalidated for processor {}",
+                self.index
+            );
 
             log::info!("Dumping VMCS: {:#x?}", self.vmx.vmcs_region);
             log::info!("Dumping _CONTEXT: ");
@@ -117,5 +126,35 @@ impl Vcpu {
     /// The processor's unique identifier.
     pub fn id(&self) -> u32 {
         self.index
+    }
+
+    /// Invalidates processor contexts to maintain consistency in virtualization environments.
+    ///
+    /// This function handles the invalidation of TLB and paging-structure caches using the INVVPID and INVEPT
+    /// instructions. It ensures that any cached translations are consistent with the current state of the virtual
+    /// processor and EPT configurations.
+    pub fn invalidate_contexts() {
+        log::info!("Invalidating processor contexts");
+
+        // Invalidate all contexts (broad operation, typically used in specific scenarios)
+        //
+        // Software can use the INVEPT instruction with the “all-context” INVEPT type immediately after execution of the
+        // VMXON instruction or immediately prior to execution of the VMXOFF instruction. Either prevents potentially
+        // undesired retention of information cached from EPT paging structures between separate uses of VMX
+        // operation.
+        //
+        // Reference: 29.4.3.4 Guidelines for Use of the INVEPT Instruction
+        invept_all_contexts();
+
+        // Invalidate all contexts
+        //
+        // Software can use the INVVPID instruction with the “all-context” INVVPID type immediately after execution of
+        // the VMXON instruction or immediately prior to execution of the VMXOFF instruction. Either prevents potentially
+        // undesired retention of information cached from paging structures between separate uses of VMX operation.
+        //
+        // Reference: 29.4.3.3 Guidelines for Use of the INVVPID Instruction
+        invvpid_all_contexts();
+
+        log::info!("Processor contexts invalidation successful!");
     }
 }

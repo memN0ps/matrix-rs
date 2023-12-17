@@ -2,6 +2,8 @@ pub mod controls;
 pub mod descriptor;
 pub mod ept;
 pub mod events;
+pub mod invept;
+pub mod invvpid;
 pub mod msr_bitmap;
 pub mod segmentation;
 pub mod support;

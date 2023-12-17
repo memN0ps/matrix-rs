@@ -13,6 +13,8 @@ use {
                 cpuid::handle_cpuid,
                 ept::{handle_ept_misconfiguration, handle_ept_violation},
                 invd::handle_invd,
+                invept::handle_invept,
+                invvpid::handle_invvpid,
                 msr::{handle_msr_access, MsrAccessType},
                 rdtsc::handle_rdtsc,
                 xsetbv::handle_xsetbv,
@@ -26,6 +28,8 @@ use {
 pub mod cpuid;
 pub mod ept;
 pub mod invd;
+pub mod invept;
+pub mod invvpid;
 pub mod msr;
 pub mod rdtsc;
 pub mod xsetbv;
@@ -103,6 +107,8 @@ impl VmExit {
             VmxBasicExitReason::Rdtsc => handle_rdtsc(guest_registers),
             VmxBasicExitReason::EptViolation => handle_ept_violation(guest_registers),
             VmxBasicExitReason::EptMisconfiguration => handle_ept_misconfiguration(),
+            VmxBasicExitReason::Invept => handle_invept(),
+            VmxBasicExitReason::Invvpid => handle_invvpid(),
             VmxBasicExitReason::Xsetbv => handle_xsetbv(guest_registers),
             _ => return Err(HypervisorError::UnhandledVmExit),
         };
