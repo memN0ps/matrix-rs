@@ -2,7 +2,7 @@ use {
     crate::{
         error::HypervisorError,
         intel::{support::vmread, vmerror::EptViolationExitQualification, vmexit::ExitType},
-        utils::{capture::GuestRegisters, addresses::PhysicalAddress},
+        utils::{addresses::PhysicalAddress, capture::GuestRegisters},
     },
     x86::vmx::vmcs,
 };
@@ -14,6 +14,10 @@ use {
 pub fn handle_ept_violation(_guest_registers: &mut GuestRegisters) -> ExitType {
     let guest_physical_address = vmread(vmcs::ro::GUEST_PHYSICAL_ADDR_FULL);
     log::info!("EPT Violation: Guest Physical Address: {:#x}", guest_physical_address);
+
+    // Translate the page from a physical address to virtual so we can read its memory.
+    let va = PhysicalAddress::va_from_pa(guest_physical_address);
+    log::info!("EPT Violation: Guest Virtual Address: {:#x}", va);
 
     let exit_qualification_value = vmread(vmcs::ro::EXIT_QUALIFICATION);
 
@@ -39,10 +43,7 @@ pub fn handle_ept_violation(_guest_registers: &mut GuestRegisters) -> ExitType {
 }
 
 #[rustfmt::skip]
-fn ept_handle_page_hook_exit(exit_qualification: u64, guest_physical_address: u64) -> Result<(), HypervisorError> {
-    // Translate the page from a physical address to virtual so we can read its memory.
-    let va = PhysicalAddress::va_from_pa(guest_physical_address);
-    log::info!("EPT Violation: Guest Virtual Address: {:#x}", va);
+fn ept_handle_page_hook_exit(_exit_qualification: u64, _guest_physical_address: u64) -> Result<(), HypervisorError> {
 
     Ok(())
 }
