@@ -185,8 +185,8 @@ struct Pt(Table);
 ///
 /// This struct is used as a basis for PML4, PDPT, PD, and PT. It contains an array of entries
 /// where each entry can represent different levels of the EPT hierarchy.
-#[derive(Debug, Clone, Copy)]
 #[repr(C, align(4096))]
+#[derive(Debug, Clone, Copy)]
 struct Table {
     entries: [Entry; 512],
 }
