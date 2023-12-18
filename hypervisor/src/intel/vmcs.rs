@@ -15,6 +15,8 @@ use {
             msr_bitmap::MsrBitmap,
             segmentation::SegmentDescriptor,
             support::{vmclear, vmptrld, vmread, vmwrite},
+            invept::invept_single_context,
+            invvpid::{invvpid_single_context, VPID_TAG},
         },
         utils::capture::GuestRegisters,
         utils::{
@@ -278,6 +280,10 @@ impl Vmcs {
 
         let eptp = Ept::create_eptp_with_wb_and_4lvl_walk(PhysicalAddress::pa_from_va(ept.as_ref() as *const _ as _))?;
         vmwrite(vmcs::control::EPTP_FULL, eptp);
+        vmwrite(vmcs::control::VPID, VPID_TAG);
+
+        invept_single_context(eptp);
+        invvpid_single_context(VPID_TAG);
 
         Ok(())
     }
