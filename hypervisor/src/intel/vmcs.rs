@@ -12,11 +12,11 @@ use {
             controls::{adjust_vmx_controls, VmxControl},
             descriptor::DescriptorTables,
             ept::Ept,
+            invept::invept_single_context,
+            invvpid::{invvpid_single_context, VPID_TAG},
             msr_bitmap::MsrBitmap,
             segmentation::SegmentDescriptor,
             support::{vmclear, vmptrld, vmread, vmwrite},
-            invept::invept_single_context,
-            invvpid::{invvpid_single_context, VPID_TAG},
         },
         utils::capture::GuestRegisters,
         utils::{
