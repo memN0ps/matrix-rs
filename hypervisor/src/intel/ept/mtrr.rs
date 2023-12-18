@@ -1,7 +1,8 @@
 //! A module for handling Memory Type Range Registers (MTRRs) in x86 systems.
 //! It provides functionality to build a map of MTRRs and their corresponding memory ranges
-//! and types, following the specifications of the Intel® 64 and IA-32 Architectures
-//! Software Developer's Manual.
+//! and types, following the specifications of the Intel® 64 and IA-32 Architectures Software Developer's Manual: 12.11 MEMORY TYPE RANGE REGISTERS (MTRRS)
+//!
+//! Credits to Neri https://github.com/neri/maystorm/blob/develop/system/src/arch/x64/cpu.rs
 
 use {
     crate::utils::{addresses::PhysicalAddress, instructions::rdmsr},

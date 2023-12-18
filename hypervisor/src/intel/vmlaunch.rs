@@ -4,7 +4,10 @@
 //! virtualization extensions. It offers abstractions for the guest's register state,
 //! VM-entry, VM-exit, and handling VMX-specific instructions.
 //!
-//! Credits to Satoshi (https://github.com/tandasat), Daax (https://github.com/daaximus), and Drew (https://github.com/drew-gpf)
+//! Credits to Satoshi, Daax, and Drew for their valuable contributions and code snippets.
+//! Satoshi's Hypervisor-101 in Rust: https://github.com/tandasat/Hypervisor-101-in-Rust/blob/main/hypervisor/src/hardware_vt/vmx_run_vm.S
+//! Daax: https://github.com/daaximus
+//! Drew: https://github.com/drew-gpf
 
 use crate::{
     intel::{support::vmread, vmerror::VmInstructionError, vmexit::VmExit},

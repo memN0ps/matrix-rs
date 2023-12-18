@@ -2,6 +2,8 @@
 //! The extended page-table mechanism (EPT) is a feature that can be used to support the virtualization of physical memory.
 //! When EPT is in use, certain addresses that would normally be treated as physical addresses (and used to access memory) are instead treated as guest-physical addresses
 //! Guest-physical addresses are translated by traversing a set of EPT paging structures to produce physical addresses that are used to access memory.
+//! Credits to the work by Satoshi in their 'Hello-VT-rp' project for assistance and a clear implementation of EPT:
+//! https://github.com/tandasat/Hello-VT-rp/blob/main/hypervisor/src/intel_vt/epts.rs
 
 use {
     crate::{error::HypervisorError, intel::ept::mtrr::Mtrr, utils::addresses::PhysicalAddress},

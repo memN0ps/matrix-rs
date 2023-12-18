@@ -1,6 +1,9 @@
 //! This module provides utilities and structures to manage segment descriptors
 //! in the GDT (Global Descriptor Table) and LDT (Local Descriptor Table).
 //! It handles the extraction, representation, and manipulation of segment descriptors.
+//!
+//! Credits to rCore OS for providing an accessible and comprehensible implementation of segmentation:
+//! https://github.com/rcore-os/RVM1.5/blob/main/src/arch/x86_64/segmentation.rs
 
 use {
     crate::intel::descriptor::DescriptorTables,

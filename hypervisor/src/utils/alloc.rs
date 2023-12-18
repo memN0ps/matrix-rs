@@ -7,6 +7,9 @@
 //!
 //! All allocators interface directly with the Windows Driver Kit (WDK) to ensure
 //! safe and efficient memory operations.
+//!
+//! Credits to Matthias for their valuable assistance in the implementation using winapi, a foundation now adapted for wdk-sys:
+//! https://github.com/not-matthias/kernel-alloc-rs
 
 use {
     alloc::alloc::handle_alloc_error,

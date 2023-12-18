@@ -1,4 +1,7 @@
 //! This module provides utility functions for processor-related operations.
+//!
+//! Credits to Matthias for their insightful assistance in the initial implementation using winapi, now adapted for wdk-sys:
+//! https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/utils/processor.rs
 
 use wdk_sys::NTSTATUS;
 use {
