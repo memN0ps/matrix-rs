@@ -57,9 +57,9 @@ impl Ept {
         self.pml4.0.entries[0].set_readable(true);
         self.pml4.0.entries[0].set_writable(true);
         self.pml4.0.entries[0].set_executable(true);
-        self.pml4.0.entries[0].set_pfn(PhysicalAddress::pa_from_va(
-            addr_of!(self.pml3) as u64 >> BASE_PAGE_SHIFT,
-        ));
+        self.pml4.0.entries[0].set_pfn(
+            PhysicalAddress::pa_from_va(addr_of!(self.pml3) as u64) >> BASE_PAGE_SHIFT
+        );
 
         // Iterate over all PDPT entries to configure them.
         for (i, pml3e) in self.pml3.0.entries.iter_mut().enumerate() {
@@ -67,9 +67,9 @@ impl Ept {
             pml3e.set_readable(true);
             pml3e.set_writable(true);
             pml3e.set_executable(true);
-            pml3e.set_pfn(PhysicalAddress::pa_from_va(
-                addr_of!(self.pml2[i]) as u64 >> BASE_PAGE_SHIFT,
-            ));
+            pml3e.set_pfn(
+                PhysicalAddress::pa_from_va(addr_of!(self.pml2[i]) as u64) >> BASE_PAGE_SHIFT,
+            );
 
             // Configure each PDE within the current PD.
             for pml2e in &mut self.pml2[i].0.entries {
@@ -79,9 +79,9 @@ impl Ept {
                     pml2e.set_readable(true);
                     pml2e.set_writable(true);
                     pml2e.set_executable(true);
-                    pml2e.set_pfn(PhysicalAddress::pa_from_va(
-                        addr_of!(self.pml1) as u64 >> BASE_PAGE_SHIFT,
-                    ));
+                    pml2e.set_pfn(
+                        PhysicalAddress::pa_from_va(addr_of!(self.pml1) as u64) >> BASE_PAGE_SHIFT,
+                    );
 
                     // Iterate over all PTEs within the first PT.
                     for pml1e in &mut self.pml1.0.entries {
