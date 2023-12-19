@@ -12,12 +12,20 @@ use {
     x86::current::paging::{BASE_PAGE_SHIFT, LARGE_PAGE_SIZE},
 };
 
-/// Represents the entire Extended Page Table structure.
+/// Represents the entire Page Tables structure for the hypervisor.
 ///
-/// EPT is a set of nested page tables similar to the standard x86-64 paging mechanism.
-/// It consists of 4 levels: PML4, PDPT, PD, and PT.
+/// The Page Tables mechanism is crucial for virtual memory management in x86-64 architecture.
+/// It consists of four levels of tables: PML4, PDPT, PD, and PT, which together facilitate the translation of virtual to physical addresses.
 ///
-/// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 29.3.2 EPT Translation Mechanism
+/// Each level of the Page Tables plays a role in this translation process:
+/// - PML4 (Page Map Level 4) is the highest level and points to the next level.
+/// - PDPT (Page Directory Pointer Table) points to Page Directories.
+/// - PD (Page Directory) contains entries that either point to Page Tables or map large pages (2MB).
+/// - PT (Page Table) contains entries that map standard 4KB pages.
+///
+/// This structure is aligned to 4096 bytes (4KB), which is the size of a standard page in x86-64.
+///
+/// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 4.5 4-LEVEL PAGING AND 5-LEVEL PAGING
 #[repr(C, align(4096))]
 pub struct PageTables {
     /// Page Map Level 4 (PML4) Table.
