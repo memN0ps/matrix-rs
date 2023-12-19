@@ -15,6 +15,7 @@ use {
             invept::invept_single_context,
             invvpid::{invvpid_single_context, VPID_TAG},
             msr_bitmap::MsrBitmap,
+            paging::PageTables,
             segmentation::SegmentDescriptor,
             support::{vmclear, vmptrld, vmread, vmwrite},
         },
@@ -23,7 +24,6 @@ use {
             addresses::PhysicalAddress,
             alloc::{KernelAlloc, PhysicalAllocator},
             capture::CONTEXT,
-            nt::NTOSKRNL_CR3,
         },
     },
 
@@ -214,9 +214,9 @@ impl Vmcs {
     /// * `context` - Context containing the host's register states.
     /// * `host_descriptor_table` - Descriptor tables for the host.
     #[rustfmt::skip]
-    pub fn setup_host_registers_state(context: &CONTEXT, host_descriptor_table: &Box<DescriptorTables, KernelAlloc>) {
+    pub fn setup_host_registers_state(context: &CONTEXT, host_descriptor_table: &Box<DescriptorTables, KernelAlloc>, host_paging: &Box<PageTables, KernelAlloc>) {
         unsafe { vmwrite(vmcs::host::CR0, controlregs::cr0().bits() as u64) };
-        unsafe { vmwrite(vmcs::host::CR3, NTOSKRNL_CR3) };
+        vmwrite(vmcs::host::CR3, host_paging.as_ref() as *const _ as u64);
         unsafe { vmwrite(vmcs::host::CR4, controlregs::cr4().bits() as u64) };
 
         // The RIP/RSP registers are set within `launch_vm`.

@@ -5,6 +5,7 @@ pub mod events;
 pub mod invept;
 pub mod invvpid;
 pub mod msr_bitmap;
+pub mod paging;
 pub mod segmentation;
 pub mod support;
 pub mod vcpu;

@@ -12,6 +12,7 @@ use {
         intel::{
             descriptor::DescriptorTables,
             ept::Ept,
+            paging::PageTables,
             vmlaunch::launch_vm,
             vmstack::{VmStack, STACK_CONTENTS_SIZE},
         },
@@ -63,6 +64,10 @@ pub struct Vmx {
     /// Allocated using `ExAllocatePool` or `ExAllocatePoolWithTag`.
     pub host_rsp: Box<VmStack, KernelAlloc>,
 
+    /// Virtual address of the host's paging structures, aligned to a 4-KByte boundary.
+    /// Allocated using `ExAllocatePool` or `ExAllocatePoolWithTag`.
+    pub host_paging: Box<PageTables, KernelAlloc>,
+
     /// Virtual address of the guest's extended page-table structure, aligned to a 4-KByte boundary.
     /// Allocated using `MmAllocateContiguousMemorySpecifyCacheNode`.
     pub ept: Box<Ept, PhysicalAllocator>,
@@ -89,6 +94,7 @@ impl Vmx {
         let mut guest_descriptor_table = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
         let mut host_descriptor_table = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
         let host_rsp = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
+        let mut host_paging: Box<PageTables, KernelAlloc> = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
         let mut ept: Box<Ept, PhysicalAllocator> = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let guest_registers = GuestRegisters::default();
 
@@ -96,6 +102,8 @@ impl Vmx {
         // This is done here instead of `setup_virtualization` because it uses a vec to allocate memory for the new GDT
         DescriptorTables::initialize_for_guest(&mut guest_descriptor_table)?;
         DescriptorTables::initialize_for_host(&mut host_descriptor_table)?;
+
+        host_paging.build_identity();
 
         // This is done here instead of `setup_virtualization` because it uses a vec to allocate memory for the `MtrrRangeDescriptor`
         ept.build_identity_map()?;
@@ -109,6 +117,7 @@ impl Vmx {
             guest_descriptor_table,
             host_descriptor_table,
             host_rsp,
+            host_paging,
             ept,
             guest_registers,
         };
@@ -149,7 +158,7 @@ impl Vmx {
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
         log::info!("Setting up Host Registers State");
-        Vmcs::setup_host_registers_state(&context, &self.host_descriptor_table);
+        Vmcs::setup_host_registers_state(&context, &self.host_descriptor_table, &self.host_paging);
         log::info!("Host Registers State successful!");
 
         /*

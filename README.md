@@ -10,16 +10,20 @@ A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hyperv
 
 ## Features
 
-- Efficient VM exit handling: `Cpuid`, `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`
-- Custom GDT and IDT setup, partially complete with ongoing development for new Page Tables. [Learn more](https://www.unknowncheats.me/forum/2779560-post4.html).
-- Uses `ntoskrnl.exe` CR3 (Directory Base Table) for the host CR3 configuration.
-- Integrated Extended Page Tables (EPT) with Memory Type Range Registers (MTRR), ensuring optimal memory mapping and type management.
+- **Efficient VM Exit Handling**: Implements optimized handling for various VM exit reasons like `Cpuid`, `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`. This ensures minimal performance overhead and responsive virtual machine operations.
+
+- **Robust Isolation Mechanisms**: Custom Global Descriptor Table (GDT), Interrupt Descriptor Table (IDT), and Page Tables are used for enhanced security. This design decision prevents potential vulnerabilities from using the host's `ntoskrnl.exe` `CR3` or a usermode process's `CR3`, fortifying the hypervisor against sophisticated attacks. [Further reading on the importance of these structures](https://www.unknowncheats.me/forum/2779560-post4.html).
+
+- **Integrated Extended Page Tables (EPT)**: Incorporates Memory Type Range Registers (MTRR) with EPT for efficient memory mapping and management. This feature ensures that memory types are correctly identified and handled, optimizing performance and stability in virtualized environments.
+
 
 ## Planned Enhancements
 
-- Enhanced VM Exit Instruction Handling, including `Getsec`, and VMX instructions like `Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxoff`, `Vmxon`.
-- Development of EPT hooks for advanced memory control and monitoring in guest VMs.
-- Resolve a critical issue where the hypervisor causes a `CRITICAL_PROCESS_DIED (ef)` BSOD after running for a minute, aiming to enhance system stability and reliability.
+- **Enhanced VM Exit Instruction Handling**: Future updates aim to include advanced handling for instructions like `Getsec`, and VMX instructions (`Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxoff`, `Vmxon`). This will extend the hypervisor's capability to manage more complex virtual machine operations and scenarios.
+
+- **EPT Hook Development**: Planning to implement EPT hooks for sophisticated memory control and monitoring within guest VMs. This will allow for more granular memory management and potentially enable advanced features like memory introspection or modification.
+
+- **Stability Enhancements**: Addressing the `CRITICAL_PROCESS_DIED (ef)` BSOD issue is a top priority.
 
 ## Installation
 

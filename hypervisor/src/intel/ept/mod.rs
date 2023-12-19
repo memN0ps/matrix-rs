@@ -57,9 +57,8 @@ impl Ept {
         self.pml4.0.entries[0].set_readable(true);
         self.pml4.0.entries[0].set_writable(true);
         self.pml4.0.entries[0].set_executable(true);
-        self.pml4.0.entries[0].set_pfn(
-            PhysicalAddress::pa_from_va(addr_of!(self.pml3) as u64) >> BASE_PAGE_SHIFT
-        );
+        self.pml4.0.entries[0]
+            .set_pfn(PhysicalAddress::pa_from_va(addr_of!(self.pml3) as u64) >> BASE_PAGE_SHIFT);
 
         // Iterate over all PDPT entries to configure them.
         for (i, pml3e) in self.pml3.0.entries.iter_mut().enumerate() {
