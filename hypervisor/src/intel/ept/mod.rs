@@ -22,7 +22,6 @@ pub mod mtrr;
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 29.3.2 EPT Translation Mechanism
 #[repr(C, align(4096))]
-#[derive(Debug, Clone, Copy)]
 pub struct Ept {
     /// Page Map Level 4 (PML4) Table.
     pml4: Pml4,
@@ -157,7 +156,6 @@ impl Ept {
 /// PML4 is the top level in the EPT paging hierarchy.
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: Table 29-1. Format of an EPT PML4 Entry (PML4E) that References an EPT Page-Directory-Pointer Table
-#[repr(C, align(4096))]
 #[derive(Debug, Clone, Copy)]
 struct Pml4(Table);
 
@@ -166,7 +164,6 @@ struct Pml4(Table);
 /// PDPTEs are part of the second level in the EPT paging hierarchy.
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: Table 29-3. Format of an EPT Page-Directory-Pointer-Table Entry (PDPTE) that References an EPT Page Directory
-#[repr(C, align(4096))]
 #[derive(Debug, Clone, Copy)]
 struct Pdpt(Table);
 
@@ -175,7 +172,6 @@ struct Pdpt(Table);
 /// PDEs are part of the third level in the EPT paging hierarchy.
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: Table 29-5. Format of an EPT Page-Directory Entry (PDE) that References an EPT Page Table
-#[repr(C, align(4096))]
 #[derive(Debug, Clone, Copy)]
 struct Pd(Table);
 
@@ -185,7 +181,6 @@ struct Pd(Table);
 /// pages to guest-physical addresses.
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: Format of an EPT Page-Table Entry that Maps a 4-KByte Page
-#[repr(C, align(4096))]
 #[derive(Debug, Clone, Copy)]
 struct Pt(Table);
 
@@ -217,8 +212,7 @@ bitfield! {
     /// * `paging_write_access` - Additional flag for paging write access.
     ///
     /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 29.3.2 EPT Translation Mechanism
-    #[repr(C, align(4096))]
-    #[derive(Clone, Copy, Default)]
+    #[derive(Clone, Copy)]
     pub struct Entry(u64);
     impl Debug;
 
