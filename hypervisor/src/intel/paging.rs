@@ -19,7 +19,6 @@ use {
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 29.3.2 EPT Translation Mechanism
 #[repr(C, align(4096))]
-#[derive(Debug, Clone, Copy)]
 pub struct PageTables {
     /// Page Map Level 4 (PML4) Table.
     pml4: Pml4,
@@ -27,8 +26,6 @@ pub struct PageTables {
     pdpt: Pdpt,
     /// Array of Page Directory Table (PDT).
     pd: [Pd; 512],
-    /// Page Table (PT).
-    pt: Pt,
 }
 
 impl PageTables {
@@ -78,7 +75,6 @@ impl PageTables {
 /// PML4 is the top level in the standard x86-64 paging hierarchy.
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 4.5 Paging
-#[repr(C, align(4096))]
 #[derive(Debug, Clone, Copy)]
 struct Pml4(Table);
 
@@ -87,7 +83,6 @@ struct Pml4(Table);
 /// PDPTEs are part of the second level in the standard x86-64 paging hierarchy.
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 4.5 Paging
-#[repr(C, align(4096))]
 #[derive(Debug, Clone, Copy)]
 struct Pdpt(Table);
 
@@ -96,7 +91,6 @@ struct Pdpt(Table);
 /// PDEs are part of the third level in the standard x86-64 paging hierarchy.
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 4.5 Paging
-#[repr(C, align(4096))]
 #[derive(Debug, Clone, Copy)]
 struct Pd(Table);
 
@@ -106,7 +100,6 @@ struct Pd(Table);
 /// pages to physical addresses.
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 4.5 Paging
-#[repr(C, align(4096))]
 #[derive(Debug, Clone, Copy)]
 struct Pt(Table);
 
@@ -133,13 +126,13 @@ bitfield! {
     /// * `pfn` - The Page Frame Number, indicating the physical address.
     ///
     /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 4.5 Paging
-    #[repr(C, align(4096))]
-    #[derive(Clone, Copy, Default)]
+    #[derive(Clone, Copy)]
     pub struct Entry(u64);
     impl Debug;
 
     present, set_present: 0;
     writable, set_writable: 1;
     large, set_large: 7;
+    restart, set_restart: 11;
     pfn, set_pfn: 51, 12;
 }
