@@ -94,6 +94,7 @@ impl SegmentAccessRights {
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 3.4.5 Segment Descriptors
 /// and Figure 3-8. Segment Descriptor
+#[repr(C, align(16))]
 pub struct SegmentDescriptor {
     /// Selector provides an index into the GDT or LDT, pointing to the segment descriptor.
     pub selector: SegmentSelector,
