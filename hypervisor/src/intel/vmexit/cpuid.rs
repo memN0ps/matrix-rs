@@ -85,18 +85,21 @@ pub fn handle_cpuid(guest_registers: &mut GuestRegisters) -> ExitType {
         // Handle CPUID for standard feature information.
         leaf if leaf == CpuidLeaf::FeatureInformation as u32 => {
             log::info!("CPUID leaf 1 detected (Standard Feature Information).");
-            // Indicate hypervisor presence by setting the appropriate bit in ECX.
-            cpuid_result.ecx.set_bit(FeatureBits::HypervisorPresentBit as usize, true);
+            // Hide hypervisor presence by setting the appropriate bit in ECX.
+            cpuid_result.ecx.set_bit(FeatureBits::HypervisorPresentBit as usize, false);
+
+            // Hide VMX support by setting the appropriate bit in ECX.
+            cpuid_result.ecx.set_bit(FeatureBits::HypervisorVmxSupportBit as usize, false);
         },
         // Handle CPUID for hypervisor vendor information.
         leaf if leaf == CpuidLeaf::HypervisorVendor as u32 => {
             log::info!("CPUID leaf 0x40000000 detected (Hypervisor Vendor Information).");
             // Set the CPUID response to provide the hypervisor's vendor ID signature.
             // We use the signature "MatrixVisor" encoded in a little-endian format.
-            cpuid_result.eax = CpuidLeaf::HypervisorInterface as u32; // Maximum supported CPUID leaf range.
-            cpuid_result.ebx = 0x69727461; // "atri", part of "MatrixVisor" (in reverse order due to little-endian storage).
-            cpuid_result.ecx = 0x73695678; // "xVis", part of "MatrixVisor" (in reverse order due to little-endian storage).
-            cpuid_result.edx = 0x0000726f; // "or", the final part of "MatrixVisor" followed by two null bytes (in reverse order).
+            // cpuid_result.eax = CpuidLeaf::HypervisorInterface as u32; // Maximum supported CPUID leaf range.
+            // cpuid_result.ebx = 0x69727461; // "atri", part of "MatrixVisor" (in reverse order due to little-endian storage).
+            // cpuid_result.ecx = 0x73695678; // "xVis", part of "MatrixVisor" (in reverse order due to little-endian storage).
+            // cpuid_result.edx = 0x0000726f; // "or", the final part of "MatrixVisor" followed by two null bytes (in reverse order).
         },
         // Handle CPUID for hypervisor interface identification.
         leaf if leaf == CpuidLeaf::HypervisorInterface as u32 => {
