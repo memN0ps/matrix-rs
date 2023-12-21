@@ -125,10 +125,7 @@ Special thanks to:
 - [Drew (@drew)](https://github.com/drew-gpf)
 - [Matthias @not-matthias](https://github.com/not-matthias/)
 - [@felix-rs / @joshuа](https://github.com/felix-rs)
-- `@jessiep_ aka Jess`
-- [Ryan McCrystal (@rmccrystal)](https://github.com/rmccrystal)
 - [Jim Colerick (@vmprotect)](https://github.com/thug-shaker)
-- [Christopher (@Kharosx0)](https://twitter.com/Kharosx0)
 
 ## License
 
