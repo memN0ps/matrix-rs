@@ -166,6 +166,5 @@ bitfield! {
     present, set_present: 0;
     writable, set_writable: 1;
     large, set_large: 7;
-    restart, set_restart: 11;
     pfn, set_pfn: 51, 12;
 }
