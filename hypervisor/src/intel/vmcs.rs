@@ -216,7 +216,7 @@ impl Vmcs {
     #[rustfmt::skip]
     pub fn setup_host_registers_state(context: &CONTEXT, host_descriptor_table: &Box<DescriptorTables, KernelAlloc>, host_paging: &Box<PageTables, KernelAlloc>) {
         unsafe { vmwrite(vmcs::host::CR0, controlregs::cr0().bits() as u64) };
-        vmwrite(vmcs::host::CR3, host_paging.as_ref() as *const _ as u64);
+        vmwrite(vmcs::host::CR3, PhysicalAddress::pa_from_va(host_paging.as_ref() as *const _ as u64));
         unsafe { vmwrite(vmcs::host::CR4, controlregs::cr4().bits() as u64) };
 
         // The RIP/RSP registers are set within `launch_vm`.
