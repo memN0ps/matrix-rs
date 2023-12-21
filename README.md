@@ -12,8 +12,6 @@ A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hyperv
 
 - **Efficient VM Exit Handling**: Implements optimized handling for various VM exit reasons like `Cpuid`, `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`. This ensures minimal performance overhead and responsive virtual machine operations.
 
-- **Robust Isolation Mechanisms**: Custom Global Descriptor Table (GDT), Interrupt Descriptor Table (IDT), and Page Tables are used for enhanced security. This design decision prevents potential vulnerabilities from using the host's `ntoskrnl.exe` `CR3` or a usermode process's `CR3`, fortifying the hypervisor against sophisticated attacks. [Further reading on the importance of these structures](https://www.unknowncheats.me/forum/2779560-post4.html).
-
 - **Integrated Extended Page Tables (EPT)**: Incorporates Memory Type Range Registers (MTRR) with EPT for efficient memory mapping and management. This feature ensures that memory types are correctly identified and handled, optimizing performance and stability in virtualized environments.
 
 
@@ -22,6 +20,8 @@ A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hyperv
 - **Enhanced VM Exit Instruction Handling**: Future updates aim to include advanced handling for instructions like `Getsec`, and VMX instructions (`Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxoff`, `Vmxon`). This will extend the hypervisor's capability to manage more complex virtual machine operations and scenarios.
 
 - **EPT Hook Development**: Planning to implement EPT hooks for sophisticated memory control and monitoring within guest VMs. This will allow for more granular memory management and potentially enable advanced features like memory introspection or modification.
+
+- **Robust Isolation Mechanisms**: Custom Global Descriptor Table (GDT), Interrupt Descriptor Table (IDT), and Page Tables will be used for enhanced security. This design decision will prevent potential vulnerabilities from using the host's `ntoskrnl.exe` `CR3` or a usermode process's `CR3`, fortifying the hypervisor against sophisticated attacks. [Further reading on the importance of these structures](https://www.unknowncheats.me/forum/2779560-post4.html).
 
 - **Stability Enhancements**: Addressing the `CRITICAL_PROCESS_DIED (ef)` BSOD issue is a top priority.
 

@@ -217,8 +217,9 @@ impl Vmcs {
     pub fn setup_host_registers_state(context: &CONTEXT, host_descriptor_table: &Box<DescriptorTables, KernelAlloc>, host_paging: &Box<PageTables, PhysicalAllocator>) -> Result<(), HypervisorError> {
         unsafe { vmwrite(vmcs::host::CR0, controlregs::cr0().bits() as u64) };
 
-        let pml4_pa = host_paging.get_pml4_pa()?;
-        vmwrite(vmcs::host::CR3, pml4_pa);
+        // We can use custom page tables later, this is half implemented.
+        let _pml4_pa = host_paging.get_pml4_pa()?;
+        unsafe { vmwrite(vmcs::host::CR3, crate::utils::nt::NTOSKRNL_CR3) };
 
         unsafe { vmwrite(vmcs::host::CR4, controlregs::cr4().bits() as u64) };
 
