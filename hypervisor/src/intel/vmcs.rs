@@ -216,7 +216,10 @@ impl Vmcs {
     #[rustfmt::skip]
     pub fn setup_host_registers_state(context: &CONTEXT, host_descriptor_table: &Box<DescriptorTables, KernelAlloc>, host_paging: &Box<PageTables, PhysicalAllocator>) -> Result<(), HypervisorError> {
         unsafe { vmwrite(vmcs::host::CR0, controlregs::cr0().bits() as u64) };
-        vmwrite(vmcs::host::CR3, host_paging.get_pml4_pa()?);
+
+        let pml4_pa = host_paging.get_pml4_pa()?;
+        vmwrite(vmcs::host::CR3, pml4_pa);
+
         unsafe { vmwrite(vmcs::host::CR4, controlregs::cr4().bits() as u64) };
 
         // The RIP/RSP registers are set within `launch_vm`.
@@ -280,7 +283,8 @@ impl Vmcs {
 
         vmwrite(vmcs::control::MSR_BITMAPS_ADDR_FULL, PhysicalAddress::pa_from_va(msr_bitmap.as_ref() as *const _ as _));
 
-        let eptp = Ept::create_eptp_with_wb_and_4lvl_walk(PhysicalAddress::pa_from_va(ept.as_ref() as *const _ as _))?;
+        let eptp = ept.create_eptp_with_wb_and_4lvl_walk()?;
+
         vmwrite(vmcs::control::EPTP_FULL, eptp);
         vmwrite(vmcs::control::VPID, VPID_TAG);
 

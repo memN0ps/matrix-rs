@@ -127,24 +127,29 @@ impl Ept {
     /// It encodes the provided physical base address of the EPT PML4 table into the EPTP format, setting
     /// the memory type to Write-Back and indicating a 4-level page walk.
     ///
-    /// # Arguments
-    /// * `ept_pml4_base_addr` - The physical base address of the EPT PML4 table. This address must be 4KB aligned.
-    ///
     /// # Returns
     /// A `Result<u64, HypervisorError>` containing the configured EPTP value. Returns an error if
     /// the base address is not properly aligned.
     ///
-    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.6.11 Extended-Page-Table Pointer (EPTP)
-    pub fn create_eptp_with_wb_and_4lvl_walk(
-        ept_pml4_base_addr: u64,
-    ) -> Result<u64, HypervisorError> {
+    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 28.2.6 EPT Paging-Structure Entries
+    pub fn create_eptp_with_wb_and_4lvl_walk(&self) -> Result<u64, HypervisorError> {
+        // Get the virtual address of the PML4 table for EPT.
+        let addr = addr_of!(self.pml4) as u64;
+
+        // Get the physical address of the PML4 table for EPT.
+        let ept_pml4_base_addr = PhysicalAddress::pa_from_va(addr);
+
         // Represents the EPT page walk length for Intel VT-x, specifically for a 4-level page walk.
         // The value is 3 (encoded as '3 << 3' in EPTP) because the EPTP encoding requires "number of levels minus one".
         const EPT_PAGE_WALK_LENGTH_4: u64 = 3 << 3;
 
+        // Represents the memory type setting for Write-Back (WB) in the EPTP.
+        const EPT_MEMORY_TYPE_WB: u64 = Mtrr::WriteBack as u64;
+
         // Check if the base address is 4KB aligned (the lower 12 bits should be zero).
         if ept_pml4_base_addr.trailing_zeros() >= 12 {
-            Ok(ept_pml4_base_addr | EPT_PAGE_WALK_LENGTH_4 | Mtrr::WriteBack as u64)
+            // Construct the EPTP with the page walk length and memory type for WB.
+            Ok(ept_pml4_base_addr | EPT_PAGE_WALK_LENGTH_4 | EPT_MEMORY_TYPE_WB)
         } else {
             Err(HypervisorError::InvalidEptPml4BaseAddress)
         }
