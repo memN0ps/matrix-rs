@@ -65,8 +65,8 @@ pub struct Vmx {
     pub host_rsp: Box<VmStack, KernelAlloc>,
 
     /// Virtual address of the host's paging structures, aligned to a 4-KByte boundary.
-    /// Allocated using `ExAllocatePool` or `ExAllocatePoolWithTag`.
-    pub host_paging: Box<PageTables, KernelAlloc>,
+    /// Allocated using `MmAllocateContiguousMemorySpecifyCacheNode`.
+    pub host_paging: Box<PageTables, PhysicalAllocator>,
 
     /// Virtual address of the guest's extended page-table structure, aligned to a 4-KByte boundary.
     /// Allocated using `MmAllocateContiguousMemorySpecifyCacheNode`.
@@ -94,7 +94,7 @@ impl Vmx {
         let mut guest_descriptor_table = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
         let mut host_descriptor_table = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
         let host_rsp = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
-        let mut host_paging: Box<PageTables, KernelAlloc> = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
+        let mut host_paging: Box<PageTables, PhysicalAllocator> = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let mut ept: Box<Ept, PhysicalAllocator> = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let guest_registers = GuestRegisters::default();
 
