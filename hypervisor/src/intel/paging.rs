@@ -6,7 +6,7 @@
 //! https://github.com/tandasat/Hello-VT-rp/blob/main/hypervisor/src/paging_structures.rs
 
 use {
-    crate::utils::addresses::PhysicalAddress,
+    crate::{error::HypervisorError, utils::addresses::PhysicalAddress},
     bitfield::bitfield,
     core::ptr::addr_of,
     x86::current::paging::{BASE_PAGE_SHIFT, LARGE_PAGE_SIZE},
@@ -74,6 +74,26 @@ impl PageTables {
                 // Increment the physical address by the size of a large page.
                 pa += LARGE_PAGE_SIZE as u64;
             }
+        }
+    }
+
+    /// Gets the physical address of the PML4 table, ensuring it is 4KB aligned.
+    ///
+    /// This method is typically used to retrieve the address to be loaded into CR3.
+    ///
+    /// # Returns
+    /// A `Result` containing the 4KB-aligned physical address of the PML4 table
+    /// or an error if the address is not aligned.
+    ///
+    /// # Errors
+    /// Returns `HypervisorError::InvalidCr3BaseAddress` if the address is not 4KB aligned.
+    pub fn get_pml4_pa(&self) -> Result<u64, HypervisorError> {
+        let addr = addr_of!(self.pml4) as u64;
+        let pa = PhysicalAddress::pa_from_va(addr);
+        if pa.trailing_zeros() >= BASE_PAGE_SHIFT as u32 {
+            Ok(pa)
+        } else {
+            Err(HypervisorError::InvalidCr3BaseAddress)
         }
     }
 }

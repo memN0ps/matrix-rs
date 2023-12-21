@@ -70,4 +70,7 @@ pub enum HypervisorError {
 
     #[error("Failed to resolve memory type for given physical address range")]
     MemoryTypeResolutionError,
+
+    #[error("Invalid CR3 base address")]
+    InvalidCr3BaseAddress,
 }
