@@ -88,8 +88,13 @@ impl PageTables {
     /// # Errors
     /// Returns `HypervisorError::InvalidCr3BaseAddress` if the address is not 4KB aligned.
     pub fn get_pml4_pa(&self) -> Result<u64, HypervisorError> {
+        // Retrieve the virtual address of the PML4 table.
         let addr = addr_of!(self.pml4) as u64;
+
+        // Get the physical address of the PML4 table for CR3.
         let pa = PhysicalAddress::pa_from_va(addr);
+
+        // Check if the base address is 4KB aligned (the lower 12 bits should be zero).
         if pa.trailing_zeros() >= BASE_PAGE_SHIFT as u32 {
             Ok(pa)
         } else {
