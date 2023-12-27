@@ -20,7 +20,7 @@ use {
 ///
 /// # Returns
 /// A pointer to the requested function, or null if not found.
-fn get_ntoskrnl_export(function_name: &str) -> PVOID {
+pub fn get_ntoskrnl_export(function_name: &str) -> PVOID {
     let wide_string: Vec<u16> = function_name
         .encode_utf16()
         .chain(core::iter::once(0)) // Add null terminator
