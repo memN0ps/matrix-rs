@@ -80,3 +80,12 @@ impl const DerefMut for PhysicalAddress {
         &mut self.0
     }
 }
+
+/// Converts a virtual address to its corresponding physical address.
+///
+/// # Arguments
+///
+/// * `ptr` - The virtual address to convert.
+pub fn physical_address(ptr: *const u64) -> PAddr {
+    PhysicalAddress::from_va(ptr as u64).0
+}
