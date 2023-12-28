@@ -74,7 +74,7 @@ impl Hypervisor {
 
             processor.virtualize_cpu()?;
 
-            core::mem::drop(executor);
+            drop(executor);
         }
 
         Ok(())
@@ -95,7 +95,7 @@ impl Hypervisor {
 
             processor.devirtualize_cpu()?;
 
-            core::mem::drop(executor);
+            drop(executor);
         }
 
         Ok(())
