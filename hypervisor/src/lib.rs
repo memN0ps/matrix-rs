@@ -41,7 +41,7 @@ impl Hypervisor {
     /// # Returns
     ///
     /// A `Result` which is `Ok` if hypervisor initialization was successful, or `Err` if there was an error.
-    pub fn new() -> Result<Self, HypervisorError> {
+    pub fn new(primary_eptp: u64, secondary_eptp: u64) -> Result<Self, HypervisorError> {
         log::info!("Initializing hypervisor");
 
         Self::check_supported_cpu()?;
@@ -52,7 +52,7 @@ impl Hypervisor {
         let mut processors: Vec<Vcpu> = Vec::new();
 
         for i in 0..processor_count() {
-            processors.push(Vcpu::new(i)?);
+            processors.push(Vcpu::new(i, primary_eptp, secondary_eptp)?);
         }
         log::info!("Found {} processors", processors.len());
 

@@ -1,49 +1,75 @@
-/// Credits to Matthias: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/utils/function_hook.rs
+//! Provides utilities for inline hooking of functions, allowing redirection of function calls.
+//! It includes creating and managing hooks with support for different types, enabling and disabling hooks,
+//! and managing the necessary memory and page table entries.
+//! Credits to Matthias: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/utils/function_hook.rs
 
 use {
+    crate::{error::HypervisorError, utils::nt::RtlCopyMemory}, // Internal error handling and utilities.
     alloc::{boxed::Box, vec, vec::Vec},
+    iced_x86::{
+        // Importing from iced_x86 for instruction decoding and encoding.
+        BlockEncoder,
+        BlockEncoderOptions,
+        Decoder,
+        DecoderOptions,
+        FlowControl,
+        InstructionBlock,
+    },
     wdk_sys::{
         ntddk::{
-            IoAllocateMdl, IoFreeMdl, KeInvalidateAllCaches, MmProbeAndLockPages, MmUnlockPages,
+            // System calls for memory descriptor list operations.
+            IoAllocateMdl,
+            IoFreeMdl,
+            KeInvalidateAllCaches,
+            MmProbeAndLockPages,
+            MmUnlockPages,
         },
-        _LOCK_OPERATION::IoReadAccess, _MODE::KernelMode, PMDL,
+        PMDL,
+        _LOCK_OPERATION::IoReadAccess,
+        _MODE::KernelMode,
     },
-    x86::bits64::paging::BASE_PAGE_SIZE,
-    crate::{error::HypervisorError, utils::nt::RtlCopyMemory},
-    iced_x86::{BlockEncoder, BlockEncoderOptions, Decoder, DecoderOptions, FlowControl, InstructionBlock},
+    x86::bits64::paging::BASE_PAGE_SIZE, // Constant for base page size.
 };
 
-pub const JMP_SHELLCODE_LEN: usize = 14;
-pub const BP_SHELLCODE_LEN: usize = 1;
+// Constants for the length of different shellcodes used in hooks.
+pub const JMP_SHELLCODE_LEN: usize = 14; // Length of JMP shellcode.
+pub const BP_SHELLCODE_LEN: usize = 1; // Length of Breakpoint shellcode.
 
+// Define the types of hooks available: JMP for jump-based hooks, Breakpoint for hooks that use breakpoints.
 pub enum HookType {
     Jmp,
     Breakpoint,
 }
 
+/// Represents a function hook with the capability to enable inline hooking.
+///
+/// ## Fields
+/// - `trampoline`: The trampoline code to execute the original function.
+/// - `hook_address`: The address where the hook is installed.
+/// - `handler`: The address of the handler function.
+/// - `mdl`: Memory descriptor list for the hook address.
+/// - `hook_type`: Type of the hook (Jmp or Breakpoint).
 pub struct FunctionHook {
     trampoline: Box<[u8]>,
-
-    /// Address where the inline hook has been written to (shadow page)
     hook_address: u64,
     handler: u64,
-
     mdl: PMDL,
-
     hook_type: HookType,
 }
 
 impl FunctionHook {
-    /// Creates a new inline hook (not yet enabled) for the specified function.
+    /// Creates a new inline hook for a given function. It prepares the necessary trampoline and other components but doesn't enable the hook.
     ///
     /// ## Parameters
+    /// - `original_address`: The original address of the function to be hooked.
+    /// - `hook_address`: The address where the hook will be placed.
+    /// - `handler`: Pointer to the handler function that will be called instead of the original.
     ///
+    /// ## Returns
+    /// Returns an Option containing the new FunctionHook if successful, or None if failed.
     ///
-    ///
-    /// ## Note
-    ///
-    /// Note: We have to allocate a new instance here, so that it's valid after
-    /// the virtualization. Otherwise, all the addresses would be 0x0.
+    /// ## Safety
+    /// This function allocates memory and manipulates page table entries. Incorrect use may lead to system instability.
     pub fn new(original_address: u64, hook_address: u64, handler: *const ()) -> Option<Self> {
         log::info!(
             "Creating a new inline hook. Address: {:x}, handler: {:x}",
@@ -56,7 +82,7 @@ impl FunctionHook {
         // - 14 Bytes: JMP shellcode
         //
         #[cfg(feature = "shellcode-hook")]
-            let (hook_type, trampoline) = match Self::trampoline_shellcode(
+        let (hook_type, trampoline) = match Self::trampoline_shellcode(
             original_address,
             hook_address as u64,
             JMP_SHELLCODE_LEN,
@@ -72,18 +98,18 @@ impl FunctionHook {
                     hook_address as u64,
                     BP_SHELLCODE_LEN,
                 )
-                    .map_err(|e| {
-                        log::warn!("Failed to create bp trampoline: {:?}", e);
-                        e
-                    })
-                    .ok()?;
+                .map_err(|e| {
+                    log::warn!("Failed to create bp trampoline: {:?}", e);
+                    e
+                })
+                .ok()?;
 
                 (HookType::Breakpoint, trampoline)
             }
         };
 
         #[cfg(not(feature = "shellcode-hook"))]
-            let (hook_type, trampoline) = {
+        let (hook_type, trampoline) = {
             let trampoline =
                 Self::trampoline_shellcode(original_address, hook_address, BP_SHELLCODE_LEN)
                     .map_err(|e| {
@@ -95,17 +121,14 @@ impl FunctionHook {
             (HookType::Breakpoint, trampoline)
         };
 
-        // Lock the virtual address. The specified hook address can/will be tradable
-        // pagable memory or where its physical address can be changed by the
-        // Memory Manager at any time. We need to prevent that because we assume
-        // permanent 1:1 mapping of the hook virtual and physical addresses.
-        //
+        // Allocate and lock the memory descriptor list for the page where the hook is installed.
+        // This ensures the memory doesn't get paged out and is accessible when needed.
         let mdl = unsafe {
             IoAllocateMdl(
                 original_address as _,
                 BASE_PAGE_SIZE as _,
-                0,
-                0,
+                false as _,
+                false as _,
                 0 as _,
             )
         };
@@ -124,10 +147,17 @@ impl FunctionHook {
         })
     }
 
+    /// Enables the hook by writing the jmp or breakpoint shellcode at the hook address.
+    ///
+    /// ## Details
+    /// Depending on the hook type, it writes the appropriate shellcode to jump to the handler or to trigger a breakpoint.
+    ///
+    /// ## Safety
+    /// This function modifies the instruction at the hook address. Ensure that this doesn't corrupt the program flow or overlap with critical instructions.
     pub fn enable(&self) {
         let jmp_to_handler = match self.hook_type {
             HookType::Jmp => Self::jmp_shellcode(self.handler).to_vec(),
-            HookType::Breakpoint => vec![0xCC_u8],
+            HookType::Breakpoint => vec![0xCC_u8], // 0xCC is the opcode for INT3, a common breakpoint instruction.
         };
 
         log::info!(
@@ -136,11 +166,8 @@ impl FunctionHook {
             self.trampoline_address(),
         );
 
-        // Note: In order for this to work, we have to use an heap allocated instance
-        // instead of a stack allocated one. Otherwise, the stack will be
-        // invalidated after the virtualization of the current processor. After
-        // that, all the variables will be set to 0.
-        //
+        // Write the shellcode to the hook address. Note that after virtualization of the current processor,
+        // all variables are set to 0 due to stack invalidation. Hence, heap allocation is used instead.
         unsafe {
             RtlCopyMemory(
                 self.hook_address as *mut u64,
@@ -149,6 +176,7 @@ impl FunctionHook {
             );
         }
 
+        // Invalidate all processor caches to ensure the new instructions are used.
         unsafe { KeInvalidateAllCaches() };
     }
 
@@ -188,9 +216,7 @@ impl FunctionHook {
         let mut shellcode = [
             0xff, 0x25, 0x00, 0x00, 0x00, 0x00, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
         ];
-        unsafe {
-            (shellcode.as_mut_ptr().add(6) as *mut u64).write_volatile(target_address)
-        };
+        unsafe { (shellcode.as_mut_ptr().add(6) as *mut u64).write_volatile(target_address) };
         log::info!("Jmp shellcode: {:x?}", shellcode);
 
         shellcode
@@ -213,7 +239,9 @@ impl FunctionHook {
     ///
     /// The trampoline shellcode.
     fn trampoline_shellcode(
-        original_address: u64, address: u64, required_size: usize,
+        original_address: u64,
+        address: u64,
+        required_size: usize,
     ) -> Result<Box<[u8]>, HypervisorError> {
         log::info!("Creating the trampoline for function: {:#x}", address);
 
@@ -303,19 +331,30 @@ impl FunctionHook {
         Ok(unsafe { memory.assume_init() })
     }
 
+    /// Provides a constant function to retrieve the address of the trampoline.
+    ///
+    /// ## Returns
+    /// Returns the address of the trampoline as a mutable pointer to a 64-bit unsigned integer.
     pub const fn trampoline_address(&self) -> *mut u64 {
         self.trampoline.as_ptr() as _
     }
 
+    /// Provides a constant function to retrieve the address of the handler.
+    ///
+    /// ## Returns
+    /// Returns the address of the handler function as a 64-bit unsigned integer.
     pub const fn handler_address(&self) -> u64 {
         self.handler
     }
 }
 
+/// Implementation of the Drop trait for FunctionHook.
+/// Ensures that when a FunctionHook is dropped, it unlocks and frees the pages associated with the hook.
 impl Drop for FunctionHook {
     fn drop(&mut self) {
         if !self.mdl.is_null() {
             unsafe {
+                // Unlock pages that were locked for this hook and free the memory descriptor list.
                 MmUnlockPages(self.mdl);
                 IoFreeMdl(self.mdl);
             };

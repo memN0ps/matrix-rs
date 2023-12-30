@@ -11,7 +11,6 @@ use {
         error::HypervisorError,
         intel::{
             descriptor::DescriptorTables,
-            ept::Ept,
             paging::PageTables,
             vmlaunch::launch_vm,
             vmstack::{VmStack, STACK_CONTENTS_SIZE},
@@ -68,12 +67,14 @@ pub struct Vmx {
     /// Allocated using `MmAllocateContiguousMemorySpecifyCacheNode`.
     pub host_paging: Box<PageTables, PhysicalAllocator>,
 
-    /// Virtual address of the guest's extended page-table structure, aligned to a 4-KByte boundary.
-    /// Allocated using `MmAllocateContiguousMemorySpecifyCacheNode`.
-    pub ept: Box<Ept, PhysicalAllocator>,
-
     /// The guest's general-purpose registers state.
     pub guest_registers: GuestRegisters,
+
+    /// The primary Extended Page Table Pointer (EPTP) for the VMCS per logical processor.
+    pub primary_eptp: u64,
+
+    /// The secondary Extended Page Table Pointer (EPTP) for the VMCS per logical processor.
+    pub secondary_eptp: u64,
 }
 
 impl Vmx {
@@ -84,7 +85,7 @@ impl Vmx {
     ///
     /// Returns a `Result` with a boxed `Vmx` instance or an `HypervisorError`.
     #[rustfmt::skip]
-    pub fn new() -> Result<Box<Self>, HypervisorError> {
+    pub fn new(primary_eptp: u64, secondary_eptp: u64) -> Result<Box<Self>, HypervisorError> {
         log::info!("Setting up VMX");
 
         // Allocate memory for the hypervisor's needs
@@ -95,7 +96,6 @@ impl Vmx {
         let mut host_descriptor_table = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
         let host_rsp = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
         let mut host_paging: Box<PageTables, PhysicalAllocator> = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
-        let mut ept: Box<Ept, PhysicalAllocator> = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let guest_registers = GuestRegisters::default();
 
         // To capture the current GDT and IDT for the guest the order is important so we can setup up a new GDT and IDT for the host.
@@ -104,9 +104,6 @@ impl Vmx {
         DescriptorTables::initialize_for_host(&mut host_descriptor_table)?;
 
         host_paging.build_identity();
-
-        // This is done here instead of `setup_virtualization` because it uses a vec to allocate memory for the `MtrrRangeDescriptor`
-        ept.build_identity_map()?;
 
         log::info!("Creating Vmx instance");
 
@@ -118,8 +115,9 @@ impl Vmx {
             host_descriptor_table,
             host_rsp,
             host_paging,
-            ept,
             guest_registers,
+            primary_eptp,
+            secondary_eptp,
         };
 
         let instance = Box::new(instance);
@@ -169,7 +167,7 @@ impl Vmx {
          * - 25.8 VM-ENTRY CONTROL FIELDS
          */
         log::info!("Setting up VMCS Control Fields");
-        Vmcs::setup_vmcs_control_fields(&self.msr_bitmap, &self.ept)?;
+        Vmcs::setup_vmcs_control_fields(&self.msr_bitmap, self.primary_eptp, self.secondary_eptp)?;
         log::info!("VMCS Control Fields successful!");
 
         log::info!("Virtualization setup successful!");

@@ -38,10 +38,14 @@ impl Vcpu {
     /// # Returns
     ///
     /// A `Result` containing the initialized VCPU instance or a `HypervisorError`.
-    pub fn new(index: u32) -> Result<Self, HypervisorError> {
+    pub fn new(
+        index: u32,
+        primary_eptp: u64,
+        secondary_eptp: u64,
+    ) -> Result<Self, HypervisorError> {
         log::info!("Creating processor {}", index);
 
-        let vmx = Vmx::new()?;
+        let vmx = Vmx::new(primary_eptp, secondary_eptp)?;
 
         Ok(Self { index, vmx })
     }

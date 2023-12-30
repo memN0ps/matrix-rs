@@ -11,7 +11,6 @@ use {
         intel::{
             controls::{adjust_vmx_controls, VmxControl},
             descriptor::DescriptorTables,
-            ept::Ept,
             invept::invept_single_context,
             invvpid::{invvpid_single_context, VPID_TAG},
             msr_bitmap::MsrBitmap,
@@ -261,7 +260,7 @@ impl Vmcs {
     /// # Arguments
     /// * `msr_bitmap` - Bitmap for Model-Specific Registers.
     #[rustfmt::skip]
-    pub fn setup_vmcs_control_fields(msr_bitmap: &Box<MsrBitmap, PhysicalAllocator>, ept: &Box<Ept, PhysicalAllocator>) -> Result<(), HypervisorError> {
+    pub fn setup_vmcs_control_fields(msr_bitmap: &Box<MsrBitmap, PhysicalAllocator>, primary_eptp: u64, _secondary_eptp: u64) -> Result<(), HypervisorError> {
         const PRIMARY_CTL: u64 = (vmcs::control::PrimaryControls::SECONDARY_CONTROLS.bits() | vmcs::control::PrimaryControls::USE_MSR_BITMAPS.bits()) as u64;
         const SECONDARY_CTL: u64 = (vmcs::control::SecondaryControls::ENABLE_RDTSCP.bits()
             | vmcs::control::SecondaryControls::ENABLE_XSAVES_XRSTORS.bits()
@@ -284,12 +283,10 @@ impl Vmcs {
 
         vmwrite(vmcs::control::MSR_BITMAPS_ADDR_FULL, PhysicalAddress::pa_from_va(msr_bitmap.as_ref() as *const _ as _));
 
-        let eptp = ept.create_eptp_with_wb_and_4lvl_walk()?;
-
-        vmwrite(vmcs::control::EPTP_FULL, eptp);
+        vmwrite(vmcs::control::EPTP_FULL, primary_eptp);
         vmwrite(vmcs::control::VPID, VPID_TAG);
 
-        invept_single_context(eptp);
+        invept_single_context(primary_eptp);
         invvpid_single_context(VPID_TAG);
 
         Ok(())

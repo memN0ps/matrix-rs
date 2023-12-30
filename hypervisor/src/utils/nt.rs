@@ -109,3 +109,12 @@ pub fn update_ntoskrnl_cr3() {
 extern "C" {
     pub static mut PsInitialSystemProcess: PEPROCESS;
 }
+
+#[link(name = "ntoskrnl")]
+extern "system" {
+    /// The RtlCopyMemory routine copies the contents of a source memory block to a destination memory block.
+    /// Callers of RtlCopyMemory can be running at any IRQL if the source and destination memory blocks are in nonpaged system memory.
+    /// Otherwise, the caller must be running at IRQL <= APC_LEVEL.
+    /// https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-rtlcopymemory
+    pub fn RtlCopyMemory(destination: *mut u64, source: *mut u64, length: usize);
+}

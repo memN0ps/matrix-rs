@@ -5,8 +5,11 @@
 
 #![no_std]
 #![allow(unused_mut)]
+#![feature(allocator_api, new_uninit)]
+#![feature(link_llvm_intrinsics)]
 
 // Set up a panic handler for non-test configurations.
+extern crate alloc;
 #[cfg(not(test))]
 extern crate wdk_panic;
 
@@ -20,12 +23,25 @@ use wdk_alloc::WDKAllocator;
 #[global_allocator]
 static GLOBAL: hypervisor::utils::alloc::KernelAlloc = hypervisor::utils::alloc::KernelAlloc;
 
+use alloc::boxed::Box;
+use alloc::vec;
+use core::sync::atomic::Ordering;
 use {
-    hypervisor::Hypervisor,
+    hypervisor::{
+        intel::ept::{
+            access::AccessType,
+            hooks::{Hook, HookManager, HookType},
+            paging::Ept,
+        },
+        utils::alloc::PhysicalAllocator,
+        Hypervisor,
+    },
     log::LevelFilter,
     log::{self},
     wdk_sys::{DRIVER_OBJECT, NTSTATUS, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL},
 };
+
+pub mod hook;
 
 /// The main entry point for the driver.
 ///
@@ -83,9 +99,11 @@ pub unsafe extern "system" fn driver_entry(
 pub extern "C" fn driver_unload(_driver: *mut DRIVER_OBJECT) {
     log::info!("Driver unloaded successfully!");
     if let Some(mut hypervisor) = unsafe { HYPERVISOR.take() } {
-        core::mem::drop(hypervisor);
+        drop(hypervisor);
     }
 }
+
+static mut HOOK_MANAGER: Option<HookManager> = None;
 
 /// The main hypervisor object.
 ///
@@ -102,7 +120,56 @@ static mut HYPERVISOR: Option<Hypervisor> = None;
 /// * `Some(())` if the system was successfully virtualized.
 /// * `None` if there was an error during virtualization.
 fn virtualize() -> Option<()> {
-    let mut hypervisor = match Hypervisor::new() {
+    // Initialize the hook and hook manager
+    //
+    let hook = Hook::hook_function("MmIsAddressValid", hook::mm_is_address_valid as *const ())?;
+    if let HookType::Function { ref inline_hook } = hook.hook_type {
+        hook::ORIGINAL.store(inline_hook.trampoline_address(), Ordering::Relaxed);
+    }
+    let hook_manager = HookManager::new(vec![hook]);
+
+    // Setup the extended page tables. Because we also have hooks, we need to change
+    // the permissions of the page tables accordingly. This will be done by the
+    // `HookManager`.
+    //
+    let mut primary_ept: Box<Ept, PhysicalAllocator> = unsafe {
+        Box::try_new_zeroed_in(PhysicalAllocator)
+            .expect("failed to allocate primary ept")
+            .assume_init()
+    };
+    let mut secondary_ept: Box<Ept, PhysicalAllocator> = unsafe {
+        Box::try_new_zeroed_in(PhysicalAllocator)
+            .expect("failed to allocate secondary ept")
+            .assume_init()
+    };
+
+    log::info!("Setting Primary EPTs");
+    primary_ept.identity_4kb(AccessType::ReadWriteExecute);
+
+    log::info!("Setting Secondary EPTs");
+    secondary_ept.identity_4kb(AccessType::ReadWrite);
+
+    let primary_eptp = match primary_ept.create_eptp_with_wb_and_4lvl_walk() {
+        Ok(eptp) => eptp,
+        Err(err) => {
+            log::info!("Failed to create primary EPTP: {}", err);
+            return None;
+        }
+    };
+
+    let secondary_eptp = match secondary_ept.create_eptp_with_wb_and_4lvl_walk() {
+        Ok(eptp) => eptp,
+        Err(err) => {
+            log::info!("Failed to create secondary EPTP: {}", err);
+            return None;
+        }
+    };
+
+    hook_manager.enable_hooks(&mut primary_ept, &mut secondary_ept);
+
+    unsafe { HOOK_MANAGER = Some(hook_manager) };
+
+    let mut hypervisor = match Hypervisor::new(primary_eptp, secondary_eptp) {
         Ok(hypervisor) => hypervisor,
         Err(err) => {
             log::info!("Failed to initialize hypervisor: {}", err);
