@@ -91,4 +91,7 @@ pub enum HypervisorError {
 
     #[error("Found unsupported instruction")]
     UnsupportedInstruction,
+
+    #[error("VMX is not initialized")]
+    VmxNotInitialized,
 }
