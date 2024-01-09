@@ -8,13 +8,17 @@ use {
     super::vmx::Vmx,
     crate::{
         error::HypervisorError,
-        intel::{invept::invept_all_contexts, invvpid::invvpid_all_contexts, support},
+        intel::{
+            invept::invept_all_contexts, invvpid::invvpid_all_contexts, shared_data::SharedData,
+            support,
+        },
         utils::{
             capture::CONTEXT,
             processor::{is_virtualized, set_virtualized},
         },
     },
     alloc::boxed::Box,
+    core::cell::OnceCell,
     core::mem::MaybeUninit,
     wdk_sys::ntddk::RtlCaptureContext,
 };
@@ -25,7 +29,7 @@ pub struct Vcpu {
     index: u32,
 
     /// The VMX instance associated with this VCPU.
-    vmx: Box<Vmx>,
+    vmx: OnceCell<Box<Vmx>>,
 }
 
 impl Vcpu {
@@ -38,16 +42,13 @@ impl Vcpu {
     /// # Returns
     ///
     /// A `Result` containing the initialized VCPU instance or a `HypervisorError`.
-    pub fn new(
-        index: u32,
-        primary_eptp: u64,
-        secondary_eptp: u64,
-    ) -> Result<Self, HypervisorError> {
+    pub fn new(index: u32) -> Result<Self, HypervisorError> {
         log::info!("Creating processor {}", index);
 
-        let vmx = Vmx::new(primary_eptp, secondary_eptp)?;
-
-        Ok(Self { index, vmx })
+        Ok(Self {
+            index,
+            vmx: OnceCell::new(),
+        })
     }
 
     /// Virtualizes the current CPU.
@@ -58,7 +59,7 @@ impl Vcpu {
     /// # Returns
     ///
     /// A `Result` indicating the success or failure of the virtualization process.
-    pub fn virtualize_cpu(&mut self) -> Result<(), HypervisorError> {
+    pub fn virtualize_cpu(&mut self, shared_data: &mut SharedData) -> Result<(), HypervisorError> {
         log::info!("Virtualizing processor {}", self.index);
 
         // Capture the current processor's context. The Guest will resume from this point since we capture and write this context to the guest state for each vcpu.
@@ -75,20 +76,18 @@ impl Vcpu {
             log::info!("Preparing for virtualization");
             set_virtualized();
 
-            self.vmx.setup_virtualization(&context)?;
+            self.vmx
+                .get_or_try_init(|| Vmx::new(shared_data, &context))?;
+
+            let vmx = match self.vmx.get_mut() {
+                Some(vmx) => vmx,
+                None => return Err(HypervisorError::VmxNotInitialized),
+            };
+
             log::info!("Virtualization complete for processor {}", self.index);
 
-            Self::invalidate_contexts();
-            log::info!(
-                "Processor contexts invalidated for processor {}",
-                self.index
-            );
+            vmx.run();
 
-            log::info!("Dumping VMCS: {:#x?}", self.vmx.vmcs_region);
-            log::info!("Dumping _CONTEXT: ");
-            CONTEXT::dump_context(&context);
-
-            self.vmx.run();
             // We should never reach this point as the VM should have been launched.
         }
 

@@ -18,6 +18,7 @@ pub const _4KB: usize = 4 * 1024;
 pub enum AccessType {
     ReadWrite,
     ReadWriteExecute,
+    Execute,
 }
 
 impl AccessType {
@@ -26,6 +27,7 @@ impl AccessType {
         match self {
             AccessType::ReadWrite => PML4Flags::P | PML4Flags::RW | PML4Flags::US | PML4Flags::XD,
             AccessType::ReadWriteExecute => PML4Flags::P | PML4Flags::RW | PML4Flags::US,
+            AccessType::Execute => PML4Flags::US,
         }
     }
 
@@ -34,6 +36,7 @@ impl AccessType {
         match self {
             AccessType::ReadWrite => PDPTFlags::P | PDPTFlags::RW | PDPTFlags::US | PDPTFlags::XD,
             AccessType::ReadWriteExecute => PDPTFlags::P | PDPTFlags::RW | PDPTFlags::US,
+            AccessType::Execute => PDPTFlags::US,
         }
     }
 
@@ -42,6 +45,7 @@ impl AccessType {
         match self {
             AccessType::ReadWrite => PDFlags::P | PDFlags::RW | PDFlags::US | PDFlags::XD,
             AccessType::ReadWriteExecute => PDFlags::P | PDFlags::RW | PDFlags::US,
+            AccessType::Execute => PDFlags::US,
         }
     }
 
@@ -54,6 +58,7 @@ impl AccessType {
             AccessType::ReadWriteExecute => {
                 PTFlags::from_iter([PTFlags::P, PTFlags::RW, PTFlags::US])
             }
+            AccessType::Execute => PTFlags::from_iter([PTFlags::US]),
         }
     }
 
@@ -66,6 +71,10 @@ impl AccessType {
             }
             AccessType::ReadWriteExecute => {
                 flags.insert(PDFlags::RW); // Set the ReadWrite flag.
+                flags.remove(PDFlags::XD); // Remove the Execute Disable flag to allow execution.
+            }
+            AccessType::Execute => {
+                flags.remove(PDFlags::RW); // Remove the ReadWrite flag to prevent writes.
                 flags.remove(PDFlags::XD); // Remove the Execute Disable flag to allow execution.
             }
         }
@@ -82,6 +91,10 @@ impl AccessType {
             }
             AccessType::ReadWriteExecute => {
                 flags.insert(PTFlags::RW); // Set the ReadWrite flag.
+                flags.remove(PTFlags::XD); // Remove the Execute Disable flag to allow execution.
+            }
+            AccessType::Execute => {
+                flags.remove(PTFlags::RW); // Remove the ReadWrite flag to prevent writes.
                 flags.remove(PTFlags::XD); // Remove the Execute Disable flag to allow execution.
             }
         }

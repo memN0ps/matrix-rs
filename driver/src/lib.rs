@@ -23,22 +23,26 @@ use wdk_alloc::WDKAllocator;
 #[global_allocator]
 static GLOBAL: hypervisor::utils::alloc::KernelAlloc = hypervisor::utils::alloc::KernelAlloc;
 
-use alloc::boxed::Box;
-use alloc::vec;
-use core::sync::atomic::Ordering;
 use {
+    alloc::vec,
+    core::sync::atomic::Ordering,
     hypervisor::{
-        intel::ept::{
-            access::AccessType,
-            hooks::{Hook, HookManager, HookType},
-            paging::Ept,
+        intel::{
+            ept::{
+                access::AccessType,
+                hooks::{Hook, HookManager, HookType},
+                paging::Ept,
+            },
+            vmm::Hypervisor,
         },
-        utils::alloc::PhysicalAllocator,
-        Hypervisor,
+        utils::nt::update_ntoskrnl_cr3,
     },
     log::LevelFilter,
     log::{self},
-    wdk_sys::{DRIVER_OBJECT, NTSTATUS, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL},
+    wdk_sys::{
+        ntddk::MmIsAddressValid, DRIVER_OBJECT, NTSTATUS, PUNICODE_STRING, STATUS_SUCCESS,
+        STATUS_UNSUCCESSFUL,
+    },
 };
 
 pub mod hook;
@@ -82,6 +86,10 @@ pub unsafe extern "system" fn driver_entry(
         log::error!("Failed to virtualize processors");
         return STATUS_UNSUCCESSFUL;
     }
+
+    // Test the hooks
+    //
+    unsafe { MmIsAddressValid(0 as _) };
 
     STATUS_SUCCESS
 }
@@ -128,64 +136,37 @@ fn virtualize() -> Option<()> {
     }
     let hook_manager = HookManager::new(vec![hook]);
 
-    // Setup the extended page tables. Because we also have hooks, we need to change
-    // the permissions of the page tables accordingly. This will be done by the
-    // `HookManager`.
-    //
-    let mut primary_ept: Box<Ept, PhysicalAllocator> = unsafe {
-        Box::try_new_zeroed_in(PhysicalAllocator)
-            .expect("failed to allocate primary ept")
-            .assume_init()
-    };
-    let mut secondary_ept: Box<Ept, PhysicalAllocator> = unsafe {
-        Box::try_new_zeroed_in(PhysicalAllocator)
-            .expect("failed to allocate secondary ept")
-            .assume_init()
-    };
-
-    log::info!("Setting Primary EPTs");
-    primary_ept.identity_4kb(AccessType::ReadWriteExecute);
-
-    log::info!("Setting Secondary EPTs");
-    secondary_ept.identity_4kb(AccessType::ReadWrite);
-
-    let primary_eptp = match primary_ept.create_eptp_with_wb_and_4lvl_walk() {
-        Ok(eptp) => eptp,
-        Err(err) => {
-            log::info!("Failed to create primary EPTP: {}", err);
-            return None;
-        }
-    };
-
-    let secondary_eptp = match secondary_ept.create_eptp_with_wb_and_4lvl_walk() {
-        Ok(eptp) => eptp,
-        Err(err) => {
-            log::info!("Failed to create secondary EPTP: {}", err);
-            return None;
-        }
-    };
+    let mut primary_ept = Ept::identity_4kb(AccessType::ReadWriteExecute);
+    let mut secondary_ept = Ept::identity_4kb(AccessType::ReadWriteExecute);
 
     hook_manager.enable_hooks(&mut primary_ept, &mut secondary_ept);
 
     unsafe { HOOK_MANAGER = Some(hook_manager) };
 
-    let mut hypervisor = match Hypervisor::new(primary_eptp, secondary_eptp) {
-        Ok(hypervisor) => hypervisor,
+    let mut hv = match Hypervisor::builder()
+        .primary_ept(primary_ept)
+        .secondary_ept(secondary_ept)
+        .build()
+    {
+        Ok(hv) => hv,
         Err(err) => {
-            log::info!("Failed to initialize hypervisor: {}", err);
+            log::info!("Failed to build hypervisor: {:?}", err);
             return None;
         }
     };
 
-    match hypervisor.virtualize_system() {
+    // Update NTOSKRNL_CR3 to ensure correct CR3 in case of execution within a user-mode process via DPC.
+    update_ntoskrnl_cr3();
+
+    match hv.virtualize_system() {
         Ok(_) => log::info!("Successfully virtualized system!"),
         Err(err) => {
-            log::info!("Failed to virtualize system: {}", err);
+            log::info!("Failed to virtualize system: {:?}", err);
             return None;
         }
     }
 
-    unsafe { HYPERVISOR = Some(hypervisor) };
+    unsafe { HYPERVISOR = Some(hv) };
 
     Some(())
 }

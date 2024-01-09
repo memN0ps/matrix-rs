@@ -1,7 +1,10 @@
 /// Credits to Matthias: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/hook.rs
 use {
     crate::{
-        intel::ept::{access::AccessType, paging::Ept},
+        intel::{
+            ept::{access::AccessType, paging::Ept},
+            invept::invept_all_contexts,
+        },
         utils::{
             addresses::PhysicalAddress,
             function_hook::FunctionHook,
@@ -226,15 +229,18 @@ impl HookManager {
             let page = hook.original_pa.align_down_to_base_page().as_u64();
             let hook_page = hook.hook_pa.align_down_to_base_page().as_u64();
 
-            // Change the page permission in the primary EPT to Read-Write. This is done to
-            // ensure that when the guest tries to execute from this page, a page fault occurs,
+            // Change the page permission in the primary EPT to Execute. This is done to
+            // ensure that when the guest tries to read/write from this page, a page fault occurs,
             // and the handler can switch to the secondary EPT.
             primary_ept.change_page_flags(page, AccessType::ReadWrite);
 
-            // In the secondary EPT, change the permission of the hook page to Read-Write-Execute.
-            // This is where the actual hook resides, and execution should proceed normally when
+            // In the secondary EPT, change the permission of the hook page to Read-Write.
+            // This is where the actual hook resides, and read/write should proceed normally when
             // this page is active.
-            secondary_ept.change_page_flags(hook_page, AccessType::ReadWriteExecute);
+            secondary_ept.change_page_flags(hook_page, AccessType::Execute);
+
+            // Invalidate the EPT translation cache (INVEPT)
+            invept_all_contexts();
         }
     }
 }
