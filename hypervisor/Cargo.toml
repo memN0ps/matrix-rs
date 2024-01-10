@@ -29,8 +29,6 @@ log = "0.4.20" # https://crates.io/crates/log
 kernel-log = "0.1.2" # https://crates.io/crates/kernel-log
 com_logger = "0.1.1" # https://crates.io/crates/com_logger
 iced-x86 = { version = "1.20.0", default-features = false, features = ["no_std", "decoder", "block_encoder", "instr_info", "no_d3now", "no_evex", "no_vex", "no_xop"] } # https://crates.io/crates/iced-x86
-kernel-alloc = { version = "0.2.3", features = ["pool-tag"] }
-
 
 [build-dependencies]
 wdk-build = "0.1.0"
