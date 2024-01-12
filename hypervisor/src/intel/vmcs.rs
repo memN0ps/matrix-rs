@@ -4,7 +4,6 @@
 //! is vital for VMX operations on the CPU. It also offers utility functions for
 //! adjusting VMCS entries and displaying VMCS state for debugging purposes.
 
-use x86_64::registers::control::Cr4;
 use {
     // Internal crate usages
     crate::{
@@ -41,6 +40,7 @@ use {
         task,
         vmx::vmcs::{self},
     },
+    x86_64::registers::control::Cr4,
 };
 
 /// Represents the VMCS region in memory.
@@ -110,7 +110,7 @@ impl Vmcs {
     pub fn setup_guest_registers_state(context: &CONTEXT, guest_descriptor_table: &Box<DescriptorTables, KernelAlloc>, guest_registers: &mut GuestRegisters) {
         unsafe { vmwrite(vmcs::guest::CR0, controlregs::cr0().bits() as u64) };
         unsafe { vmwrite(vmcs::guest::CR3, controlregs::cr3()) };
-        unsafe { vmwrite(vmcs::guest::CR4, Cr4::read_raw()) };
+        vmwrite(vmcs::guest::CR4, Cr4::read_raw());
 
         vmwrite(vmcs::guest::DR7, context.Dr7);
 
@@ -222,7 +222,7 @@ impl Vmcs {
         let _pml4_pa = host_paging.get_pml4_pa()?;
         unsafe { vmwrite(vmcs::host::CR3, crate::utils::nt::NTOSKRNL_CR3) };
 
-        unsafe { vmwrite(vmcs::host::CR4, controlregs::cr4().bits() as u64) };
+        vmwrite(vmcs::host::CR4, Cr4::read_raw());
 
         // The RIP/RSP registers are set within `launch_vm`.
 
@@ -280,7 +280,7 @@ impl Vmcs {
 
         unsafe {
             vmwrite(vmcs::control::CR0_READ_SHADOW, controlregs::cr0().bits() as u64);
-            vmwrite(vmcs::control::CR4_READ_SHADOW, controlregs::cr4().bits() as u64);
+            vmwrite(vmcs::control::CR4_READ_SHADOW, Cr4::read_raw());
         };
 
         vmwrite(vmcs::control::MSR_BITMAPS_ADDR_FULL, PhysicalAddress::pa_from_va(msr_bitmap.as_ref() as *const _ as _));
