@@ -4,6 +4,7 @@
 //! enable VMX operations. It also offers utility functions for adjusting control
 //! registers to facilitate VMX operations.
 
+use x86_64::registers::control::Cr4;
 use {
     crate::{
         error::HypervisorError,
@@ -68,9 +69,10 @@ impl Vmxon {
 
     /// Enables VMX operation by setting appropriate bits and executing the VMXON instruction.
     fn enable_vmx_operation() -> Result<(), HypervisorError> {
-        let mut cr4 = unsafe { x86::controlregs::cr4() };
-        cr4.set(x86::controlregs::Cr4::CR4_ENABLE_VMX, true);
-        unsafe { x86::controlregs::cr4_write(cr4) };
+        const CR4_VMX_ENABLE_BIT: usize = 13;
+        let mut cr4 = Cr4::read_raw();
+        cr4.set_bit(CR4_VMX_ENABLE_BIT, true);
+        unsafe { Cr4::write_raw(cr4) };
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
         log::info!("Setting Lock Bit set via IA32_FEATURE_CONTROL");
@@ -128,11 +130,11 @@ impl Vmxon {
         let ia32_vmx_cr4_fixed0 = unsafe { x86::msr::rdmsr(x86::msr::IA32_VMX_CR4_FIXED0) };
         let ia32_vmx_cr4_fixed1 = unsafe { x86::msr::rdmsr(x86::msr::IA32_VMX_CR4_FIXED1) };
 
-        let mut cr4 = unsafe { x86::controlregs::cr4() };
+        let mut cr4 = Cr4::read_raw();
 
-        cr4 |= x86::controlregs::Cr4::from_bits_truncate(ia32_vmx_cr4_fixed0 as usize);
-        cr4 &= x86::controlregs::Cr4::from_bits_truncate(ia32_vmx_cr4_fixed1 as usize);
+        cr4 |= ia32_vmx_cr4_fixed0;
+        cr4 &= ia32_vmx_cr4_fixed1;
 
-        unsafe { x86::controlregs::cr4_write(cr4) };
+        unsafe { Cr4::write_raw(cr4) };
     }
 }
