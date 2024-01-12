@@ -4,6 +4,7 @@
 //! is vital for VMX operations on the CPU. It also offers utility functions for
 //! adjusting VMCS entries and displaying VMCS state for debugging purposes.
 
+use x86_64::registers::control::Cr4;
 use {
     // Internal crate usages
     crate::{
@@ -109,7 +110,7 @@ impl Vmcs {
     pub fn setup_guest_registers_state(context: &CONTEXT, guest_descriptor_table: &Box<DescriptorTables, KernelAlloc>, guest_registers: &mut GuestRegisters) {
         unsafe { vmwrite(vmcs::guest::CR0, controlregs::cr0().bits() as u64) };
         unsafe { vmwrite(vmcs::guest::CR3, controlregs::cr3()) };
-        unsafe { vmwrite(vmcs::guest::CR4, controlregs::cr4().bits() as u64) };
+        unsafe { vmwrite(vmcs::guest::CR4, Cr4::read_raw()) };
 
         vmwrite(vmcs::guest::DR7, context.Dr7);
 
