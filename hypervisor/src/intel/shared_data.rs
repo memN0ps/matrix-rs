@@ -10,18 +10,21 @@ use {
 pub struct SharedData {
     pub msr_bitmap: Box<MsrBitmap, PhysicalAllocator>,
 
-    pub primary_ept: Box<Ept>,
+    pub primary_ept: Box<Ept, PhysicalAllocator>,
     pub primary_pml4: PhysicalAddress,
 
     #[cfg(feature = "secondary-ept")]
-    pub secondary_ept: Box<Ept>,
+    pub secondary_ept: Box<Ept, PhysicalAllocator>,
     #[cfg(feature = "secondary-ept")]
     pub secondary_pml4: PhysicalAddress,
 }
 
 impl SharedData {
     #[cfg(feature = "secondary-ept")]
-    pub fn new(primary_ept: Box<Ept>, secondary_ept: Box<Ept>) -> Box<Self> {
+    pub fn new(
+        primary_ept: Box<Ept, PhysicalAllocator>,
+        secondary_ept: Box<Ept, PhysicalAllocator>,
+    ) -> Box<Self> {
         log::info!("Initializing shared data");
 
         let primary_pml4 = PhysicalAddress::from_va(primary_ept.pml4.as_ptr() as u64);

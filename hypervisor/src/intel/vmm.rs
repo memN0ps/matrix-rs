@@ -4,7 +4,10 @@ use {
     crate::{
         error::HypervisorError,
         intel::{ept::paging::Ept, shared_data::SharedData, vcpu::Vcpu},
-        utils::processor::{processor_count, ProcessorExecutor},
+        utils::{
+            alloc::PhysicalAllocator,
+            processor::{processor_count, ProcessorExecutor},
+        },
     },
     alloc::{boxed::Box, vec::Vec},
 };
@@ -12,11 +15,11 @@ use {
 #[derive(Default)]
 pub struct HypervisorBuilder {
     /// The primary extended page table.
-    primary_ept: Option<Box<Ept>>,
+    primary_ept: Option<Box<Ept, PhysicalAllocator>>,
 
     #[cfg(feature = "secondary-ept")]
     /// The secondary extended page table.
-    secondary_ept: Option<Box<Ept>>,
+    secondary_ept: Option<Box<Ept, PhysicalAllocator>>,
 }
 
 impl HypervisorBuilder {
@@ -38,14 +41,18 @@ impl HypervisorBuilder {
 
         log::info!("Found {} processors", processors.len());
 
-        let primary_ept = self.primary_ept.unwrap_or_else(Ept::default);
+        let primary_ept = self
+            .primary_ept
+            .ok_or(HypervisorError::PrimaryEPTNotProvided)?;
 
         #[cfg(not(feature = "secondary-ept"))]
         let mut shared_data = SharedData::new(primary_ept);
 
         #[cfg(feature = "secondary-ept")]
         let shared_data = {
-            let secondary_ept = self.secondary_ept.unwrap_or_else(Ept::default);
+            let secondary_ept = self
+                .secondary_ept
+                .ok_or(HypervisorError::SecondaryEPTNotProvided)?;
 
             SharedData::new(primary_ept, secondary_ept)
         };
@@ -56,13 +63,13 @@ impl HypervisorBuilder {
         })
     }
 
-    pub fn primary_ept(mut self, ept: Box<Ept>) -> Self {
+    pub fn primary_ept(mut self, ept: Box<Ept, PhysicalAllocator>) -> Self {
         self.primary_ept = Some(ept);
         self
     }
 
     #[cfg(feature = "secondary-ept")]
-    pub fn secondary_ept(mut self, ept: Box<Ept>) -> Self {
+    pub fn secondary_ept(mut self, ept: Box<Ept, PhysicalAllocator>) -> Self {
         self.secondary_ept = Some(ept);
         self
     }

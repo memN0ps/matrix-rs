@@ -14,7 +14,6 @@ use {
         },
         utils::addresses::{physical_address, PhysicalAddress},
     },
-    alloc::boxed::Box,
     core::ptr::addr_of,
     elain::Align,
     static_assertions::{const_assert, const_assert_eq},
@@ -54,22 +53,6 @@ const_assert_eq!(core::mem::size_of::<Ept>(), 0x40202000);
 const_assert!(core::mem::align_of::<Ept>() == 4096);
 
 impl Ept {
-    fn empty() -> Self {
-        Self {
-            pml4: [PML4Entry(0); 512],
-            align_0: Default::default(),
-            pdpt: [PDPTEntry(0); 512],
-            align_1: Default::default(),
-            pd: [[PDEntry(0); 512]; 512],
-            align_2: Default::default(),
-            pt: [[[PTEntry(0); 512]; 512]; 512],
-        }
-    }
-
-    pub fn default() -> Box<Self> {
-        Ept::identity_4kb(AccessType::ReadWriteExecute)
-    }
-
     /// Splits a large 2MB page into 512 smaller 4KB pages for a given guest physical address.
     ///
     /// # Arguments
@@ -119,20 +102,15 @@ impl Ept {
     ///
     /// # Remarks
     /// An identity map means every guest physical address maps directly to the same host physical address.
-    pub fn identity_4kb(access_type: AccessType) -> Box<Self> {
+    pub fn identity_4kb(&mut self, access_type: AccessType) {
         log::info!("Creating 4KB identity mappings for all addressable space.");
-
-        let mut ept = Box::new(Self::empty());
-
         log::info!("Mapping 512GB of physical memory");
 
         // Iterate through each possible 4KB page in the addressable space and map it to itself.
         for pa in (0.._512GB).step_by(BASE_PAGE_SIZE) {
             // Mapping guest physical address to the same host physical address.
-            ept.map_4kb(pa, pa, access_type);
+            self.map_4kb(pa, pa, access_type);
         }
-
-        ept
     }
 
     /// Creates an identity map for 2MB pages in the Extended Page Tables (EPT).
@@ -142,20 +120,15 @@ impl Ept {
     ///
     /// # Remarks
     /// Similar to `identity_4kb`, but maps larger 2MB pages for better performance in some scenarios.
-    pub fn identity_2mb(&mut self, access_type: AccessType) -> Box<Self> {
+    pub fn identity_2mb(&mut self, access_type: AccessType) {
         log::info!("Creating 2MB identity mappings for all addressable space.");
-
-        let mut ept = Box::new(Self::empty());
-
         log::info!("Mapping 512GB of physical memory");
 
         // Iterate through each possible 2MB page in the addressable space and map it to itself.
         for pa in (0.._512GB).step_by(LARGE_PAGE_SIZE) {
             // Mapping guest physical address to the same host physical address.
-            ept.map_2mb(pa, pa, access_type);
+            self.map_2mb(pa, pa, access_type);
         }
-
-        ept
     }
 
     /// Maps a single 4KB page in the EPT.

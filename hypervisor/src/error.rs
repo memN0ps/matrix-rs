@@ -94,4 +94,13 @@ pub enum HypervisorError {
 
     #[error("VMX is not initialized")]
     VmxNotInitialized,
+
+    #[error("Hook error")]
+    HookError,
+
+    #[error("Primary EPT not provided")]
+    PrimaryEPTNotProvided,
+
+    #[error("Secondary EPT not provided")]
+    SecondaryEPTNotProvided,
 }

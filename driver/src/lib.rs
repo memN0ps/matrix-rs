@@ -23,10 +23,13 @@ use wdk_alloc::WDKAllocator;
 #[global_allocator]
 static GLOBAL: hypervisor::utils::alloc::KernelAlloc = hypervisor::utils::alloc::KernelAlloc;
 
+use alloc::boxed::Box;
 use {
+    crate::expanded_stack::with_expanded_stack,
     alloc::vec,
     core::sync::atomic::Ordering,
     hypervisor::{
+        error::HypervisorError,
         intel::{
             ept::{
                 access::AccessType,
@@ -35,7 +38,7 @@ use {
             },
             vmm::Hypervisor,
         },
-        utils::nt::update_ntoskrnl_cr3,
+        utils::{alloc::PhysicalAllocator, nt::update_ntoskrnl_cr3},
     },
     log::LevelFilter,
     log::{self},
@@ -45,6 +48,7 @@ use {
     },
 };
 
+pub mod expanded_stack;
 pub mod hook;
 
 /// The main entry point for the driver.
@@ -82,16 +86,22 @@ pub unsafe extern "system" fn driver_entry(
     // Remove if manually mapping the kernel driver
     driver.DriverUnload = Some(driver_unload);
 
-    if virtualize().is_none() {
-        log::error!("Failed to virtualize processors");
-        return STATUS_UNSUCCESSFUL;
-    }
+    with_expanded_stack(|| {
+        match virtualize() {
+            Ok(_) => log::info!("Virtualization successful!"),
+            Err(err) => {
+                log::error!("Virtualization failed: {:?}", err);
+                return STATUS_UNSUCCESSFUL;
+            }
+        }
 
-    // Test the hooks
-    //
-    unsafe { MmIsAddressValid(0 as _) };
+        // Test the hooks
+        //
+        log::info!("Calling MmIsAddressValid to test EPT hook...");
+        unsafe { MmIsAddressValid(0 as _) };
 
-    STATUS_SUCCESS
+        STATUS_SUCCESS
+    })
 }
 
 /// The unload callback for the driver.
@@ -127,21 +137,33 @@ static mut HYPERVISOR: Option<Hypervisor> = None;
 ///
 /// * `Some(())` if the system was successfully virtualized.
 /// * `None` if there was an error during virtualization.
-fn virtualize() -> Option<()> {
+fn virtualize() -> Result<(), HypervisorError> {
     // Initialize the hook and hook manager
     //
-    let hook = Hook::hook_function("MmIsAddressValid", hook::mm_is_address_valid as *const ())?;
+    let hook = Hook::hook_function("MmIsAddressValid", hook::mm_is_address_valid as *const ())
+        .ok_or(HypervisorError::HookError)?;
     if let HookType::Function { ref inline_hook } = hook.hook_type {
         hook::ORIGINAL.store(inline_hook.trampoline_address(), Ordering::Relaxed);
     }
     let hook_manager = HookManager::new(vec![hook]);
 
-    let mut primary_ept = Ept::identity_4kb(AccessType::ReadWriteExecute);
-    let mut secondary_ept = Ept::identity_4kb(AccessType::ReadWriteExecute);
+    let mut primary_ept: Box<Ept, PhysicalAllocator> =
+        unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
+    let mut secondary_ept: Box<Ept, PhysicalAllocator> =
+        unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
 
-    hook_manager.enable_hooks(&mut primary_ept, &mut secondary_ept);
+    log::info!("Creating Primary EPT");
+    primary_ept.identity_4kb(AccessType::ReadWriteExecute);
+
+    log::info!("Creating Secondary EPT");
+    secondary_ept.identity_4kb(AccessType::ReadWriteExecute);
+
+    log::info!("Enabling hooks");
+    hook_manager.enable_hooks(&mut primary_ept, &mut secondary_ept)?;
 
     unsafe { HOOK_MANAGER = Some(hook_manager) };
+
+    log::info!("Building hypervisor");
 
     let mut hv = match Hypervisor::builder()
         .primary_ept(primary_ept)
@@ -149,10 +171,7 @@ fn virtualize() -> Option<()> {
         .build()
     {
         Ok(hv) => hv,
-        Err(err) => {
-            log::info!("Failed to build hypervisor: {:?}", err);
-            return None;
-        }
+        Err(err) => return Err(err),
     };
 
     // Update NTOSKRNL_CR3 to ensure correct CR3 in case of execution within a user-mode process via DPC.
@@ -160,13 +179,10 @@ fn virtualize() -> Option<()> {
 
     match hv.virtualize_system() {
         Ok(_) => log::info!("Successfully virtualized system!"),
-        Err(err) => {
-            log::info!("Failed to virtualize system: {:?}", err);
-            return None;
-        }
-    }
+        Err(err) => return Err(err),
+    };
 
     unsafe { HYPERVISOR = Some(hv) };
 
-    Some(())
+    Ok(())
 }
