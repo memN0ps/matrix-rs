@@ -4,56 +4,50 @@
 //! Credits to Matthias: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/utils/function_hook.rs
 
 use {
-    crate::{error::HypervisorError, utils::nt::RtlCopyMemory}, // Internal error handling and utilities.
+    crate::{error::HypervisorError, utils::nt::RtlCopyMemory},
     alloc::{boxed::Box, vec, vec::Vec},
     iced_x86::{
-        // Importing from iced_x86 for instruction decoding and encoding.
-        BlockEncoder,
-        BlockEncoderOptions,
-        Decoder,
-        DecoderOptions,
-        FlowControl,
-        InstructionBlock,
+        BlockEncoder, BlockEncoderOptions, Decoder, DecoderOptions, FlowControl, InstructionBlock,
     },
     wdk_sys::{
-        ntddk::{
-            // System calls for memory descriptor list operations.
-            IoAllocateMdl,
-            IoFreeMdl,
-            KeInvalidateAllCaches,
-            MmProbeAndLockPages,
-            MmUnlockPages,
-        },
+        ntddk::{IoAllocateMdl, IoFreeMdl, MmProbeAndLockPages, MmUnlockPages},
         PMDL,
         _LOCK_OPERATION::IoReadAccess,
         _MODE::KernelMode,
     },
-    x86::bits64::paging::BASE_PAGE_SIZE, // Constant for base page size.
+    x86::bits64::paging::BASE_PAGE_SIZE,
 };
 
-// Constants for the length of different shellcodes used in hooks.
-pub const JMP_SHELLCODE_LEN: usize = 14; // Length of JMP shellcode.
-pub const BP_SHELLCODE_LEN: usize = 1; // Length of Breakpoint shellcode.
+/// Length of JMP shellcode.
+pub const JMP_SHELLCODE_LEN: usize = 14;
 
-// Define the types of hooks available: JMP for jump-based hooks, Breakpoint for hooks that use breakpoints.
+/// Length of Breakpoint shellcode.
+pub const BP_SHELLCODE_LEN: usize = 1;
+
+/// Define the types of hooks available: JMP for jump-based hooks, Breakpoint for hooks that use breakpoints.
 pub enum HookType {
+    /// Jump-based hook.
     Jmp,
+
+    /// Breakpoint-based hook.
     Breakpoint,
 }
 
 /// Represents a function hook with the capability to enable inline hooking.
-///
-/// ## Fields
-/// - `trampoline`: The trampoline code to execute the original function.
-/// - `hook_address`: The address where the hook is installed.
-/// - `handler`: The address of the handler function.
-/// - `mdl`: Memory descriptor list for the hook address.
-/// - `hook_type`: Type of the hook (Jmp or Breakpoint).
 pub struct FunctionHook {
+    /// The trampoline code to execute the original function.
     trampoline: Box<[u8]>,
+
+    /// The address where the hook is installed.
     hook_address: u64,
+
+    /// The address of the handler function.
     handler: u64,
+
+    /// Memory descriptor list for the hook address.
     mdl: PMDL,
+
+    /// Type of the hook (Jmp or Breakpoint).
     hook_type: HookType,
 }
 
@@ -82,31 +76,28 @@ impl FunctionHook {
         // - 14 Bytes: JMP shellcode
         //
         #[cfg(feature = "shellcode-hook")]
-        let (hook_type, trampoline) = match Self::trampoline_shellcode(
-            original_address,
-            hook_address as u64,
-            JMP_SHELLCODE_LEN,
-        ) {
-            Ok(trampoline) => (HookType::Jmp, trampoline),
-            Err(error) => {
-                log::warn!("Failed to create jmp trampoline: {:?}", error);
+        let (hook_type, trampoline) =
+            match Self::trampoline_shellcode(original_address, hook_address, JMP_SHELLCODE_LEN) {
+                Ok(trampoline) => (HookType::Jmp, trampoline),
+                Err(error) => {
+                    log::warn!("Failed to create jmp trampoline: {:?}", error);
 
-                // If jmp trampoline didn't work, let's try this one:
-                //
-                let trampoline = Self::trampoline_shellcode(
-                    original_address,
-                    hook_address as u64,
-                    BP_SHELLCODE_LEN,
-                )
-                .map_err(|e| {
-                    log::warn!("Failed to create bp trampoline: {:?}", e);
-                    e
-                })
-                .ok()?;
+                    // If jmp trampoline didn't work, let's try this one:
+                    //
+                    let trampoline = Self::trampoline_shellcode(
+                        original_address,
+                        hook_address,
+                        BP_SHELLCODE_LEN,
+                    )
+                    .map_err(|e| {
+                        log::warn!("Failed to create bp trampoline: {:?}", e);
+                        e
+                    })
+                    .ok()?;
 
-                (HookType::Breakpoint, trampoline)
-            }
-        };
+                    (HookType::Breakpoint, trampoline)
+                }
+            };
 
         #[cfg(not(feature = "shellcode-hook"))]
         let (hook_type, trampoline) = {
@@ -176,8 +167,8 @@ impl FunctionHook {
             );
         }
 
-        // Invalidate all processor caches to ensure the new instructions are used.
-        unsafe { KeInvalidateAllCaches() };
+        // Invalidate all processor caches to ensure the new instructions are used. (Will use invept instead of this later)
+        //unsafe { KeInvalidateAllCaches() };
     }
 
     /// Creates the jmp shellcode.
@@ -216,7 +207,9 @@ impl FunctionHook {
         let mut shellcode = [
             0xff, 0x25, 0x00, 0x00, 0x00, 0x00, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
         ];
+
         unsafe { (shellcode.as_mut_ptr().add(6) as *mut u64).write_volatile(target_address) };
+
         log::info!("Jmp shellcode: {:x?}", shellcode);
 
         shellcode
@@ -253,10 +246,12 @@ impl FunctionHook {
         let bytes = unsafe {
             core::slice::from_raw_parts(address as *mut u8, usize::max(required_size * 2, 15))
         };
+
         let mut decoder = Decoder::with_ip(64, bytes, address, DecoderOptions::NONE);
 
         let mut total_bytes = 0;
         let mut trampoline = Vec::new();
+
         for instr in &mut decoder {
             if instr.is_invalid() {
                 return Err(HypervisorError::InvalidBytes);
@@ -286,7 +281,9 @@ impl FunctionHook {
                 FlowControl::IndirectBranch
                 | FlowControl::Interrupt
                 | FlowControl::XbeginXabortXend
-                | FlowControl::Exception => return Err(HypervisorError::UnsupportedInstruction),
+                | FlowControl::Exception => {
+                    return Err(HypervisorError::UnsupportedInstruction);
+                }
             };
         }
 
@@ -304,9 +301,11 @@ impl FunctionHook {
         log::info!("Allocated trampoline memory at {:p}", memory.as_ptr());
 
         let block = InstructionBlock::new(&trampoline, memory.as_mut_ptr() as _);
+
         let mut encoded = BlockEncoder::encode(decoder.bitness(), block, BlockEncoderOptions::NONE)
             .map(|b| b.code_buffer)
             .map_err(|_| HypervisorError::EncodingFailed)?;
+
         log::info!("Encoded trampoline: {:x?}", encoded);
 
         // Add jmp to the original function at the end. We can't use `address` for this,
