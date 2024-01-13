@@ -237,8 +237,8 @@ impl HookManager {
             // and the handler can switch to the secondary EPT.
             primary_ept.change_page_flags(page, AccessType::ReadWrite);
 
-            // In the secondary EPT, change the permission of the hook page to Read-Write.
-            // This is where the actual hook resides, and read/write should proceed normally when
+            // In the secondary EPT, change the permission of the hook page to Execute.
+            // This is where the actual hook resides, and execution should proceed normally from this page to our handler when
             // this page is active.
             secondary_ept.change_page_flags(hook_page, AccessType::Execute);
         }
