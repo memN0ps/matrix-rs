@@ -2,10 +2,7 @@
 use {
     crate::{
         error::HypervisorError,
-        intel::{
-            ept::{access::AccessType, paging::Ept},
-            invept::invept_single_context,
-        },
+        intel::ept::{access::AccessType, paging::Ept},
         utils::{
             addresses::PhysicalAddress,
             alloc::PhysicalAllocator,
@@ -244,36 +241,6 @@ impl HookManager {
             // This is where the actual hook resides, and read/write should proceed normally when
             // this page is active.
             secondary_ept.change_page_flags(hook_page, AccessType::Execute);
-
-            log::info!("Invalidating EPT cache");
-
-            // Invalidate the EPT cache to ensure that the changes are reflected in the EPT.
-
-            // Note this crashes with `KMODE_EXCEPTION_NOT_HANDLED (1e)`
-
-            /*
-            FAILED_INSTRUCTION_ADDRESS:
-            matrix!hypervisor::intel::invept::invept+24 [C:\Users\memN0ps\Documents\GitHub\hypervisor-rs\hypervisor\src\intel\invept.rs @ 39]
-            fffff804`67c1dee4 660f388001      invept  rax,oword ptr [rcx]
-
-            STACK_TEXT:
-            fffff50a`3b598ad8 fffff804`68d56262     : fffff50a`3b598c40 fffff804`68b01b60 fffff804`6616c180 ffffffff`c0000001 : nt!DbgBreakPointWithStatus
-            fffff50a`3b598ae0 fffff804`68d55953     : fffff804`00000003 fffff50a`3b598c40 fffff804`68c379b0 00000000`0000001e : nt!KiBugCheckDebugBreak+0x12
-            fffff50a`3b598b40 fffff804`68c210b7     : fffff50a`3b59af60 fffff804`688ebf30 fffff50a`3b59a2e8 00000000`00000000 : nt!KeBugCheck2+0xba3
-            fffff50a`3b5992b0 fffff804`68d36f0a     : 00000000`0000001e ffffffff`c000001d fffff804`67c1dee4 fffffe7f`371c4000 : nt!KeBugCheckEx+0x107
-            fffff50a`3b5992f0 fffff804`68c2a7af     : fffff50a`3b599b00 fffff50a`3b5993c0 fffff804`68800000 fffff804`68c24c8e : nt!HvlpVtlCallExceptionHandler+0x22
-            fffff50a`3b599330 fffff804`68ac4e23     : fffff50a`3b59af10 fffff50a`3b59a2e8 fffff804`68c24c8e fffff804`688ebf30 : nt!RtlpExecuteHandlerForException+0xf
-            fffff50a`3b599360 fffff804`68ac8b31     : ffffffff`ffffffff fffff50a`3b59a390 fffff50a`3b59a390 fffff50a`3b599b00 : nt!RtlDispatchException+0x2f3
-            fffff50a`3b599ad0 fffff804`68c340fc     : fffff804`6950d830 fffff50a`3b59afb1 fffff50a`3b59a280 fffff804`68c2851b : nt!KiDispatchException+0x1b1
-            fffff50a`3b59a1b0 fffff804`68c2e0a1     : 000000f4`3b599fd8 00000000`00000003 fffff50a`3b59a638 fffff804`67cbc0b8 : nt!KiExceptionDispatch+0x13c
-            fffff50a`3b59a390 fffff804`67c1dee4     : 00000000`00000001 00000001`bfe7101e 00000000`00000000 00000001`bfe7101e : nt!KiInvalidOpcodeFault+0x321
-            fffff50a`3b59a528 fffff804`67c1deaf     : 00000000`7f5d0000 fffff50a`3b59a6a8 fffff50a`3b59a698 fffff50a`3b59a698 : matrix!hypervisor::intel::invept::invept+0x24 [C:\Users\memN0ps\Documents\GitHub\hypervisor-rs\hypervisor\src\intel\invept.rs @ 39]
-             */
-
-            //let primary_eptp = primary_ept.create_eptp_with_wb_and_4lvl_walk()?;
-            //let secondary_eptp = secondary_ept.create_eptp_with_wb_and_4lvl_walk()?;
-            //invept_single_context(primary_eptp);
-            //invept_single_context(secondary_eptp);
         }
 
         Ok(())
