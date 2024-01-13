@@ -4,6 +4,7 @@
 //! is vital for VMX operations on the CPU. It also offers utility functions for
 //! adjusting VMCS entries and displaying VMCS state for debugging purposes.
 
+use crate::intel::shared_data::SharedData;
 use {
     // Internal crate usages
     crate::{
@@ -11,10 +12,8 @@ use {
         intel::{
             controls::{adjust_vmx_controls, VmxControl},
             descriptor::DescriptorTables,
-            ept::Ept,
             invept::invept_single_context,
             invvpid::{invvpid_single_context, VPID_TAG},
-            msr_bitmap::MsrBitmap,
             paging::PageTables,
             segmentation::SegmentDescriptor,
             support::{vmclear, vmptrld, vmread, vmwrite},
@@ -260,9 +259,9 @@ impl Vmcs {
     /// - 25.8 VM-ENTRY CONTROL FIELDS
     ///
     /// # Arguments
-    /// * `msr_bitmap` - Bitmap for Model-Specific Registers.
+    /// * `shared_data` - Shared data between processors.
     #[rustfmt::skip]
-    pub fn setup_vmcs_control_fields(msr_bitmap: &Box<MsrBitmap, PhysicalAllocator>, ept: &Box<Ept, PhysicalAllocator>) -> Result<(), HypervisorError> {
+    pub fn setup_vmcs_control_fields(shared_data: &mut SharedData) -> Result<(), HypervisorError> {
         const PRIMARY_CTL: u64 = (vmcs::control::PrimaryControls::SECONDARY_CONTROLS.bits() | vmcs::control::PrimaryControls::USE_MSR_BITMAPS.bits()) as u64;
         const SECONDARY_CTL: u64 = (vmcs::control::SecondaryControls::ENABLE_RDTSCP.bits()
             | vmcs::control::SecondaryControls::ENABLE_XSAVES_XRSTORS.bits()
@@ -283,14 +282,14 @@ impl Vmcs {
             vmwrite(vmcs::control::CR4_READ_SHADOW, Cr4::read_raw());
         };
 
-        vmwrite(vmcs::control::MSR_BITMAPS_ADDR_FULL, PhysicalAddress::pa_from_va(msr_bitmap.as_ref() as *const _ as _));
+        vmwrite(vmcs::control::MSR_BITMAPS_ADDR_FULL, PhysicalAddress::pa_from_va(shared_data.msr_bitmap.as_ref() as *const _ as _));
 
-        let eptp = ept.create_eptp_with_wb_and_4lvl_walk()?;
+        let primary_eptp = shared_data.primary_ept.create_eptp_with_wb_and_4lvl_walk()?;
 
-        vmwrite(vmcs::control::EPTP_FULL, eptp);
+        vmwrite(vmcs::control::EPTP_FULL, primary_eptp);
         vmwrite(vmcs::control::VPID, VPID_TAG);
 
-        invept_single_context(eptp);
+        invept_single_context(primary_eptp);
         invvpid_single_context(VPID_TAG);
 
         Ok(())

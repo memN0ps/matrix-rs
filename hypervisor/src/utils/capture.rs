@@ -115,6 +115,7 @@ pub struct CONTEXT {
 impl CONTEXT {
     /// Outputs the processor's context for debugging purposes.
     pub fn dump_context(context: &CONTEXT) {
+        log::info!("Dumping _CONTEXT: ");
         /*
         log::info!("P1Home: {:#x}", context.P1Home);
         log::info!("P2Home: {:#x}", context.P2Home);

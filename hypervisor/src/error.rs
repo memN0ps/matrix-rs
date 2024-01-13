@@ -73,4 +73,34 @@ pub enum HypervisorError {
 
     #[error("Invalid CR3 base address")]
     InvalidCr3BaseAddress,
+
+    #[error("Failed to parse bytes of original function")]
+    InvalidBytes,
+
+    #[error("Couldn't find enough space for the jump shellcode")]
+    NotEnoughBytes,
+
+    #[error("Failed to find original instructions")]
+    NoInstructions,
+
+    #[error("Failed to encode trampoline")]
+    EncodingFailed,
+
+    #[error("Found rip-relative instruction which is not supported")]
+    RelativeInstruction,
+
+    #[error("Found unsupported instruction")]
+    UnsupportedInstruction,
+
+    #[error("VMX is not initialized")]
+    VmxNotInitialized,
+
+    #[error("Hook error")]
+    HookError,
+
+    #[error("Primary EPT not provided")]
+    PrimaryEPTNotProvided,
+
+    #[error("Secondary EPT not provided")]
+    SecondaryEPTNotProvided,
 }

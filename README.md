@@ -123,6 +123,7 @@ Special thanks to:
 - [Drew (@drew)](https://github.com/drew-gpf)
 - [Matthias @not-matthias](https://github.com/not-matthias/)
 - [@felix-rs / @joshuа](https://github.com/felix-rs)
+- Jess (@jessiep_)
 - [Jim Colerick (@vmprotect)](https://github.com/thug-shaker)
 
 ## License

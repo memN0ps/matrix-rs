@@ -5,8 +5,11 @@
 
 #![no_std]
 #![allow(unused_mut)]
+#![feature(allocator_api, new_uninit)]
+#![feature(link_llvm_intrinsics)]
 
 // Set up a panic handler for non-test configurations.
+extern crate alloc;
 #[cfg(not(test))]
 extern crate wdk_panic;
 
@@ -20,12 +23,33 @@ use wdk_alloc::WDKAllocator;
 #[global_allocator]
 static GLOBAL: hypervisor::utils::alloc::KernelAlloc = hypervisor::utils::alloc::KernelAlloc;
 
+use alloc::boxed::Box;
 use {
-    hypervisor::Hypervisor,
+    crate::expanded_stack::with_expanded_stack,
+    alloc::vec,
+    core::sync::atomic::Ordering,
+    hypervisor::{
+        error::HypervisorError,
+        intel::{
+            ept::{
+                access::AccessType,
+                hooks::{Hook, HookManager, HookType},
+                paging::Ept,
+            },
+            vmm::Hypervisor,
+        },
+        utils::{alloc::PhysicalAllocator, nt::update_ntoskrnl_cr3},
+    },
     log::LevelFilter,
     log::{self},
-    wdk_sys::{DRIVER_OBJECT, NTSTATUS, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL},
+    wdk_sys::{
+        ntddk::MmIsAddressValid, DRIVER_OBJECT, NTSTATUS, PUNICODE_STRING, STATUS_SUCCESS,
+        STATUS_UNSUCCESSFUL,
+    },
 };
+
+pub mod expanded_stack;
+pub mod hook;
 
 /// The main entry point for the driver.
 ///
@@ -62,12 +86,22 @@ pub unsafe extern "system" fn driver_entry(
     // Remove if manually mapping the kernel driver
     driver.DriverUnload = Some(driver_unload);
 
-    if virtualize().is_none() {
-        log::error!("Failed to virtualize processors");
-        return STATUS_UNSUCCESSFUL;
-    }
+    with_expanded_stack(|| {
+        match virtualize() {
+            Ok(_) => log::info!("Virtualization successful!"),
+            Err(err) => {
+                log::error!("Virtualization failed: {:?}", err);
+                return STATUS_UNSUCCESSFUL;
+            }
+        }
 
-    STATUS_SUCCESS
+        // Test the hooks
+        //
+        log::info!("Calling MmIsAddressValid to test EPT hook...");
+        unsafe { MmIsAddressValid(0 as _) };
+
+        STATUS_SUCCESS
+    })
 }
 
 /// The unload callback for the driver.
@@ -83,9 +117,11 @@ pub unsafe extern "system" fn driver_entry(
 pub extern "C" fn driver_unload(_driver: *mut DRIVER_OBJECT) {
     log::info!("Driver unloaded successfully!");
     if let Some(mut hypervisor) = unsafe { HYPERVISOR.take() } {
-        core::mem::drop(hypervisor);
+        drop(hypervisor);
     }
 }
+
+static mut HOOK_MANAGER: Option<HookManager> = None;
 
 /// The main hypervisor object.
 ///
@@ -101,24 +137,52 @@ static mut HYPERVISOR: Option<Hypervisor> = None;
 ///
 /// * `Some(())` if the system was successfully virtualized.
 /// * `None` if there was an error during virtualization.
-fn virtualize() -> Option<()> {
-    let mut hypervisor = match Hypervisor::new() {
-        Ok(hypervisor) => hypervisor,
-        Err(err) => {
-            log::info!("Failed to initialize hypervisor: {}", err);
-            return None;
-        }
+fn virtualize() -> Result<(), HypervisorError> {
+    // Initialize the hook and hook manager
+    //
+    let hook = Hook::hook_function("MmIsAddressValid", hook::mm_is_address_valid as *const ())
+        .ok_or(HypervisorError::HookError)?;
+    if let HookType::Function { ref inline_hook } = hook.hook_type {
+        hook::ORIGINAL.store(inline_hook.trampoline_address(), Ordering::Relaxed);
+    }
+    let hook_manager = HookManager::new(vec![hook]);
+
+    let mut primary_ept: Box<Ept, PhysicalAllocator> =
+        unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
+    let mut secondary_ept: Box<Ept, PhysicalAllocator> =
+        unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
+
+    log::info!("Creating Primary EPT");
+    primary_ept.identity_4kb(AccessType::ReadWriteExecute);
+
+    log::info!("Creating Secondary EPT");
+    secondary_ept.identity_4kb(AccessType::ReadWriteExecute);
+
+    log::info!("Enabling hooks");
+    hook_manager.enable_hooks(&mut primary_ept, &mut secondary_ept)?;
+
+    unsafe { HOOK_MANAGER = Some(hook_manager) };
+
+    log::info!("Building hypervisor");
+
+    let mut hv = match Hypervisor::builder()
+        .primary_ept(primary_ept)
+        .secondary_ept(secondary_ept)
+        .build()
+    {
+        Ok(hv) => hv,
+        Err(err) => return Err(err),
     };
 
-    match hypervisor.virtualize_system() {
+    // Update NTOSKRNL_CR3 to ensure correct CR3 in case of execution within a user-mode process via DPC.
+    update_ntoskrnl_cr3();
+
+    match hv.virtualize_system() {
         Ok(_) => log::info!("Successfully virtualized system!"),
-        Err(err) => {
-            log::info!("Failed to virtualize system: {}", err);
-            return None;
-        }
-    }
+        Err(err) => return Err(err),
+    };
 
-    unsafe { HYPERVISOR = Some(hypervisor) };
+    unsafe { HYPERVISOR = Some(hv) };
 
-    Some(())
+    Ok(())
 }

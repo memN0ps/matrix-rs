@@ -3,8 +3,13 @@
 //! in a virtualized environment.
 
 use {
-    crate::{error::HypervisorError, utils::alloc::PhysicalAllocator},
+    crate::utils::alloc::PhysicalAllocator,
     alloc::boxed::Box,
+    core::mem::MaybeUninit,
+    wdk_sys::{
+        ntddk::{RtlClearAllBits, RtlInitializeBitMap},
+        RTL_BITMAP,
+    },
 };
 
 /// Represents the MSR Bitmap structure used in VMX.
@@ -36,27 +41,43 @@ pub struct MsrBitmap {
 impl MsrBitmap {
     /// Sets up the MSR Bitmap.
     ///
-    /// This function initializes and configures the MSR Bitmap for use in VMX.
-    /// It also logs the virtual address of the allocated MSR Bitmap.
+    /// # Returns
+    /// * A `Result` indicating the success or failure of the setup process.
+    pub fn new() -> Box<MsrBitmap, PhysicalAllocator> {
+        log::info!("Setting up MSR Bitmap");
+
+        let instance = Self {
+            read_low_msrs: [0; 0x400],
+            read_high_msrs: [0; 0x400],
+            write_low_msrs: [0; 0x400],
+            write_high_msrs: [0; 0x400],
+        };
+        let mut instance = Box::<Self, PhysicalAllocator>::new_in(instance, PhysicalAllocator);
+
+        log::info!("Initializing MSR Bitmap");
+
+        Self::initialize_bitmap(instance.as_mut() as *mut _ as _);
+
+        log::info!("MSR Bitmap setup successful!");
+
+        instance
+    }
+
+    /// Initializes the MSR Bitmap.
     ///
     /// # Arguments
-    ///
-    /// * `msr_bitmap` - A mutable reference to the MSR Bitmap to be set up.
-    ///
-    /// # Returns
-    ///
-    /// A result indicating the success or failure of the setup operation.
-    pub fn setup(
-        msr_bitmap: &mut Box<MsrBitmap, PhysicalAllocator>,
-    ) -> Result<(), HypervisorError> {
-        log::info!("Setting up MSR-Bitmap");
+    /// * `bitmap_ptr` - The virtual address of the MSR Bitmap.
+    fn initialize_bitmap(bitmap_ptr: *mut u64) {
+        let mut bitmap_header: MaybeUninit<RTL_BITMAP> = MaybeUninit::uninit();
+        let bitmap_header_ptr = bitmap_header.as_mut_ptr() as *mut _;
 
-        // TODO, if needed
-
-        log::info!("MSR-Bitmap Virtual Address: {:p}", msr_bitmap);
-
-        log::info!("MSR-Bitmap setup successful!");
-
-        Ok(())
+        unsafe {
+            RtlInitializeBitMap(
+                bitmap_header_ptr as _,
+                bitmap_ptr as _,
+                core::mem::size_of::<Self>() as u32,
+            )
+        }
+        unsafe { RtlClearAllBits(bitmap_header_ptr as _) }
     }
 }

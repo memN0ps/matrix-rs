@@ -5,6 +5,8 @@
 //! Credits to the work by Satoshi in their 'Hello-VT-rp' project for assistance and a clear implementation of this Paging Structure:
 //! https://github.com/tandasat/Hello-VT-rp/blob/main/hypervisor/src/paging_structures.rs
 
+#![allow(dead_code)]
+
 use {
     crate::{error::HypervisorError, utils::addresses::PhysicalAddress},
     bitfield::bitfield,
