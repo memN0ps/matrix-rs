@@ -45,7 +45,7 @@ impl SharedData {
     }
 
     #[cfg(not(feature = "secondary-ept"))]
-    pub fn new(primary_ept: Box<Ept>) -> Option<Box<Self>> {
+    pub fn new(primary_ept: Box<Ept, PhysicalAllocator>) -> Option<Box<Self>> {
         log::info!("Initializing shared data");
 
         let primary_pml4 = PhysicalAddress::from_va(primary_ept.pml4.as_ptr() as u64);
