@@ -10,18 +10,17 @@ A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hyperv
 
 ## Features
 
-- **Efficient VM Exit Handling**: Implements optimized handling for various VM exit reasons like `Cpuid`, `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`. This ensures minimal performance overhead and responsive virtual machine operations.
+- **VM Exit Handling** for `Cpuid`, `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`.
 
-- **Integrated Extended Page Tables (EPT)**: Incorporates Memory Type Range Registers (MTRR) with EPT for efficient memory mapping and management. This feature ensures that memory types are correctly identified and handled, optimizing performance and stability in virtualized environments.
+- **Extended Page Tables (EPT) with Memory Type Range Registers (MTRR)**.
 
+- **Extended Page Tables (EPT) Hooks (Unstable)**.
 
-## Planned Enhancements
+## Planned Features
 
-- **Enhanced VM Exit Instruction Handling**: Future updates aim to include advanced handling for instructions like `Getsec`, and VMX instructions (`Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxoff`, `Vmxon`). This will extend the hypervisor's capability to manage more complex virtual machine operations and scenarios.
+- **VM Exit Handling** for `Getsec`, and VMX instructions (`Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxoff`, `Vmxon`).
 
-- **EPT Hook Development**: Planning to implement EPT hooks for sophisticated memory control and monitoring within guest VMs. This will allow for more granular memory management and potentially enable advanced features like memory introspection or modification.
-
-- **Robust Isolation Mechanisms**: Custom Global Descriptor Table (GDT), Interrupt Descriptor Table (IDT), and Page Tables will be used for enhanced security. This design decision will prevent potential vulnerabilities from using the host's `ntoskrnl.exe` `CR3` or a usermode process's `CR3`, fortifying the hypervisor against sophisticated attacks. [Further reading on the importance of these structures](https://www.unknowncheats.me/forum/2779560-post4.html).
+- **Isolation and Security** by implementing custom Global Descriptor Table (GDT), Interrupt Descriptor Table (IDT), and Page Tables to prevent potential vulnerabilities ([More information: @namazso](https://www.unknowncheats.me/forum/2779560-post4.html)).
 
 ## Installation
 
@@ -124,6 +123,7 @@ Special thanks to:
 - [Matthias @not-matthias](https://github.com/not-matthias/)
 - [@felix-rs / @joshuа](https://github.com/felix-rs)
 - Jess (@jessiep_)
+- [Ryan McCrystal / @rmccrystal](https://github.com/rmccrystal)
 - [Jim Colerick (@vmprotect)](https://github.com/thug-shaker)
 
 ## License
