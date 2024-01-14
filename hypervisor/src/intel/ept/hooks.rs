@@ -5,11 +5,13 @@
 //!
 //! Credits to Matthias: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/hook.rs
 
-use crate::intel::ept::paging::Access;
 use {
     crate::{
         error::HypervisorError,
-        intel::ept::paging::Ept,
+        intel::ept::{
+            buffer::PageTableBuffer,
+            paging::{Access, Ept},
+        },
         utils::{
             addresses::PhysicalAddress,
             alloc::PhysicalAllocator,
@@ -262,6 +264,7 @@ impl HookManager {
         &self,
         primary_ept: &mut Box<Ept, PhysicalAllocator>,
         secondary_ept: &mut Box<Ept, PhysicalAllocator>,
+        page_table_buffer: &mut Box<PageTableBuffer, PhysicalAllocator>,
     ) -> Result<(), HypervisorError> {
         for hook in &self.hooks {
             // Enable the hook if it is a function hook, which involves
@@ -280,7 +283,7 @@ impl HookManager {
             );
 
             // Modify the page permission in the primary EPT to ReadWrite.
-            primary_ept.change_permission(page, Access::READ_WRITE)?;
+            primary_ept.change_permission(page, Access::READ_WRITE, page_table_buffer)?;
 
             log::info!(
                 "Changing permissions for hook page to Execute (X) only: {:#x}",
@@ -288,7 +291,7 @@ impl HookManager {
             );
 
             // Modify the page permission in the secondary EPT to Execute for the hook page.
-            secondary_ept.change_permission(hook_page, Access::EXECUTE)?;
+            secondary_ept.change_permission(hook_page, Access::EXECUTE, page_table_buffer)?;
         }
 
         Ok(())

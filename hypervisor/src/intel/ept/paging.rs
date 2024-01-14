@@ -9,16 +9,18 @@
 use {
     crate::{
         error::HypervisorError,
-        intel::ept::mtrr::{MemoryType, Mtrr},
-        utils::addresses::PhysicalAddress,
+        intel::ept::{
+            buffer::PageTableBuffer,
+            mtrr::{MemoryType, Mtrr},
+        },
+        utils::{addresses::PhysicalAddress, alloc::PhysicalAllocator},
     },
+    alloc::boxed::Box,
     bitfield::bitfield,
     bitflags::bitflags,
     core::ptr::addr_of,
     x86::current::paging::{BASE_PAGE_SHIFT, BASE_PAGE_SIZE, LARGE_PAGE_SIZE},
 };
-
-extern crate bitflags;
 
 bitflags! {
     /// Represents the different access permissions for an EPT entry.
@@ -197,9 +199,9 @@ impl Ept {
         &mut self,
         guest_phys_addr: u64,
         permissions: Access,
+        page_table_buffer: &mut Box<PageTableBuffer, PhysicalAllocator>,
     ) -> Result<(), HypervisorError> {
-
-        self.split_2mb_to_4kb(guest_phys_addr)?;
+        self.split_2mb_to_4kb(guest_phys_addr, page_table_buffer)?;
 
         let pml1_entry = self.find_pml1_entry(guest_phys_addr)?;
 
@@ -218,25 +220,31 @@ impl Ept {
     ///
     /// # Returns
     /// A `Result<(), HypervisorError>` indicating the success or failure of the operation.
-    pub fn split_2mb_to_4kb(&mut self, guest_phys_addr: u64) -> Result<(), HypervisorError> {
+    pub fn split_2mb_to_4kb(
+        &mut self,
+        guest_phys_addr: u64,
+        page_table_buffer: &mut Box<PageTableBuffer, PhysicalAllocator>,
+    ) -> Result<(), HypervisorError> {
+        log::info!(
+            "Checking if guest_phys_addr is aligned: {:#x}",
+            guest_phys_addr
+        );
+
         // Ensure the given address is aligned to a 2MB boundary.
-        if guest_phys_addr & 0x1FFFFF != 0 {
+        if guest_phys_addr & (LARGE_PAGE_SIZE as u64 - 1) != 0 {
             return Err(HypervisorError::UnalignedAddressError);
         }
 
-        // Calculate indexes for PML4, PML3, and PML2 based on the guest physical address.
-        let pml4_index = (guest_phys_addr >> 39) & 0x1FF;
+        log::info!("Calculating indexes for PML3, and PML2");
+
+        // Calculate the indexes for PML4, PML3, and PML2 based on the given guest physical address.
+        // let pml4_index = (guest_phys_addr >> 39) & 0x1FF;
         let pml3_index = (guest_phys_addr >> 30) & 0x1FF;
         let pml2_index = (guest_phys_addr >> 21) & 0x1FF;
 
-        // Navigate the EPT structure to reach the PML2 entry.
-        let pml4_entry = &self.pml4.0.entries[pml4_index as usize];
-        let pml3_pa = pml4_entry.pfn() << BASE_PAGE_SHIFT;
-        let pml3_va = PhysicalAddress::va_from_pa(pml3_pa) as *const Entry;
-        let pml3_entry = unsafe { &*pml3_va.add(pml3_index as usize) };
-        let pml2_pa = pml3_entry.pfn() << BASE_PAGE_SHIFT;
-        let pml2_va = PhysicalAddress::va_from_pa(pml2_pa) as *const Entry;
-        let pml2_entry = unsafe { &mut *(pml2_va.add(pml2_index as usize) as *mut Entry) };
+        log::info!("Finding PML2 entry for {:#x}", guest_phys_addr);
+        // Retrieve the PML2 entry corresponding to the guest physical address.
+        let pml2_entry = &mut self.pml2[pml3_index as usize].0.entries[pml2_index as usize];
 
         log::info!("Checking if PML2 entry is already a large page");
 
@@ -247,31 +255,37 @@ impl Ept {
 
         log::info!("Marking PML2 entry as not large");
 
-        // Clear the large page bit and update the PML2 entry.
+        // Mark the PML2 entry as not large, indicating it will reference PML1.
         pml2_entry.set_large(false);
-        pml2_entry.set_pfn(0); // Reset the PFN as we'll set it up in the loop below.
+
+        log::info!("Allocating new PML1 table");
+
+        // Use a new PML1 table from the pre-allocated PageTableBuffer.
+        let new_pml1_entries = page_table_buffer.entries_mut();
 
         log::info!("Filling in new PML1 entries");
 
-        // Starting guest physical address for the 4KB pages.
-        let mut small_page_pa = guest_phys_addr;
+        // Fill in the new PML1 entries to cover the 2MB range.
+        let mut pa = guest_phys_addr;
+        for entry in new_pml1_entries.iter_mut() {
+            entry.set_readable(true);
+            entry.set_writable(true);
+            entry.set_executable(true);
+            // Set the memory type and other properties as needed.
+            entry.set_pfn(pa >> BASE_PAGE_SHIFT);
 
-        // Set up the 512 PML1 entries for the 4KB pages.
-        for i in 0..512 {
-            let pml1_pa = pml2_entry.pfn() << BASE_PAGE_SHIFT;
-            let pml1_va = PhysicalAddress::va_from_pa(pml1_pa) as *mut Entry;
-            let pml1_entry = unsafe { &mut *pml1_va.add(i) };
-
-            // Configure the PML1 entry for the 4KB page.
-            pml1_entry.set_readable(true);
-            pml1_entry.set_writable(true);
-            pml1_entry.set_executable(true);
-            pml1_entry.set_pfn(small_page_pa >> BASE_PAGE_SHIFT);
-
-            // Move to the next 4KB page.
-            small_page_pa += BASE_PAGE_SIZE as u64;
+            pa += BASE_PAGE_SIZE as u64; // Move to the next 4KB page.
         }
 
+        log::info!("Updating PML2 entry to point to new PML1 table");
+
+        // Update the PML2 entry to point to the new PML1 table.
+        let pml1_phys_addr = PhysicalAddress::pa_from_va(page_table_buffer as *const _ as u64);
+        pml2_entry.set_pfn(pml1_phys_addr >> BASE_PAGE_SHIFT);
+
+        log::info!("Split complete");
+
+        // Return success.
         Ok(())
     }
 
@@ -341,7 +355,7 @@ struct Pd(Table);
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: Format of an EPT Page-Table Entry that Maps a 4-KByte Page
 #[derive(Debug, Clone, Copy)]
-struct Pt(Table);
+pub struct Pt(pub(crate) Table);
 
 /// General struct to represent a table in the EPT paging structure.
 ///
@@ -349,8 +363,8 @@ struct Pt(Table);
 /// where each entry can represent different levels of the EPT hierarchy.
 #[repr(C, align(4096))]
 #[derive(Debug, Clone, Copy)]
-struct Table {
-    entries: [Entry; 512],
+pub struct Table {
+    pub entries: [Entry; 512],
 }
 
 bitfield! {

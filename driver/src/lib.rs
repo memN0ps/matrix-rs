@@ -32,6 +32,7 @@ use {
         error::HypervisorError,
         intel::{
             ept::{
+                buffer::PageTableBuffer,
                 hooks::{Hook, HookManager, HookType},
                 paging::Ept,
             },
@@ -157,8 +158,12 @@ fn virtualize() -> Result<(), HypervisorError> {
     log::info!("Creating Secondary EPT");
     secondary_ept.build_identity_map()?;
 
+    log::info!("Creating Page Table Buffer");
+    let mut page_table_buffer: Box<PageTableBuffer, PhysicalAllocator> =
+        unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
+
     log::info!("Enabling hooks");
-    hook_manager.enable_hooks(&mut primary_ept, &mut secondary_ept)?;
+    hook_manager.enable_hooks(&mut primary_ept, &mut secondary_ept, &mut page_table_buffer)?;
 
     unsafe { HOOK_MANAGER = Some(hook_manager) };
 
