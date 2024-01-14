@@ -198,12 +198,79 @@ impl Ept {
         guest_phys_addr: u64,
         permissions: Access,
     ) -> Result<(), HypervisorError> {
+
+        self.split_2mb_to_4kb(guest_phys_addr)?;
+
         let pml1_entry = self.find_pml1_entry(guest_phys_addr)?;
 
         // Set permissions based on the flags
         unsafe { (*pml1_entry).set_readable(permissions.contains(Access::READ)) };
         unsafe { (*pml1_entry).set_writable(permissions.contains(Access::WRITE)) };
         unsafe { (*pml1_entry).set_executable(permissions.contains(Access::EXECUTE)) };
+
+        Ok(())
+    }
+
+    /// Splits a 2MB large page into 512 4KB pages for a given guest physical address.
+    ///
+    /// # Arguments
+    /// * `guest_phys_addr` - The guest physical address indicating the 2MB page to be split.
+    ///
+    /// # Returns
+    /// A `Result<(), HypervisorError>` indicating the success or failure of the operation.
+    pub fn split_2mb_to_4kb(&mut self, guest_phys_addr: u64) -> Result<(), HypervisorError> {
+        // Ensure the given address is aligned to a 2MB boundary.
+        if guest_phys_addr & 0x1FFFFF != 0 {
+            return Err(HypervisorError::UnalignedAddressError);
+        }
+
+        // Calculate indexes for PML4, PML3, and PML2 based on the guest physical address.
+        let pml4_index = (guest_phys_addr >> 39) & 0x1FF;
+        let pml3_index = (guest_phys_addr >> 30) & 0x1FF;
+        let pml2_index = (guest_phys_addr >> 21) & 0x1FF;
+
+        // Navigate the EPT structure to reach the PML2 entry.
+        let pml4_entry = &self.pml4.0.entries[pml4_index as usize];
+        let pml3_pa = pml4_entry.pfn() << BASE_PAGE_SHIFT;
+        let pml3_va = PhysicalAddress::va_from_pa(pml3_pa) as *const Entry;
+        let pml3_entry = unsafe { &*pml3_va.add(pml3_index as usize) };
+        let pml2_pa = pml3_entry.pfn() << BASE_PAGE_SHIFT;
+        let pml2_va = PhysicalAddress::va_from_pa(pml2_pa) as *const Entry;
+        let pml2_entry = unsafe { &mut *(pml2_va.add(pml2_index as usize) as *mut Entry) };
+
+        log::info!("Checking if PML2 entry is already a large page");
+
+        // Check if the PML2 entry is already a large page.
+        if !pml2_entry.large() {
+            return Err(HypervisorError::AlreadySplitError);
+        }
+
+        log::info!("Marking PML2 entry as not large");
+
+        // Clear the large page bit and update the PML2 entry.
+        pml2_entry.set_large(false);
+        pml2_entry.set_pfn(0); // Reset the PFN as we'll set it up in the loop below.
+
+        log::info!("Filling in new PML1 entries");
+
+        // Starting guest physical address for the 4KB pages.
+        let mut small_page_pa = guest_phys_addr;
+
+        // Set up the 512 PML1 entries for the 4KB pages.
+        for i in 0..512 {
+            let pml1_pa = pml2_entry.pfn() << BASE_PAGE_SHIFT;
+            let pml1_va = PhysicalAddress::va_from_pa(pml1_pa) as *mut Entry;
+            let pml1_entry = unsafe { &mut *pml1_va.add(i) };
+
+            // Configure the PML1 entry for the 4KB page.
+            pml1_entry.set_readable(true);
+            pml1_entry.set_writable(true);
+            pml1_entry.set_executable(true);
+            pml1_entry.set_pfn(small_page_pa >> BASE_PAGE_SHIFT);
+
+            // Move to the next 4KB page.
+            small_page_pa += BASE_PAGE_SIZE as u64;
+        }
 
         Ok(())
     }

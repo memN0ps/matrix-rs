@@ -118,4 +118,13 @@ pub enum HypervisorError {
 
     #[error("Invalid Permission Character")]
     InvalidPermissionCharacter,
+
+    #[error("Unaligned address error")]
+    UnalignedAddressError,
+
+    #[error("Already split error")]
+    AlreadySplitError,
+
+    #[error("Out of memory")]
+    OutOfMemory,
 }

@@ -271,8 +271,8 @@ impl HookManager {
             }
 
             // Align addresses to their base page sizes for accurate permission modification.
-            let page = hook.original_pa.align_down_to_base_page().as_u64();
-            let hook_page = hook.hook_pa.align_down_to_base_page().as_u64();
+            let page = hook.original_pa.align_down_to_large_page().as_u64();
+            let hook_page = hook.hook_pa.align_down_to_large_page().as_u64();
 
             log::info!(
                 "Changing permissions for page to Read-Write (RW) only: {:#x}",
