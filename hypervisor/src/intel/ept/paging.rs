@@ -162,20 +162,23 @@ impl Ept {
             return Err(HypervisorError::InvalidPml4Entry);
         }
 
-        let pml3_base_addr = (pml4_entry.pfn() << BASE_PAGE_SHIFT) as *const Entry;
-        let pml3_entry = unsafe { &*pml3_base_addr.add(pml3_index as usize) };
+        let pml3_pa = pml4_entry.pfn() << BASE_PAGE_SHIFT;
+        let pml3_va = PhysicalAddress::va_from_pa(pml3_pa) as *const Entry;
+        let pml3_entry = unsafe { &*pml3_va.add(pml3_index as usize) };
         if !pml3_entry.readable() {
             return Err(HypervisorError::InvalidPml3Entry);
         }
 
-        let pml2_base_addr = (pml3_entry.pfn() << BASE_PAGE_SHIFT) as *const Entry;
-        let pml2_entry = unsafe { &*pml2_base_addr.add(pml2_index as usize) };
+        let pml2_pa = pml3_entry.pfn() << BASE_PAGE_SHIFT;
+        let pml2_va = PhysicalAddress::va_from_pa(pml2_pa) as *const Entry;
+        let pml2_entry = unsafe { &*pml2_va.add(pml2_index as usize) };
         if !pml2_entry.readable() || pml2_entry.large() {
             return Err(HypervisorError::InvalidPml2Entry);
         }
 
-        let pml1_base_addr = (pml2_entry.pfn() << BASE_PAGE_SHIFT) as *const Entry;
-        let pml1_entry = unsafe { &mut *(pml1_base_addr.add(pml1_index as usize) as *mut Entry) };
+        let pml1_pa = pml2_entry.pfn() << BASE_PAGE_SHIFT;
+        let pml1_va = PhysicalAddress::va_from_pa(pml1_pa) as *const Entry;
+        let pml1_entry = unsafe { &mut *(pml1_va.add(pml1_index as usize) as *mut Entry) };
 
         // Return the mutable pointer to the PML1 entry.
         Ok(pml1_entry)

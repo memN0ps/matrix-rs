@@ -278,13 +278,14 @@ impl HookManager {
                 "Changing permissions for page to Read-Write (RW) only: {:#x}",
                 page
             );
+
+            // Modify the page permission in the primary EPT to ReadWrite.
+            primary_ept.change_permission(page, Access::READ_WRITE)?;
+
             log::info!(
                 "Changing permissions for hook page to Execute (X) only: {:#x}",
                 hook_page
             );
-
-            // Modify the page permission in the primary EPT to ReadWrite.
-            primary_ept.change_permission(page, Access::READ_WRITE)?;
 
             // Modify the page permission in the secondary EPT to Execute for the hook page.
             secondary_ept.change_permission(hook_page, Access::EXECUTE)?;
