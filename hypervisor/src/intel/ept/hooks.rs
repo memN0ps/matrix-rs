@@ -5,6 +5,7 @@
 //!
 //! Credits to Matthias: https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/hook.rs
 
+use crate::intel::ept::paging::Access;
 use {
     crate::{
         error::HypervisorError,
@@ -273,11 +274,20 @@ impl HookManager {
             let page = hook.original_pa.align_down_to_base_page().as_u64();
             let hook_page = hook.hook_pa.align_down_to_base_page().as_u64();
 
+            log::info!(
+                "Changing permissions for page to Read-Write (RW) only: {:#x}",
+                page
+            );
+            log::info!(
+                "Changing permissions for hook page to Execute (X) only: {:#x}",
+                hook_page
+            );
+
             // Modify the page permission in the primary EPT to ReadWrite.
-            primary_ept.change_permission(page, "rw")?;
+            primary_ept.change_permission(page, Access::READ_WRITE)?;
 
             // Modify the page permission in the secondary EPT to Execute for the hook page.
-            secondary_ept.change_permission(hook_page, "x")?;
+            secondary_ept.change_permission(hook_page, Access::EXECUTE)?;
         }
 
         Ok(())

@@ -13,9 +13,26 @@ use {
         utils::addresses::PhysicalAddress,
     },
     bitfield::bitfield,
+    bitflags::bitflags,
     core::ptr::addr_of,
     x86::current::paging::{BASE_PAGE_SHIFT, BASE_PAGE_SIZE, LARGE_PAGE_SIZE},
 };
+
+extern crate bitflags;
+
+bitflags! {
+    /// Represents the different access permissions for an EPT entry.
+    #[derive(Debug, Clone, Copy)]
+    pub struct Access: u8 {
+        const READ = 0b001;
+        const WRITE = 0b010;
+        const EXECUTE = 0b100;
+        const READ_WRITE = Self::READ.bits() | Self::WRITE.bits();
+        const READ_EXECUTE = Self::READ.bits() | Self::EXECUTE.bits();
+        const WRITE_EXECUTE = Self::WRITE.bits() | Self::EXECUTE.bits();
+        const READ_WRITE_EXECUTE = Self::READ.bits() | Self::WRITE.bits() | Self::EXECUTE.bits();
+    }
+}
 
 /// Represents the entire Extended Page Table structure.
 ///
@@ -167,32 +184,23 @@ impl Ept {
     /// Changes the permission of a page given its guest physical address.
     ///
     /// # Arguments
+    ///
     /// * `guest_phys_addr` - The guest physical address of the page.
-    /// * `permissions` - The new permissions for the page (e.g., "rw", "x").
+    /// * `permissions` - The new permissions to set for the page.
     ///
     /// # Returns
     /// A `Result<(), HypervisorError>` indicating the success or failure of the operation.
     pub fn change_permission(
         &mut self,
         guest_phys_addr: u64,
-        permissions: &str,
+        permissions: Access,
     ) -> Result<(), HypervisorError> {
         let pml1_entry = self.find_pml1_entry(guest_phys_addr)?;
 
-        // Clear current permissions
-        unsafe { (*pml1_entry).set_readable(false) };
-        unsafe { (*pml1_entry).set_writable(false) };
-        unsafe { (*pml1_entry).set_executable(false) };
-
-        // Apply new permissions
-        for ch in permissions.chars() {
-            match ch {
-                'r' => unsafe { (*pml1_entry).set_readable(true) },
-                'w' => unsafe { (*pml1_entry).set_writable(true) },
-                'x' => unsafe { (*pml1_entry).set_executable(true) },
-                _ => return Err(HypervisorError::InvalidPermissionCharacter),
-            }
-        }
+        // Set permissions based on the flags
+        unsafe { (*pml1_entry).set_readable(permissions.contains(Access::READ)) };
+        unsafe { (*pml1_entry).set_writable(permissions.contains(Access::WRITE)) };
+        unsafe { (*pml1_entry).set_executable(permissions.contains(Access::EXECUTE)) };
 
         Ok(())
     }
