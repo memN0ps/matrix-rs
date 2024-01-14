@@ -32,7 +32,6 @@ use {
         error::HypervisorError,
         intel::{
             ept::{
-                buffer::PageTableBuffer,
                 hooks::{Hook, HookManager, HookType},
                 paging::Ept,
             },
@@ -121,9 +120,8 @@ pub extern "C" fn driver_unload(_driver: *mut DRIVER_OBJECT) {
     }
 }
 
+/// The main hook manager object.
 static mut HOOK_MANAGER: Option<HookManager> = None;
-static mut PRIMARY_PAGE_TABLE_BUFFER: Option<Box<PageTableBuffer, PhysicalAllocator>> = None;
-static mut SECONDARY_PAGE_TABLE_BUFFER: Option<Box<PageTableBuffer, PhysicalAllocator>> = None;
 
 /// The main hypervisor object.
 ///
@@ -160,26 +158,11 @@ fn virtualize() -> Result<(), HypervisorError> {
     log::info!("Creating Secondary EPT");
     secondary_ept.build_identity_map()?;
 
-    log::info!("Creating Primary Page Table Pre-Allocate Buffer for splitting a 2MB large page into 512 4KB pages");
-    let mut primary_page_table_buffer: Box<PageTableBuffer, PhysicalAllocator> =
-        unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
-
-    log::info!("Creating Secondary Page Table Pre-Allocate Buffer for splitting a 2MB large page into 512 4KB pages");
-    let mut secondary_page_table_buffer: Box<PageTableBuffer, PhysicalAllocator> =
-        unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
-
     log::info!("Enabling hooks");
-    hook_manager.enable_hooks(
-        &mut primary_ept,
-        &mut secondary_ept,
-        &mut primary_page_table_buffer,
-        &mut secondary_page_table_buffer,
-    )?;
+    hook_manager.enable_hooks(&mut primary_ept, &mut secondary_ept)?;
 
     // Save as global to avoid dropping
     unsafe { HOOK_MANAGER = Some(hook_manager) };
-    unsafe { PRIMARY_PAGE_TABLE_BUFFER = Some(primary_page_table_buffer) };
-    unsafe { SECONDARY_PAGE_TABLE_BUFFER = Some(secondary_page_table_buffer) };
 
     log::info!("Building hypervisor");
 

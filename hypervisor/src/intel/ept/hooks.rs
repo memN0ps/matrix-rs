@@ -8,10 +8,7 @@
 use {
     crate::{
         error::HypervisorError,
-        intel::ept::{
-            buffer::PageTableBuffer,
-            paging::{Access, Ept},
-        },
+        intel::ept::paging::{Access, Ept},
         utils::{
             addresses::PhysicalAddress,
             alloc::PhysicalAllocator,
@@ -264,8 +261,6 @@ impl HookManager {
         &self,
         primary_ept: &mut Box<Ept, PhysicalAllocator>,
         secondary_ept: &mut Box<Ept, PhysicalAllocator>,
-        primary_page_table_buffer: &mut Box<PageTableBuffer, PhysicalAllocator>,
-        secondary_page_table_buffer: &mut Box<PageTableBuffer, PhysicalAllocator>,
     ) -> Result<(), HypervisorError> {
         for hook in &self.hooks {
             // Enable the hook if it is a function hook, which involves
@@ -274,9 +269,12 @@ impl HookManager {
                 inline_hook.enable();
             }
 
+            primary_ept.split_2mb_to_4kb(hook.original_pa.align_down_to_huge_page().as_u64())?;
+            secondary_ept.split_2mb_to_4kb(hook.hook_pa.align_down_to_huge_page().as_u64())?;
+
             // Align addresses to their base page sizes for accurate permission modification.
-            let page = hook.original_pa.align_down_to_large_page().as_u64();
-            let hook_page = hook.hook_pa.align_down_to_large_page().as_u64();
+            let page = hook.original_pa.align_down_to_base_page().as_u64();
+            let hook_page = hook.hook_pa.align_down_to_base_page().as_u64();
 
             log::info!(
                 "Changing permissions for page to Read-Write (RW) only: {:#x}",
@@ -284,7 +282,7 @@ impl HookManager {
             );
 
             // Modify the page permission in the primary EPT to ReadWrite.
-            primary_ept.change_permission(page, Access::READ_WRITE, primary_page_table_buffer)?;
+            primary_ept.change_permission(page, Access::READ_WRITE)?;
 
             log::info!(
                 "Changing permissions for hook page to Execute (X) only: {:#x}",
@@ -292,11 +290,7 @@ impl HookManager {
             );
 
             // Modify the page permission in the secondary EPT to Execute for the hook page.
-            secondary_ept.change_permission(
-                hook_page,
-                Access::EXECUTE,
-                secondary_page_table_buffer,
-            )?;
+            secondary_ept.change_permission(hook_page, Access::EXECUTE)?;
         }
 
         Ok(())

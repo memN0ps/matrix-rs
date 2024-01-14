@@ -9,13 +9,9 @@
 use {
     crate::{
         error::HypervisorError,
-        intel::ept::{
-            buffer::PageTableBuffer,
-            mtrr::{MemoryType, Mtrr},
-        },
-        utils::{addresses::PhysicalAddress, alloc::PhysicalAllocator},
+        intel::ept::mtrr::{MemoryType, Mtrr},
+        utils::addresses::PhysicalAddress,
     },
-    alloc::boxed::Box,
     bitfield::bitfield,
     bitflags::bitflags,
     core::ptr::addr_of,
@@ -47,11 +43,11 @@ pub struct Ept {
     /// Page Map Level 4 (PML4) Table.
     pml4: Pml4,
     /// Page Directory Pointer Table (PDPT).
-    pml3: Pdpt,
+    pdpt: Pdpt,
     /// Array of Page Directory Table (PDT).
-    pml2: [Pd; 512],
+    pd: [Pd; 512],
     /// Page Table (PT).
-    pml1: Pt,
+    pt: Pt,
 }
 
 impl Ept {
@@ -78,20 +74,20 @@ impl Ept {
         self.pml4.0.entries[0].set_writable(true);
         self.pml4.0.entries[0].set_executable(true);
         self.pml4.0.entries[0]
-            .set_pfn(PhysicalAddress::pa_from_va(addr_of!(self.pml3) as u64) >> BASE_PAGE_SHIFT);
+            .set_pfn(PhysicalAddress::pa_from_va(addr_of!(self.pdpt) as u64) >> BASE_PAGE_SHIFT);
 
         // Iterate over all PDPT entries to configure them.
-        for (i, pml3e) in self.pml3.0.entries.iter_mut().enumerate() {
+        for (i, pml3e) in self.pdpt.0.entries.iter_mut().enumerate() {
             // Configure the PDPT entry.
             pml3e.set_readable(true);
             pml3e.set_writable(true);
             pml3e.set_executable(true);
             pml3e.set_pfn(
-                PhysicalAddress::pa_from_va(addr_of!(self.pml2[i]) as u64) >> BASE_PAGE_SHIFT,
+                PhysicalAddress::pa_from_va(addr_of!(self.pd[i]) as u64) >> BASE_PAGE_SHIFT,
             );
 
             // Configure each PDE within the current PD.
-            for pml2e in &mut self.pml2[i].0.entries {
+            for pml2e in &mut self.pd[i].0.entries {
                 if pa == 0 {
                     // Special handling for the first PDE.
                     // This is typically where the first PT is set up.
@@ -99,11 +95,11 @@ impl Ept {
                     pml2e.set_writable(true);
                     pml2e.set_executable(true);
                     pml2e.set_pfn(
-                        PhysicalAddress::pa_from_va(addr_of!(self.pml1) as u64) >> BASE_PAGE_SHIFT,
+                        PhysicalAddress::pa_from_va(addr_of!(self.pt) as u64) >> BASE_PAGE_SHIFT,
                     );
 
                     // Iterate over all PTEs within the first PT.
-                    for pml1e in &mut self.pml1.0.entries {
+                    for pml1e in &mut self.pt.0.entries {
                         // Determine the memory type for the current address.
                         let memory_type = mtrr
                             .find(pa..pa + BASE_PAGE_SIZE as u64)
@@ -174,6 +170,11 @@ impl Ept {
         let pml2_pa = pml3_entry.pfn() << BASE_PAGE_SHIFT;
         let pml2_va = PhysicalAddress::va_from_pa(pml2_pa) as *const Entry;
         let pml2_entry = unsafe { &*pml2_va.add(pml2_index as usize) };
+
+        log::info!("pml2_entry: {:?}", pml2_entry);
+        log::info!("pml2_entry.readable(): {:?}", pml2_entry.readable());
+        log::info!("pml2_entry.large(): {:?}", pml2_entry.large());
+
         if !pml2_entry.readable() || pml2_entry.large() {
             return Err(HypervisorError::InvalidPml2Entry);
         }
@@ -199,9 +200,7 @@ impl Ept {
         &mut self,
         guest_phys_addr: u64,
         permissions: Access,
-        page_table_buffer: &mut Box<PageTableBuffer, PhysicalAllocator>,
     ) -> Result<(), HypervisorError> {
-        self.split_2mb_to_4kb(guest_phys_addr, page_table_buffer)?;
 
         let pml1_entry = self.find_pml1_entry(guest_phys_addr)?;
 
@@ -213,79 +212,54 @@ impl Ept {
         Ok(())
     }
 
-    /// Splits a 2MB large page into 512 4KB pages for a given guest physical address.
+    /// Splits a 2MB large page into 512 smaller 4KB pages.
     ///
     /// # Arguments
     /// * `guest_phys_addr` - The guest physical address indicating the 2MB page to be split.
     ///
     /// # Returns
     /// A `Result<(), HypervisorError>` indicating the success or failure of the operation.
-    pub fn split_2mb_to_4kb(
-        &mut self,
-        guest_phys_addr: u64,
-        page_table_buffer: &mut Box<PageTableBuffer, PhysicalAllocator>,
-    ) -> Result<(), HypervisorError> {
-        log::info!(
-            "Checking if guest_phys_addr is aligned: {:#x}",
-            guest_phys_addr
-        );
-
+    #[rustfmt::skip]
+    pub fn split_2mb_to_4kb(&mut self, guest_phys_addr: u64) -> Result<(), HypervisorError> {
         // Ensure the given address is aligned to a 2MB boundary.
         if guest_phys_addr & (LARGE_PAGE_SIZE as u64 - 1) != 0 {
             return Err(HypervisorError::UnalignedAddressError);
         }
 
-        log::info!("Calculating indexes for PML3, and PML2");
+        // Calculate the indexes for PDPT and PD based on the given guest physical address.
+        let pdpt_index = (guest_phys_addr >> 30) & 0x1FF;
+        let pd_index = (guest_phys_addr >> 21) & 0x1FF;
 
-        // Calculate the indexes for PML4, PML3, and PML2 based on the given guest physical address.
-        // let pml4_index = (guest_phys_addr >> 39) & 0x1FF;
-        let pml3_index = (guest_phys_addr >> 30) & 0x1FF;
-        let pml2_index = (guest_phys_addr >> 21) & 0x1FF;
+        // Retrieve the PD entry corresponding to the guest physical address.
+        let pd_entry = &mut self.pd[pdpt_index as usize].0.entries[pd_index as usize];
 
-        log::info!("Finding PML2 entry for {:#x}", guest_phys_addr);
-        // Retrieve the PML2 entry corresponding to the guest physical address.
-        let pml2_entry = &mut self.pml2[pml3_index as usize].0.entries[pml2_index as usize];
-
-        log::info!("Checking if PML2 entry is already a large page");
-
-        // Check if the PML2 entry is already a large page.
-        if !pml2_entry.large() {
+        // Check if the PD entry is already a large page.
+        if !pd_entry.large() {
             return Err(HypervisorError::AlreadySplitError);
         }
 
-        log::info!("Marking PML2 entry as not large");
+        // Mark the PD entry as not large, indicating it will reference PT.
+        pd_entry.set_large(false);
 
-        // Mark the PML2 entry as not large, indicating it will reference PML1.
-        pml2_entry.set_large(false);
+        // Update the PD entry to point to the corresponding PT.
+        let pt_phys_addr = PhysicalAddress::pa_from_va(&self.pt as *const _ as u64);
+        pd_entry.set_pfn(pt_phys_addr >> BASE_PAGE_SHIFT);
 
-        log::info!("Allocating new PML1 table");
+        // Calculate the starting index in the PT for the 4KB pages corresponding to the 2MB page.
+        let pt_start_index = (pd_index * (LARGE_PAGE_SIZE as u64) / (BASE_PAGE_SIZE as u64)) as usize;
 
-        // Use a new PML1 table from the pre-allocated PageTableBuffer.
-        let new_pml1_entries = page_table_buffer.entries_mut();
+        // Iterate over the PT entries corresponding to the 2MB page.
+        for index in 0..(LARGE_PAGE_SIZE / BASE_PAGE_SIZE) {
+            let pt_entry = &mut self.pt.0.entries[pt_start_index + index];
+            pt_entry.set_readable(true);
+            pt_entry.set_writable(true);
+            pt_entry.set_executable(true);
 
-        log::info!("Filling in new PML1 entries");
-
-        // Fill in the new PML1 entries to cover the 2MB range.
-        let mut pa = guest_phys_addr;
-        for entry in new_pml1_entries.iter_mut() {
-            entry.set_readable(true);
-            entry.set_writable(true);
-            entry.set_executable(true);
-            // Set the memory type and other properties as needed.
-            entry.set_pfn(pa >> BASE_PAGE_SHIFT);
-
-            pa += BASE_PAGE_SIZE as u64; // Move to the next 4KB page.
+            // Calculate the physical address for each 4KB page within the 2MB page.
+            let page_phys_addr = guest_phys_addr + (index * BASE_PAGE_SIZE) as u64;
+            pt_entry.set_pfn(page_phys_addr >> BASE_PAGE_SHIFT);
         }
 
-        log::info!("Updating PML2 entry to point to new PML1 table");
-
-        // Update the PML2 entry to point to the new PML1 table.
-        let pml1_phys_addr = PhysicalAddress::pa_from_va(page_table_buffer as *const _ as u64);
-        pml2_entry.set_pfn(pml1_phys_addr >> BASE_PAGE_SHIFT);
-
-        log::info!("Split complete");
-
-        // Return success.
         Ok(())
     }
 
@@ -355,7 +329,7 @@ struct Pd(Table);
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: Format of an EPT Page-Table Entry that Maps a 4-KByte Page
 #[derive(Debug, Clone, Copy)]
-pub struct Pt(pub(crate) Table);
+struct Pt(Table);
 
 /// General struct to represent a table in the EPT paging structure.
 ///
@@ -363,8 +337,8 @@ pub struct Pt(pub(crate) Table);
 /// where each entry can represent different levels of the EPT hierarchy.
 #[repr(C, align(4096))]
 #[derive(Debug, Clone, Copy)]
-pub struct Table {
-    pub entries: [Entry; 512],
+struct Table {
+    entries: [Entry; 512],
 }
 
 bitfield! {
