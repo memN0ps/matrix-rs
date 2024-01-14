@@ -103,4 +103,19 @@ pub enum HypervisorError {
 
     #[error("Secondary EPT not provided")]
     SecondaryEPTNotProvided,
+
+    #[error("Invalid PML4 entry")]
+    InvalidPml4Entry,
+
+    #[error("Invalid PML3 entry")]
+    InvalidPml3Entry,
+
+    #[error("Invalid PML2 entry")]
+    InvalidPml2Entry,
+
+    #[error("Invalid PML1 entry")]
+    InvalidPml1Entry,
+
+    #[error("Invalid Permission Character")]
+    InvalidPermissionCharacter,
 }

@@ -12,7 +12,7 @@ use {
 
 /// Represents the different types of memory as defined by MTRRs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Mtrr {
+pub enum MemoryType {
     /// Memory type: Uncacheable (UC)
     Uncacheable = 0,
     /// Memory type: Write-combining (WC)
@@ -25,19 +25,24 @@ pub enum Mtrr {
     WriteBack = 6,
 }
 
+/// Represents a Mttr range descriptor.
+pub struct Mtrr {
+    descriptors: Vec<MtrrRangeDescriptor>,
+}
+
 impl Mtrr {
     /// Builds a map of the MTRR memory ranges currently in use.
     ///
     /// # Returns
     /// A vector of `MtrrRangeDescriptor` representing each enabled memory range.
-    pub fn build_mtrr_map() -> Vec<MtrrRangeDescriptor> {
+    pub fn new() -> Self {
         let mut descriptors = Vec::new();
 
         for index in Self::indexes() {
             let item = Self::get(index);
 
             // Skip Write Back type as it's the default memory type.
-            if item.is_enabled && item.mem_type != Mtrr::WriteBack {
+            if item.is_enabled && item.mem_type != MemoryType::WriteBack {
                 let end_address = Self::calculate_end_address(item.base.pa(), item.mask);
 
                 let descriptor = MtrrRangeDescriptor {
@@ -57,7 +62,7 @@ impl Mtrr {
         }
 
         log::info!("Total MTRR Ranges Committed: {}", descriptors.len());
-        descriptors
+        Self { descriptors }
     }
 
     /// Finds the memory type for a given physical address range based on the MTRR map.
@@ -73,31 +78,31 @@ impl Mtrr {
     ///
     /// # Returns
     /// The memory type for the given address range, or a default of WriteBack if no matching range is found.
-    pub fn find(mtrr_map: &[MtrrRangeDescriptor], range: core::ops::Range<u64>) -> Option<Mtrr> {
+    pub fn find(&mut self, range: core::ops::Range<u64>) -> Option<MemoryType> {
         // Initialize a variable to store the memory type, initially set to None.
-        let mut memory_type: Option<Mtrr> = None;
+        let mut memory_type: Option<MemoryType> = None;
 
         // Iterate through each MTRR range descriptor in the map.
-        for descriptor in mtrr_map {
+        for descriptor in self.descriptors.iter_mut() {
             // Check if the provided range falls within the current descriptor's range.
             if range.start >= descriptor.base_address && range.end <= descriptor.end_address {
                 // Based on the memory type of the descriptor, set the memory type.
                 match descriptor.memory_type {
                     // If Uncacheable, return immediately as it has the highest precedence.
-                    Mtrr::Uncacheable => return Some(Mtrr::Uncacheable),
+                    MemoryType::Uncacheable => return Some(MemoryType::Uncacheable),
 
                     // For other types, set the memory type if it is not already set.
                     // Or if it's a less strict type compared to the existing one.
-                    Mtrr::WriteCombining => memory_type = Some(Mtrr::WriteCombining),
-                    Mtrr::WriteThrough => memory_type = Some(Mtrr::WriteThrough),
-                    Mtrr::WriteProtected => memory_type = Some(Mtrr::WriteProtected),
-                    Mtrr::WriteBack => memory_type = Some(Mtrr::WriteBack),
+                    MemoryType::WriteCombining => memory_type = Some(MemoryType::WriteCombining),
+                    MemoryType::WriteThrough => memory_type = Some(MemoryType::WriteThrough),
+                    MemoryType::WriteProtected => memory_type = Some(MemoryType::WriteProtected),
+                    MemoryType::WriteBack => memory_type = Some(MemoryType::WriteBack),
                 }
             }
         }
 
         // Return the found memory type or default to WriteBack if no specific type was found.
-        memory_type.or(Some(Mtrr::WriteBack))
+        memory_type.or(Some(MemoryType::WriteBack))
     }
 
     /// Calculates the end address of an MTRR memory range.
@@ -192,18 +197,18 @@ impl Mtrr {
         IA32_MTRR_PHYSMASK0 + n.0 as u32 * 2
     }
 
-    /// Converts a raw memory type value into an Mtrr enum variant.
+    /// Converts a raw memory type value into an MemoryType enum variant.
     ///
     /// # Arguments
     /// * `value` - The raw memory type value.
     ///
     /// # Returns
-    /// The corresponding `Mtrr` enum variant.
+    /// The corresponding `MemoryType` enum variant.
     ///
     /// # Safety
     /// This function is unsafe because it uses `transmute` which can lead to undefined behavior
-    /// if `value` does not correspond to a valid variant of `Mtrr`.
-    pub const fn from_raw(value: u8) -> Self {
+    /// if `value` does not correspond to a valid variant of `MemoryType`.
+    pub const fn from_raw(value: u8) -> MemoryType {
         unsafe { core::mem::transmute(value) }
     }
 }
@@ -220,7 +225,7 @@ pub struct MtrrRangeDescriptor {
     /// The end address of the memory range.
     pub end_address: u64,
     /// The memory type associated with this range.
-    pub memory_type: Mtrr,
+    pub memory_type: MemoryType,
 }
 
 /// Represents the configuration of a single MTRR.
@@ -231,7 +236,7 @@ pub struct MtrrItem {
     /// The mask that determines the size and enablement of the MTRR.
     pub mask: u64,
     /// The memory type (caching behavior) of this MTRR.
-    pub mem_type: Mtrr,
+    pub mem_type: MemoryType,
     /// Flag indicating whether this MTRR is enabled.
     pub is_enabled: bool,
 }

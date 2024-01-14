@@ -32,7 +32,6 @@ use {
         error::HypervisorError,
         intel::{
             ept::{
-                access::AccessType,
                 hooks::{Hook, HookManager, HookType},
                 paging::Ept,
             },
@@ -153,10 +152,10 @@ fn virtualize() -> Result<(), HypervisorError> {
         unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
 
     log::info!("Creating Primary EPT");
-    primary_ept.identity_4kb(AccessType::ReadWriteExecute);
+    primary_ept.build_identity_map()?;
 
     log::info!("Creating Secondary EPT");
-    secondary_ept.identity_4kb(AccessType::ReadWriteExecute);
+    secondary_ept.build_identity_map()?;
 
     log::info!("Enabling hooks");
     hook_manager.enable_hooks(&mut primary_ept, &mut secondary_ept)?;
