@@ -70,6 +70,10 @@ enum FeatureBits {
 ///
 /// * `registers` - A mutable reference to the guest's current register state.
 ///
+/// # Returns
+///
+/// * `ExitType::IncrementRIP` - To move past the `CPUID` instruction in the VM.
+///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual, Table C-1. Basic Exit Reasons 10.
 #[rustfmt::skip]
 pub fn handle_cpuid(guest_registers: &mut GuestRegisters) -> ExitType {

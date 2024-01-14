@@ -23,6 +23,10 @@ User can add the following later:
 ///
 /// * `guest_registers` - A mutable reference to the guest's current register state.
 ///
+/// # Returns
+///
+/// * `ExitType::IncrementRIP` - To move past the `RDTSC` instruction in the VM.
+///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual, Table C-1. Basic Exit Reasons 10.
 pub fn handle_rdtsc(guest_registers: &mut GuestRegisters) -> ExitType {
     // Read the time stamp counter.

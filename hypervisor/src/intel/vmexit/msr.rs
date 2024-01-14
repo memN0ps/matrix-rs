@@ -28,6 +28,10 @@ pub enum MsrAccessType {
 /// * `registers` - A mutable reference to the guest's current register state.
 /// * `access_type` - The type of MSR access (read or write).
 ///
+/// # Returns
+///
+/// * `ExitType::IncrementRIP` - To move past the `rdmsr` or `wrmsr` instruction in the VM.
+///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: RDMSR—Read From Model Specific Register or WRMSR—Write to Model Specific Register
 /// and Table C-1. Basic Exit Reasons 31 and 32.
 pub fn handle_msr_access(

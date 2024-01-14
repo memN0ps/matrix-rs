@@ -17,6 +17,10 @@ use {
 /// # Arguments
 ///
 /// * `registers` - A mutable reference to the guest VM's general-purpose registers.
+///
+/// # Returns
+///
+/// * `ExitType::IncrementRIP` - To move past the `XSETBV` instruction in the VM.
 pub fn handle_xsetbv(guest_registers: &mut GuestRegisters) -> ExitType {
     // Extract the XCR (extended control register) number from the guest's RCX register.
     let xcr: u32 = guest_registers.rcx as u32;
