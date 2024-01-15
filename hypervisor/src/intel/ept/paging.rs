@@ -6,6 +6,7 @@
 //! Credits to the work by Satoshi in their 'Hello-VT-rp' project for assistance and a clear implementation of EPT:
 //! https://github.com/tandasat/Hello-VT-rp/blob/main/hypervisor/src/intel_vt/epts.rs
 
+use x86::bits64::paging::PAGE_SIZE_ENTRIES;
 use {
     crate::{
         error::HypervisorError,
@@ -15,13 +16,16 @@ use {
     bitfield::bitfield,
     bitflags::bitflags,
     core::ptr::addr_of,
-    x86::current::paging::{BASE_PAGE_SHIFT, BASE_PAGE_SIZE, LARGE_PAGE_SIZE},
+    x86::bits64::paging::{
+        pd_index, pdpt_index, pml4_index, pt_index, VAddr, BASE_PAGE_SHIFT, BASE_PAGE_SIZE,
+        LARGE_PAGE_SIZE,
+    },
 };
 
 bitflags! {
     /// Represents the different access permissions for an EPT entry.
     #[derive(Debug, Clone, Copy)]
-    pub struct Access: u8 {
+    pub struct AccessType: u8 {
         const READ = 0b001;
         const WRITE = 0b010;
         const EXECUTE = 0b100;
@@ -31,6 +35,11 @@ bitflags! {
         const READ_WRITE_EXECUTE = Self::READ.bits() | Self::WRITE.bits() | Self::EXECUTE.bits();
     }
 }
+
+pub const _512GB: u64 = 512 * 1024 * 1024 * 1024;
+pub const _1GB: u64 = 1024 * 1024 * 1024;
+pub const _2MB: usize = 2 * 1024 * 1024;
+pub const _4KB: usize = 4 * 1024;
 
 /// Represents the entire Extended Page Table structure.
 ///
@@ -46,221 +55,268 @@ pub struct Ept {
     pdpt: Pdpt,
     /// Array of Page Directory Table (PDT).
     pd: [Pd; 512],
-    /// Page Table (PT).
-    pt: Pt,
+    /// A two-dimensional array of Page Tables (PT).
+    pt: [[Pt; 512]; 512],
 }
 
 impl Ept {
-    /// Builds an identity map for the Extended Page Table (EPT).
-    ///
-    /// This method sets up the EPT such that each guest-physical address
-    /// maps directly to the same host-physical address. It also configures
-    /// memory types based on the current MTRR (Memory Type Range Register) settings.
-    ///
-    /// # Returns
-    /// A `Result<(), HypervisorError>` indicating whether the identity map was built successfully.
-    pub fn build_identity_map(&mut self) -> Result<(), HypervisorError> {
-        log::info!("Building identity map for EPT");
-        // Retrieve the current MTRR settings.
-        // This map is used to determine memory types for each physical address.
+    pub fn identity_2mb(&mut self, access: AccessType) -> Result<(), HypervisorError> {
+        log::info!("Creating identity map for 2MB pages");
+
         let mut mtrr = Mtrr::new();
 
-        // Initialize the physical address to start mapping from.
-        let mut pa = 0u64;
-
-        // Configure the first PML4 entry.
-        // The PML4 is the top-level structure in the paging hierarchy.
-        self.pml4.0.entries[0].set_readable(true);
-        self.pml4.0.entries[0].set_writable(true);
-        self.pml4.0.entries[0].set_executable(true);
-        self.pml4.0.entries[0]
-            .set_pfn(PhysicalAddress::pa_from_va(addr_of!(self.pdpt) as u64) >> BASE_PAGE_SHIFT);
-
-        // Iterate over all PDPT entries to configure them.
-        for (i, pml3e) in self.pdpt.0.entries.iter_mut().enumerate() {
-            // Configure the PDPT entry.
-            pml3e.set_readable(true);
-            pml3e.set_writable(true);
-            pml3e.set_executable(true);
-            pml3e.set_pfn(
-                PhysicalAddress::pa_from_va(addr_of!(self.pd[i]) as u64) >> BASE_PAGE_SHIFT,
-            );
-
-            // Configure each PDE within the current PD.
-            for pml2e in &mut self.pd[i].0.entries {
-                if pa == 0 {
-                    // Special handling for the first PDE.
-                    // This is typically where the first PT is set up.
-                    pml2e.set_readable(true);
-                    pml2e.set_writable(true);
-                    pml2e.set_executable(true);
-                    pml2e.set_pfn(
-                        PhysicalAddress::pa_from_va(addr_of!(self.pt) as u64) >> BASE_PAGE_SHIFT,
-                    );
-
-                    // Iterate over all PTEs within the first PT.
-                    for pml1e in &mut self.pt.0.entries {
-                        // Determine the memory type for the current address.
-                        let memory_type = mtrr
-                            .find(pa..pa + BASE_PAGE_SIZE as u64)
-                            .ok_or(HypervisorError::MemoryTypeResolutionError)?;
-
-                        // Configure the PTE.
-                        pml1e.set_readable(true);
-                        pml1e.set_writable(true);
-                        pml1e.set_executable(true);
-                        pml1e.set_memory_type(memory_type as u64);
-                        pml1e.set_pfn(pa >> BASE_PAGE_SHIFT);
-
-                        // Move to the next page.
-                        pa += BASE_PAGE_SIZE as u64;
-                    }
-                } else {
-                    // Handling for subsequent PDEs.
-                    // Configure large pages if used.
-                    let memory_type = mtrr
-                        .find(pa..pa + LARGE_PAGE_SIZE as u64)
-                        .ok_or(HypervisorError::MemoryTypeResolutionError)?;
-
-                    pml2e.set_readable(true);
-                    pml2e.set_writable(true);
-                    pml2e.set_executable(true);
-                    pml2e.set_memory_type(memory_type as u64);
-                    pml2e.set_large(true);
-                    pml2e.set_pfn(pa >> BASE_PAGE_SHIFT);
-
-                    // Move to the next large page.
-                    pa += LARGE_PAGE_SIZE as u64;
-                }
-            }
+        for pa in (0.._512GB).step_by(_2MB) {
+            self.map_2mb(pa, pa, access, &mut mtrr)?;
         }
-
-        log::info!("Identity map for EPT built successfully!");
 
         Ok(())
     }
 
-    /// Finds the PML1 entry for a given guest physical address.
-    ///
-    /// # Arguments
-    /// * `guest_phys_addr` - The guest physical address for which to find the PML1 entry.
-    ///
-    /// # Returns
-    /// A `Result<*mut Entry, HypervisorError>` which is a mutable pointer to the PML1 entry or an error.
-    pub fn find_pml1_entry(&self, guest_phys_addr: u64) -> Result<*mut Entry, HypervisorError> {
-        // Calculate indexes for PML4, PML3, PML2, and PML1 based on the guest physical address.
-        let pml4_index = (guest_phys_addr >> 39) & 0x1FF;
-        let pml3_index = (guest_phys_addr >> 30) & 0x1FF;
-        let pml2_index = (guest_phys_addr >> 21) & 0x1FF;
-        let pml1_index = (guest_phys_addr >> 12) & 0x1FF;
+    pub fn identity_4kb(&mut self, access: AccessType) -> Result<(), HypervisorError> {
+        log::info!("Creating identity map for 4KB pages");
 
-        // Navigate the EPT structure to reach the PML1 entry.
-        let pml4_entry = &self.pml4.0.entries[pml4_index as usize];
-        if !pml4_entry.readable() {
-            return Err(HypervisorError::InvalidPml4Entry);
+        let mut mtrr = Mtrr::new();
+
+        for pa in (0.._512GB).step_by(BASE_PAGE_SIZE) {
+            self.map_4kb(pa, pa, access, &mut mtrr)?;
         }
 
-        let pml3_pa = pml4_entry.pfn() << BASE_PAGE_SHIFT;
-        let pml3_va = PhysicalAddress::va_from_pa(pml3_pa) as *const Entry;
-        let pml3_entry = unsafe { &*pml3_va.add(pml3_index as usize) };
-        if !pml3_entry.readable() {
-            return Err(HypervisorError::InvalidPml3Entry);
-        }
-
-        let pml2_pa = pml3_entry.pfn() << BASE_PAGE_SHIFT;
-        let pml2_va = PhysicalAddress::va_from_pa(pml2_pa) as *const Entry;
-        let pml2_entry = unsafe { &*pml2_va.add(pml2_index as usize) };
-
-        log::info!("pml2_entry: {:?}", pml2_entry);
-        log::info!("pml2_entry.readable(): {:?}", pml2_entry.readable());
-        log::info!("pml2_entry.large(): {:?}", pml2_entry.large());
-
-        if !pml2_entry.readable() || pml2_entry.large() {
-            return Err(HypervisorError::InvalidPml2Entry);
-        }
-
-        let pml1_pa = pml2_entry.pfn() << BASE_PAGE_SHIFT;
-        let pml1_va = PhysicalAddress::va_from_pa(pml1_pa) as *const Entry;
-        let pml1_entry = unsafe { &mut *(pml1_va.add(pml1_index as usize) as *mut Entry) };
-
-        // Return the mutable pointer to the PML1 entry.
-        Ok(pml1_entry)
+        Ok(())
     }
 
-    /// Changes the permission of a page given its guest physical address.
-    ///
-    /// # Arguments
-    ///
-    /// * `guest_phys_addr` - The guest physical address of the page.
-    /// * `permissions` - The new permissions to set for the page.
-    ///
-    /// # Returns
-    /// A `Result<(), HypervisorError>` indicating the success or failure of the operation.
-    pub fn change_permission(
+    pub fn map_2mb(
         &mut self,
-        guest_phys_addr: u64,
-        permissions: Access,
+        guest_pa: u64,
+        host_pa: u64,
+        access: AccessType,
+        mtrr: &mut Mtrr,
     ) -> Result<(), HypervisorError> {
-
-        let pml1_entry = self.find_pml1_entry(guest_phys_addr)?;
-
-        // Set permissions based on the flags
-        unsafe { (*pml1_entry).set_readable(permissions.contains(Access::READ)) };
-        unsafe { (*pml1_entry).set_writable(permissions.contains(Access::WRITE)) };
-        unsafe { (*pml1_entry).set_executable(permissions.contains(Access::EXECUTE)) };
+        self.map_pml4(guest_pa, access)?;
+        self.map_pdpt(guest_pa, access)?;
+        self.map_pde(guest_pa, host_pa, access, mtrr)?;
 
         Ok(())
     }
 
-    /// Splits a 2MB large page into 512 smaller 4KB pages.
-    ///
-    /// # Arguments
-    /// * `guest_phys_addr` - The guest physical address indicating the 2MB page to be split.
-    ///
-    /// # Returns
-    /// A `Result<(), HypervisorError>` indicating the success or failure of the operation.
-    #[rustfmt::skip]
-    pub fn split_2mb_to_4kb(&mut self, guest_phys_addr: u64) -> Result<(), HypervisorError> {
-        // Ensure the given address is aligned to a 2MB boundary.
-        if guest_phys_addr & (LARGE_PAGE_SIZE as u64 - 1) != 0 {
+    pub fn map_4kb(
+        &mut self,
+        guest_pa: u64,
+        host_pa: u64,
+        access: AccessType,
+        mtrr: &mut Mtrr,
+    ) -> Result<(), HypervisorError> {
+        self.map_pml4(guest_pa, access)?;
+        self.map_pdpt(guest_pa, access)?;
+        self.map_pdt(guest_pa, access)?;
+        self.map_pt(guest_pa, host_pa, access, mtrr)?;
+
+        Ok(())
+    }
+
+    fn map_pml4(&mut self, guest_pa: u64, access_type: AccessType) -> Result<(), HypervisorError> {
+        let pml4_index = pml4_index(VAddr::from(guest_pa));
+        let pml4_entry = &mut self.pml4.0.entries[pml4_index];
+
+        if !pml4_entry.readable() {
+            pml4_entry.set_readable(access_type.contains(AccessType::READ));
+            pml4_entry.set_writable(access_type.contains(AccessType::WRITE));
+            pml4_entry.set_executable(access_type.contains(AccessType::EXECUTE));
+            pml4_entry.set_pfn(
+                PhysicalAddress::pa_from_va(addr_of!(self.pdpt) as u64) >> BASE_PAGE_SHIFT,
+            );
+        }
+
+        Ok(())
+    }
+
+    fn map_pdpt(&mut self, guest_pa: u64, access_type: AccessType) -> Result<(), HypervisorError> {
+        let pdpt_index = pdpt_index(VAddr::from(guest_pa));
+        let pdpt_entry = &mut self.pdpt.0.entries[pdpt_index];
+
+        if !pdpt_entry.readable() {
+            pdpt_entry.set_readable(access_type.contains(AccessType::READ));
+            pdpt_entry.set_writable(access_type.contains(AccessType::WRITE));
+            pdpt_entry.set_executable(access_type.contains(AccessType::EXECUTE));
+            pdpt_entry.set_pfn(
+                PhysicalAddress::pa_from_va(addr_of!(self.pd[pdpt_index]) as u64)
+                    >> BASE_PAGE_SHIFT,
+            );
+        }
+
+        Ok(())
+    }
+
+    fn map_pdt(&mut self, guest_pa: u64, access_type: AccessType) -> Result<(), HypervisorError> {
+        let pdpt_index = pdpt_index(VAddr::from(guest_pa));
+        let pd_index = pd_index(VAddr::from(guest_pa));
+        let pd_entry = &mut self.pd[pdpt_index].0.entries[pd_index];
+
+        if !pd_entry.readable() {
+            pd_entry.set_readable(access_type.contains(AccessType::READ));
+            pd_entry.set_writable(access_type.contains(AccessType::WRITE));
+            pd_entry.set_executable(access_type.contains(AccessType::EXECUTE));
+            pd_entry.set_pfn(
+                PhysicalAddress::pa_from_va(addr_of!(self.pt[pdpt_index][pd_index]) as u64)
+                    >> BASE_PAGE_SHIFT,
+            );
+        }
+
+        Ok(())
+    }
+
+    fn map_pde(
+        &mut self,
+        guest_pa: u64,
+        host_pa: u64,
+        access_type: AccessType,
+        mtrr: &mut Mtrr,
+    ) -> Result<(), HypervisorError> {
+        let pdpt_index = pdpt_index(VAddr::from(guest_pa));
+        let pd_index = pd_index(VAddr::from(guest_pa));
+        let pd_entry = &mut self.pd[pdpt_index].0.entries[pd_index];
+
+        let memory_type = mtrr
+            .find(guest_pa..guest_pa + LARGE_PAGE_SIZE as u64)
+            .unwrap_or(MemoryType::Uncacheable);
+
+        if !pd_entry.readable() {
+            pd_entry.set_readable(access_type.contains(AccessType::READ));
+            pd_entry.set_writable(access_type.contains(AccessType::WRITE));
+            pd_entry.set_executable(access_type.contains(AccessType::EXECUTE));
+            pd_entry.set_memory_type(memory_type as u64);
+            pd_entry.set_large(true);
+            pd_entry.set_pfn(host_pa >> BASE_PAGE_SHIFT);
+        } else {
+            log::warn!(
+                "Attempted to map an already-mapped 2MB page: {:x}",
+                guest_pa
+            );
+        }
+
+        Ok(())
+    }
+
+    fn map_pt(
+        &mut self,
+        guest_pa: u64,
+        host_pa: u64,
+        access_type: AccessType,
+        mtrr: &mut Mtrr,
+    ) -> Result<(), HypervisorError> {
+        let pdpt_index = pdpt_index(VAddr::from(guest_pa));
+        let pd_index = pd_index(VAddr::from(guest_pa));
+        let pt_index = pt_index(VAddr::from(guest_pa));
+        let pt_entry = &mut self.pt[pdpt_index][pd_index].0.entries[pt_index];
+
+        let memory_type = mtrr
+            .find(guest_pa..guest_pa + BASE_PAGE_SIZE as u64)
+            .unwrap_or(MemoryType::Uncacheable);
+
+        if !pt_entry.readable() {
+            pt_entry.set_readable(access_type.contains(AccessType::READ));
+            pt_entry.set_writable(access_type.contains(AccessType::WRITE));
+            pt_entry.set_executable(access_type.contains(AccessType::EXECUTE));
+            pt_entry.set_memory_type(memory_type as u64);
+            pt_entry.set_pfn(host_pa >> BASE_PAGE_SHIFT);
+        } else {
+            log::warn!(
+                "Attempted to map an already-mapped 4KB page: {:x}",
+                guest_pa
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Changes the permission of a single page (can be 2mb or 4kb).
+    pub fn change_page_flags(
+        &mut self,
+        guest_pa: u64,
+        access_type: AccessType,
+    ) -> Result<(), HypervisorError> {
+        let guest_pa = VAddr::from(guest_pa);
+
+        if !guest_pa.is_large_page_aligned() && !guest_pa.is_base_page_aligned() {
+            log::error!("Page is not aligned: {:#x}", guest_pa);
             return Err(HypervisorError::UnalignedAddressError);
         }
 
-        // Calculate the indexes for PDPT and PD based on the given guest physical address.
-        let pdpt_index = (guest_phys_addr >> 30) & 0x1FF;
-        let pd_index = (guest_phys_addr >> 21) & 0x1FF;
+        let pdpt_index = pdpt_index(guest_pa);
+        let pd_index = pd_index(guest_pa);
+        let pt_index = pt_index(guest_pa);
 
-        // Retrieve the PD entry corresponding to the guest physical address.
-        let pd_entry = &mut self.pd[pdpt_index as usize].0.entries[pd_index as usize];
+        let pd_entry = &mut self.pd[pdpt_index].0.entries[pd_index];
 
-        // Check if the PD entry is already a large page.
-        if !pd_entry.large() {
-            return Err(HypervisorError::AlreadySplitError);
-        }
+        if pd_entry.large() {
+            log::trace!("Changing the permissions of a 2mb page");
+            pd_entry.set_readable(access_type.contains(AccessType::READ));
+            pd_entry.set_writable(access_type.contains(AccessType::WRITE));
+            pd_entry.set_executable(access_type.contains(AccessType::EXECUTE));
+        } else {
+            log::trace!("Changing the permissions of a 4kb page");
 
-        // Mark the PD entry as not large, indicating it will reference PT.
-        pd_entry.set_large(false);
-
-        // Update the PD entry to point to the corresponding PT.
-        let pt_phys_addr = PhysicalAddress::pa_from_va(&self.pt as *const _ as u64);
-        pd_entry.set_pfn(pt_phys_addr >> BASE_PAGE_SHIFT);
-
-        // Calculate the starting index in the PT for the 4KB pages corresponding to the 2MB page.
-        let pt_start_index = (pd_index * (LARGE_PAGE_SIZE as u64) / (BASE_PAGE_SIZE as u64)) as usize;
-
-        // Iterate over the PT entries corresponding to the 2MB page.
-        for index in 0..(LARGE_PAGE_SIZE / BASE_PAGE_SIZE) {
-            let pt_entry = &mut self.pt.0.entries[pt_start_index + index];
-            pt_entry.set_readable(true);
-            pt_entry.set_writable(true);
-            pt_entry.set_executable(true);
-
-            // Calculate the physical address for each 4KB page within the 2MB page.
-            let page_phys_addr = guest_phys_addr + (index * BASE_PAGE_SIZE) as u64;
-            pt_entry.set_pfn(page_phys_addr >> BASE_PAGE_SHIFT);
+            let pt_entry = &mut self.pt[pdpt_index][pd_index].0.entries[pt_index];
+            pt_entry.set_readable(access_type.contains(AccessType::READ));
+            pt_entry.set_writable(access_type.contains(AccessType::WRITE));
+            pt_entry.set_executable(access_type.contains(AccessType::EXECUTE));
         }
 
         Ok(())
+    }
+
+    pub fn split_2mb_to_4kb(
+        &mut self,
+        guest_pa: u64,
+        access_type: AccessType,
+    ) -> Result<(), HypervisorError> {
+        log::trace!("Splitting 2mb page into 4kb pages: {:x}", guest_pa);
+
+        let guest_pa = VAddr::from(guest_pa);
+
+        let pdpt_index = pdpt_index(guest_pa);
+        let pd_index = pd_index(guest_pa);
+        let pd_entry = &mut self.pd[pdpt_index].0.entries[pd_index];
+
+        // We can only split large pages and not page directories.
+        // If it's a page directory, it is already split.
+        //
+        if !pd_entry.large() {
+            log::trace!("Page is already split: {:x}.", guest_pa);
+            return Err(HypervisorError::PageAlreadySplit);
+        }
+
+        // Unmap the 2MB page by resetting the page directory entry.
+        Self::unmap_2mb(pd_entry);
+
+        let mut mtrr = Mtrr::new();
+
+        // Map the unmapped physical memory again to 4KB pages.
+        for i in 0..PAGE_SIZE_ENTRIES {
+            let pa = (guest_pa.as_usize() + i * BASE_PAGE_SIZE) as u64;
+            self.map_4kb(pa, pa, access_type, &mut mtrr)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn unmap_2mb(entry: &mut Entry) {
+        if !entry.readable() {
+            // The page is already not present; no action needed.
+            return;
+        }
+
+        // Unmap the large page and clear the flags
+        entry.set_readable(false);
+        entry.set_writable(false);
+        entry.set_executable(false);
+        entry.set_memory_type(0);
+        entry.set_large(false);
+        entry.set_pfn(0); // Reset the Page Frame Number
+    }
+
+    fn unmap_4kb(entry: &mut Entry) {
+        // Delegate to the unmap_2mb function as the unmap logic is the same.
+        Self::unmap_2mb(entry);
     }
 
     /// Creates an Extended Page Table Pointer (EPTP) with a Write-Back memory type and a 4-level page walk.

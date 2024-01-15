@@ -23,9 +23,9 @@ use wdk_alloc::WDKAllocator;
 #[global_allocator]
 static GLOBAL: hypervisor::utils::alloc::KernelAlloc = hypervisor::utils::alloc::KernelAlloc;
 
-use alloc::boxed::Box;
 use {
     crate::expanded_stack::with_expanded_stack,
+    alloc::boxed::Box,
     alloc::vec,
     core::sync::atomic::Ordering,
     hypervisor::{
@@ -33,7 +33,7 @@ use {
         intel::{
             ept::{
                 hooks::{Hook, HookManager, HookType},
-                paging::Ept,
+                paging::{AccessType, Ept},
             },
             vmm::Hypervisor,
         },
@@ -77,7 +77,7 @@ pub unsafe extern "system" fn driver_entry(
     // Initialize the COM2 port logger with level filter set to Info.
     com_logger::builder()
         .base(0x2f8)
-        .filter(LevelFilter::Info)
+        .filter(LevelFilter::Trace)
         .setup();
 
     log::info!("Driver Entry called");
@@ -153,10 +153,10 @@ fn virtualize() -> Result<(), HypervisorError> {
         unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
 
     log::info!("Creating Primary EPT");
-    primary_ept.build_identity_map()?;
+    primary_ept.identity_4kb(AccessType::READ_WRITE_EXECUTE)?;
 
     log::info!("Creating Secondary EPT");
-    secondary_ept.build_identity_map()?;
+    secondary_ept.identity_4kb(AccessType::READ_WRITE_EXECUTE)?;
 
     log::info!("Enabling hooks");
     hook_manager.enable_hooks(&mut primary_ept, &mut secondary_ept)?;

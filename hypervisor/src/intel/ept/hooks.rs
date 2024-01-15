@@ -8,7 +8,7 @@
 use {
     crate::{
         error::HypervisorError,
-        intel::ept::paging::{Access, Ept},
+        intel::ept::paging::{AccessType, Ept},
         utils::{
             addresses::PhysicalAddress,
             alloc::PhysicalAllocator,
@@ -269,8 +269,14 @@ impl HookManager {
                 inline_hook.enable();
             }
 
-            primary_ept.split_2mb_to_4kb(hook.original_pa.align_down_to_large_page().as_u64())?;
-            secondary_ept.split_2mb_to_4kb(hook.hook_pa.align_down_to_large_page().as_u64())?;
+            // let page = hook.original_pa.align_down_to_large_page().as_u64();
+            // let hook_page = hook.hook_pa.align_down_to_large_page().as_u64();
+
+            // log::info!("Splitting 2MB page to 4KB pages for Primary EPT: {:#x}", page);
+            // primary_ept.split_2mb_to_4kb(page)?;
+
+            // log::info!("Splitting 2MB page to 4KB pages for Secondary EPT: {:#x}", hook_page);
+            // secondary_ept.split_2mb_to_4kb(hook_page)?;
 
             // Align addresses to their base page sizes for accurate permission modification.
             let page = hook.original_pa.align_down_to_base_page().as_u64();
@@ -282,7 +288,7 @@ impl HookManager {
             );
 
             // Modify the page permission in the primary EPT to ReadWrite.
-            primary_ept.change_permission(page, Access::READ_WRITE)?;
+            primary_ept.change_page_flags(page, AccessType::READ_WRITE)?;
 
             log::info!(
                 "Changing permissions for hook page to Execute (X) only: {:#x}",
@@ -290,7 +296,7 @@ impl HookManager {
             );
 
             // Modify the page permission in the secondary EPT to Execute for the hook page.
-            secondary_ept.change_permission(hook_page, Access::EXECUTE)?;
+            secondary_ept.change_page_flags(hook_page, AccessType::EXECUTE)?;
         }
 
         Ok(())

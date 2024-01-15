@@ -108,10 +108,10 @@ pub enum HypervisorError {
     InvalidPml4Entry,
 
     #[error("Invalid PML3 entry")]
-    InvalidPml3Entry,
+    InvalidPdptEntry,
 
     #[error("Invalid PML2 entry")]
-    InvalidPml2Entry,
+    InvalidPdEntry,
 
     #[error("Invalid PML1 entry")]
     InvalidPml1Entry,
@@ -127,4 +127,7 @@ pub enum HypervisorError {
 
     #[error("Out of memory")]
     OutOfMemory,
+
+    #[error("Page already split")]
+    PageAlreadySplit,
 }
