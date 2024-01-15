@@ -269,8 +269,8 @@ impl HookManager {
                 inline_hook.enable();
             }
 
-            primary_ept.split_2mb_to_4kb(hook.original_pa.align_down_to_huge_page().as_u64())?;
-            secondary_ept.split_2mb_to_4kb(hook.hook_pa.align_down_to_huge_page().as_u64())?;
+            primary_ept.split_2mb_to_4kb(hook.original_pa.align_down_to_large_page().as_u64())?;
+            secondary_ept.split_2mb_to_4kb(hook.hook_pa.align_down_to_large_page().as_u64())?;
 
             // Align addresses to their base page sizes for accurate permission modification.
             let page = hook.original_pa.align_down_to_base_page().as_u64();
