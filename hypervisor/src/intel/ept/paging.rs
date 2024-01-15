@@ -249,6 +249,7 @@ impl Ept {
     /// * `guest_pa`: The guest physical address whose corresponding PD entry will be updated.
     /// * `host_pa`: The host physical address to map to.
     /// * `access_type`: The type of access allowed for this 2MB page.
+    /// * `mtrr`: The Memory Type Range Registers (MTRR) to use for this page.
     ///
     /// # Returns
     ///
@@ -291,6 +292,7 @@ impl Ept {
     /// * `guest_pa`: The guest physical address whose corresponding PT entry will be updated.
     /// * `host_pa`: The host physical address to map to.
     /// * `access_type`: The type of access allowed for this 4KB page.
+    /// * `mtrr`: The Memory Type Range Registers (MTRR) to use for this page.
     ///
     /// # Returns
     ///
