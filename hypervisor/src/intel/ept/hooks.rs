@@ -269,14 +269,20 @@ impl HookManager {
                 inline_hook.enable();
             }
 
-            // let page = hook.original_pa.align_down_to_large_page().as_u64();
-            // let hook_page = hook.hook_pa.align_down_to_large_page().as_u64();
+            let page = hook.original_pa.align_down_to_large_page().as_u64();
+            let hook_page = hook.hook_pa.align_down_to_large_page().as_u64();
 
-            // log::info!("Splitting 2MB page to 4KB pages for Primary EPT: {:#x}", page);
-            // primary_ept.split_2mb_to_4kb(page)?;
+            log::info!(
+                "Splitting 2MB page to 4KB pages for Primary EPT: {:#x}",
+                page
+            );
+            primary_ept.split_2mb_to_4kb(page, AccessType::READ_WRITE_EXECUTE)?;
 
-            // log::info!("Splitting 2MB page to 4KB pages for Secondary EPT: {:#x}", hook_page);
-            // secondary_ept.split_2mb_to_4kb(hook_page)?;
+            log::info!(
+                "Splitting 2MB page to 4KB pages for Secondary EPT: {:#x}",
+                hook_page
+            );
+            secondary_ept.split_2mb_to_4kb(hook_page, AccessType::READ_WRITE_EXECUTE)?;
 
             // Align addresses to their base page sizes for accurate permission modification.
             let page = hook.original_pa.align_down_to_base_page().as_u64();

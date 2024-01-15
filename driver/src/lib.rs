@@ -153,10 +153,10 @@ fn virtualize() -> Result<(), HypervisorError> {
         unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
 
     log::info!("Creating Primary EPT");
-    primary_ept.identity_4kb(AccessType::READ_WRITE_EXECUTE)?;
+    primary_ept.identity_2mb(AccessType::READ_WRITE_EXECUTE)?;
 
     log::info!("Creating Secondary EPT");
-    secondary_ept.identity_4kb(AccessType::READ_WRITE_EXECUTE)?;
+    secondary_ept.identity_2mb(AccessType::READ_WRITE_EXECUTE)?;
 
     log::info!("Enabling hooks");
     hook_manager.enable_hooks(&mut primary_ept, &mut secondary_ept)?;
