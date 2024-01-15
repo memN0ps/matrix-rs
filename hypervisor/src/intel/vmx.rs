@@ -56,7 +56,7 @@ pub struct Vmx {
 
     /// Virtual address of the host's stack, aligned to a 4-KByte boundary.
     /// Allocated using `ExAllocatePool` or `ExAllocatePoolWithTag`.
-    pub host_rsp: Box<VmStack, KernelAlloc>,
+    pub vmstack: Box<VmStack, KernelAlloc>,
 
     /// Virtual address of the host's paging structures, aligned to a 4-KByte boundary.
     /// Allocated using `MmAllocateContiguousMemorySpecifyCacheNode`.
@@ -85,7 +85,7 @@ impl Vmx {
         let vmcs_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let mut guest_descriptor_table = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
         let mut host_descriptor_table = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
-        let host_rsp = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
+        let vmstack = unsafe { Box::try_new_zeroed_in(KernelAlloc)?.assume_init() };
         let mut host_paging: Box<PageTables, PhysicalAllocator> = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
         let guest_registers = GuestRegisters::default();
 
@@ -103,7 +103,7 @@ impl Vmx {
             vmcs_region,
             guest_descriptor_table,
             host_descriptor_table,
-            host_rsp,
+            vmstack,
             host_paging,
             guest_registers,
             shared_data: unsafe { NonNull::new_unchecked(shared_data as *mut _) },
@@ -142,7 +142,7 @@ impl Vmx {
         Vcpu::invalidate_contexts();
 
         Vmcs::setup(&mut self.vmcs_region)?;
-        VmStack::setup(&mut self.host_rsp)?;
+        VmStack::setup(&mut self.vmstack)?;
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
         log::info!("Setting up Guest Registers State");
@@ -181,8 +181,8 @@ impl Vmx {
     pub fn run(&mut self) {
         log::info!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
 
-        let host_rsp = self.host_rsp.stack_contents.as_mut_ptr();
-        let vmcs_host_rsp = unsafe { host_rsp.offset(STACK_CONTENTS_SIZE as isize) };
+        let stack_contents_ptr = self.vmstack.stack_contents.as_mut_ptr();
+        let vmcs_host_rsp = unsafe { stack_contents_ptr.offset(STACK_CONTENTS_SIZE as isize) };
 
         unsafe { launch_vm(&mut self.guest_registers, vmcs_host_rsp as *mut u64) };
     }

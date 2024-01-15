@@ -25,8 +25,8 @@ extern "C" {
     /// # Arguments
     ///
     /// * `general_purpose_registers` - A pointer to the `GuestRegisters` structure
-    /// * `host_rsp` - A pointer to the end of `stack_contents` in the `VmStack` structure.
-    pub fn launch_vm(guest_registers: &mut GuestRegisters, host_rsp: *mut u64);
+    /// * `vmcs_host_rsp` - A pointer to the end of `stack_contents` in the `VmStack` structure.
+    pub fn launch_vm(guest_registers: &mut GuestRegisters, vmcs_host_rsp: *mut u64);
 
     /// Assembly stub for handling VM exits.
     pub fn vmexit_stub();
