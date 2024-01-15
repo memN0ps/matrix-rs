@@ -3,10 +3,8 @@
 //! When EPT is in use, certain addresses that would normally be treated as physical addresses (and used to access memory) are instead treated as guest-physical addresses
 //! Guest-physical addresses are translated by traversing a set of EPT paging structures to produce physical addresses that are used to access memory.
 //!
-//! Credits to the work by Satoshi in their 'Hello-VT-rp' project for assistance and a clear implementation of EPT:
-//! https://github.com/tandasat/Hello-VT-rp/blob/main/hypervisor/src/intel_vt/epts.rs
+//! Credits to the work by Satoshi (https://github.com/tandasat/Hello-VT-rp/blob/main/hypervisor/src/intel_vt/epts.rs) and Matthias (https://github.com/not-matthias/amd_hypervisor/blob/main/hypervisor/src/svm/nested_page_table.rs).
 
-use x86::bits64::paging::PAGE_SIZE_ENTRIES;
 use {
     crate::{
         error::HypervisorError,
@@ -18,7 +16,7 @@ use {
     core::ptr::addr_of,
     x86::bits64::paging::{
         pd_index, pdpt_index, pml4_index, pt_index, VAddr, BASE_PAGE_SHIFT, BASE_PAGE_SIZE,
-        LARGE_PAGE_SIZE,
+        LARGE_PAGE_SIZE, PAGE_SIZE_ENTRIES,
     },
 };
 
