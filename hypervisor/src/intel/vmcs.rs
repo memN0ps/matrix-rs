@@ -284,12 +284,10 @@ impl Vmcs {
 
         vmwrite(vmcs::control::MSR_BITMAPS_ADDR_FULL, PhysicalAddress::pa_from_va(shared_data.msr_bitmap.as_ref() as *const _ as _));
 
-        let primary_eptp = shared_data.primary_ept.create_eptp_with_wb_and_4lvl_walk()?;
-
-        vmwrite(vmcs::control::EPTP_FULL, primary_eptp);
+        vmwrite(vmcs::control::EPTP_FULL, shared_data.primary_eptp);
         vmwrite(vmcs::control::VPID, VPID_TAG);
 
-        invept_single_context(primary_eptp);
+        invept_single_context(shared_data.primary_eptp);
         invvpid_single_context(VPID_TAG);
 
         Ok(())

@@ -46,7 +46,7 @@ impl HypervisorBuilder {
             .ok_or(HypervisorError::PrimaryEPTNotProvided)?;
 
         #[cfg(not(feature = "secondary-ept"))]
-        let mut shared_data = SharedData::new(primary_ept);
+        let mut shared_data = SharedData::new(primary_ept)?;
 
         #[cfg(feature = "secondary-ept")]
         let shared_data = {
@@ -54,7 +54,7 @@ impl HypervisorBuilder {
                 .secondary_ept
                 .ok_or(HypervisorError::SecondaryEPTNotProvided)?;
 
-            SharedData::new(primary_ept, secondary_ept)
+            SharedData::new(primary_ept, secondary_ept)?
         };
 
         Ok(Hypervisor {
