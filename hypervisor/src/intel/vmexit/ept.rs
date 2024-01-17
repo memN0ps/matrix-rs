@@ -32,26 +32,25 @@ pub fn handle_ept_violation(_guest_registers: &mut GuestRegisters, vmx: &mut Vmx
         log::info!("EPT Violation: Execute acccess attempted on Guest Physical Address: {:#x} / Guest Virtual Address: {:#x}", guest_physical_address, va);
         // Change to the secondary EPTP and invalidate the EPT cache.
         // The hooked page that is Execute-Only will be executed from the secondary EPTP.
-        // if any Read or Write occurs, then a vmexit will occur
+        // if Read or Write occurs on that page, then a vmexit will occur
         // and we can swap the page back to the primary EPTP, (original page) with RW permissions.
         let secondary_eptp = unsafe { vmx.shared_data.as_mut().secondary_eptp };
         vmwrite(vmcs::control::EPTP_FULL, secondary_eptp);
         invept_single_context(secondary_eptp);
     }
 
-    // If the page is Execute-Only, then we need to swap it back to the primary EPTPs
+    // If the page is Execute-Only, then we need to swap it back to the primary EPTP
     if !ept_violation_qualification.readable && !ept_violation_qualification.writable && ept_violation_qualification.executable {
-        // This is a Read/Write violation, so we need to swap the page back to the primary EPTP
-        // and give it Read/Write permissions.
-        // This is done by swapping the secondary EPTP with the primary EPTP.
-        // The secondary EPTP is the original page with RW permissions.
-        // The primary EPTP is the hooked page with Execute-Only permissions.
+        // Change to the primary EPTP and invalidate the EPT cache.
+        // The original page that is Read-Write-Only will be executed from the primary EPTP.
+        // if Execute occurs on that page, then a vmexit will occur
+        // and we can swap the page back to the secondary EPTP, (hooked page) with X permissions.
         let primary_eptp = unsafe { vmx.shared_data.as_mut().primary_eptp };
         vmwrite(vmcs::control::EPTP_FULL, primary_eptp);
         invept_single_context(primary_eptp);
     }
 
-    // Do not increment RIP, since we want it to execute the same instruction?
+    // Do not increment RIP, since we want it to execute the same instruction again.
     ExitType::Continue
 }
 
