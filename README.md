@@ -6,28 +6,25 @@
 ![Forks](https://img.shields.io/github/forks/memN0ps/hypervisor-rs)
 ![Stars](https://img.shields.io/github/stars/memN0ps/hypervisor-rs)
 
-A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hypervisor for Intel VT-x, focused on studying the core concepts of virtualization.
+A lightweight, memory-safe, and blazingly fast, Rust-based type-2 research hypervisor with Extended Page Table (EPT) hooks for Intel VT-x, focused on studying the core concepts of virtualization.
 
 ## Features
 
-- **VM Exit Handling** for `Cpuid`, `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`.
+- **Efficient VM Exit Handling**: Handles a variety of VM exit reasons such as `Cpuid`, `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`, ensuring minimal performance overhead and responsive virtual machine operations.
+- **Extended Page Tables (EPT)**: Integrates Memory Type Range Registers (MTRR) with EPT for efficient memory mapping and management. This helps in correctly identifying and handling memory types, optimizing performance and stability in virtualized environments.
+- **EPT Hooks**: Adds EPT hooks for enhanced memory control and monitoring within guest VMs. This feature allows for finer memory management and the potential for advanced features like memory introspection or modification.
 
-- **Extended Page Tables (EPT) with Memory Type Range Registers (MTRR)**.
+## Planned Enhancements
 
-- **Extended Page Tables (EPT) Hooks (Unstable)**.
-
-## Planned Features
-
-- **VM Exit Handling** for `Getsec`, and VMX instructions (`Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxoff`, `Vmxon`).
-
-- **Isolation and Security** by implementing custom Global Descriptor Table (GDT), Interrupt Descriptor Table (IDT), and Page Tables to prevent potential vulnerabilities ([More information: @namazso](https://www.unknowncheats.me/forum/2779560-post4.html)).
+- **Broader Instruction Support**: Future updates are set to include advanced handling for instructions like `Getsec`, and VMX instructions (`Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxon`, `Vmxoff`). This will expand the hypervisor's capabilities in managing more complex virtual machine operations and scenarios.
+- **Robust Isolation Mechanisms**: Developing custom implementations of Global Descriptor Table (GDT), Interrupt Descriptor Table (IDT), and Page Tables for enhanced security. Moving away from relying on the host's `ntoskrnl.exe` `CR3`, to strengthen the hypervisor's defense against sophisticated attacks. [Further insights on these structures by @Namazso](https://www.unknowncheats.me/forum/2779560-post4.html).
 
 ## Installation
 
 1. Install Rust from [here](https://www.rust-lang.org/tools/install).
 2. Switch to Rust Nightly: `rustup toolchain install nightly` and `rustup default nightly`.
 3. Install LLVM: `winget install LLVM.LLVM`.
-4. Install Tools: `cargo-make`, `cargo-expand`, `cargo-edit`, and `cargo-workspaces`.
+4. Install Tools: `cargo install cargo-make cargo-expand cargo-edit cargo-workspaces`.
 5. Install WDK/SDK/EWDK: Steps [here](https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk).
 
 ## Building the Project
