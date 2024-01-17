@@ -111,6 +111,8 @@ impl Vmx {
 
         let mut instance = Box::new(instance);
 
+        instance.vmstack.vmx = &mut *instance as *mut _ as _;
+
         instance.setup_virtualization(shared_data, context)?;
 
         log::info!("Dumping VMCS: {:#x?}", instance.vmcs_region);
@@ -184,6 +186,17 @@ impl Vmx {
         let stack_contents_ptr = self.vmstack.stack_contents.as_mut_ptr();
         let vmcs_host_rsp = unsafe { stack_contents_ptr.offset(STACK_CONTENTS_SIZE as isize) };
 
+        log::info!("Vmx: {:#p}", self.vmstack.vmx);
+
         unsafe { launch_vm(&mut self.guest_registers, vmcs_host_rsp as *mut u64) };
+    }
+
+    /// Returns a mutable reference to the shared data.
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to the shared data.
+    pub fn shared_data(&mut self) -> &mut SharedData {
+        unsafe { self.shared_data.as_mut() }
     }
 }

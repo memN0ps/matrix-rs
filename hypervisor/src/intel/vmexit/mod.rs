@@ -19,6 +19,7 @@ use {
                 rdtsc::handle_rdtsc,
                 xsetbv::handle_xsetbv,
             },
+            vmx::Vmx,
         },
         utils::capture::GuestRegisters,
     },
@@ -71,6 +72,7 @@ impl VmExit {
     pub fn handle_vmexit(
         &self,
         guest_registers: &mut GuestRegisters,
+        vmx: &mut Vmx,
     ) -> Result<(), HypervisorError> {
         // Upon VM-exit, transfer the guest register values from VMCS to `self.registers` to ensure it reflects the latest and complete state.
         guest_registers.rip = vmread(guest::RIP);
@@ -80,6 +82,12 @@ impl VmExit {
         log::info!("Guest RIP: {:#x}", guest_registers.rip);
         log::info!("Guest RSP: {:#x}", guest_registers.rsp);
         log::info!("Guest RFLAGS: {:#x}", guest_registers.rflags);
+
+        log::info!("Vmx: {:#p}", vmx);
+        let primary_ept = unsafe { vmx.shared_data.as_mut().primary_eptp };
+        log::info!("Primary EPT: {:#x}", primary_ept);
+        let secondary_ept = unsafe { vmx.shared_data.as_mut().secondary_eptp };
+        log::info!("Secondary EPT: {:#x}", secondary_ept);
 
         let exit_reason = vmread(ro::EXIT_REASON) as u32;
 

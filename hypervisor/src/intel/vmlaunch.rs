@@ -10,7 +10,7 @@
 //! Drew: https://github.com/drew-gpf
 
 use crate::{
-    intel::{support::vmread, vmerror::VmInstructionError, vmexit::VmExit},
+    intel::{support::vmread, vmerror::VmInstructionError, vmexit::VmExit, vmx::Vmx},
     utils::capture::GuestRegisters,
 };
 
@@ -25,8 +25,8 @@ extern "C" {
     /// # Arguments
     ///
     /// * `general_purpose_registers` - A pointer to the `GuestRegisters` structure
-    /// * `vmcs_host_rsp` - A pointer to the end of `stack_contents` in the `VmStack` structure.
-    pub fn launch_vm(guest_registers: &mut GuestRegisters, vmcs_host_rsp: *mut u64);
+    /// * `host_rsp` - A pointer to the end of `stack_contents` in the `VmStack` structure.
+    pub fn launch_vm(guest_registers: &mut GuestRegisters, host_rsp: *mut u64);
 
     /// Assembly stub for handling VM exits.
     pub fn vmexit_stub();
@@ -184,8 +184,12 @@ vmexit_stub:
     movdqa  [r15 + registers_xmm14], xmm14
     movdqa  [r15 + registers_xmm15], xmm15
 
-    // Set rcx to point to the saved guest registers for `vmexit_handler`.
+    // Set rcx to point to the saved guest registers for `vmexit_handler` (1st parameter).
     mov rcx, r15
+
+    // Set rdx to point to the saved `Vmx` pointer for `vmexit_handler` (2nd parameter).
+    // 8 (0x8) x 16 (0x10) = 128 (0x80) bytes away is `Vmx` pointer.
+    mov rdx, [rsp + 0x80]
 
     // Temporarily save and restore r15, keeping guest registers pointer on stack.
     mov     rax, [rsp]
@@ -261,15 +265,19 @@ vmexit_stub:
 ///
 /// Panics if `registers` is a null pointer.
 #[no_mangle]
-pub unsafe extern "C" fn vmexit_handler(registers: *mut GuestRegisters) {
+pub unsafe extern "C" fn vmexit_handler(registers: *mut GuestRegisters, vmx: *mut u64) {
     if registers.is_null() {
         panic!("vmexit_handler received a null pointer for registers.");
     }
+    if vmx.is_null() {
+        panic!("vmexit_handler received a null pointer for vmx.");
+    }
 
     let registers = &mut *registers;
+    let vmx = &mut *(vmx as *mut Vmx);
     let vmexit = VmExit::new();
 
-    if let Err(e) = vmexit.handle_vmexit(registers) {
+    if let Err(e) = vmexit.handle_vmexit(registers, vmx) {
         panic!("Failed to handle VMEXIT: {:?}", e);
     }
 }
