@@ -1,7 +1,10 @@
 use {
     crate::{
         error::HypervisorError,
-        intel::{support::vmread, vmerror::EptViolationExitQualification, vmexit::ExitType},
+        intel::{
+            invept::invept_single_context, support::vmread, support::vmwrite,
+            vmerror::EptViolationExitQualification, vmexit::ExitType, vmx::Vmx,
+        },
         utils::{addresses::PhysicalAddress, capture::GuestRegisters},
     },
     x86::vmx::vmcs,
@@ -11,7 +14,7 @@ use {
 /// 29.3.3.2 EPT Violations
 /// Table 28-7. Exit Qualification for EPT Violations
 #[rustfmt::skip]
-pub fn handle_ept_violation(_guest_registers: &mut GuestRegisters) -> ExitType {
+pub fn handle_ept_violation(_guest_registers: &mut GuestRegisters, vmx: &mut Vmx) -> ExitType {
     let guest_physical_address = vmread(vmcs::ro::GUEST_PHYSICAL_ADDR_FULL);
     log::info!("EPT Violation: Guest Physical Address: {:#x}", guest_physical_address);
 
@@ -19,33 +22,37 @@ pub fn handle_ept_violation(_guest_registers: &mut GuestRegisters) -> ExitType {
     let va = PhysicalAddress::va_from_pa(guest_physical_address);
     log::info!("EPT Violation: Guest Virtual Address: {:#x}", va);
 
-    let exit_qualification_value = vmread(vmcs::ro::EXIT_QUALIFICATION);
-
-    // Create an instance of EptViolationExitQualification from the raw exit qualification value
-    let ept_violation_qualification = EptViolationExitQualification::from_exit_qualification(exit_qualification_value);
-
     // Log the detailed information about the EPT violation
+    let exit_qualification_value = vmread(vmcs::ro::EXIT_QUALIFICATION);
+    let ept_violation_qualification = EptViolationExitQualification::from_exit_qualification(exit_qualification_value);
     log::info!("Exit Qualification for EPT Violations: {}", ept_violation_qualification);
 
-    unsafe {
-        core::arch::asm!("int3");
+    // If the page is Read/Write, then we need to swap it to the secondary EPTP
+    if ept_violation_qualification.readable && ept_violation_qualification.writable && !ept_violation_qualification.executable {
+        log::info!("EPT Violation: Execute acccess attempted on Guest Physical Address: {:#x} / Guest Virtual Address: {:#x}", guest_physical_address, va);
+        // Change to the secondary EPTP and invalidate the EPT cache.
+        // The hooked page that is Execute-Only will be executed from the secondary EPTP.
+        // if any Read or Write occurs, then a vmexit will occur
+        // and we can swap the page back to the primary EPTP, (original page) with RW permissions.
+        let secondary_eptp = unsafe { vmx.shared_data.as_mut().secondary_eptp };
+        vmwrite(vmcs::control::EPTP_FULL, secondary_eptp);
+        invept_single_context(secondary_eptp);
     }
 
-    let exit_type = match ept_handle_page_hook_exit(exit_qualification_value, guest_physical_address) {
-        Ok(_) => ExitType::IncrementRIP,
-        Err(e) => {
-            log::error!("Error handling page hook exit: {}", e);
-            ExitType::ExitHypervisor
-        }
-    };
+    // If the page is Execute-Only, then we need to swap it back to the primary EPTPs
+    if !ept_violation_qualification.readable && !ept_violation_qualification.writable && ept_violation_qualification.executable {
+        // This is a Read/Write violation, so we need to swap the page back to the primary EPTP
+        // and give it Read/Write permissions.
+        // This is done by swapping the secondary EPTP with the primary EPTP.
+        // The secondary EPTP is the original page with RW permissions.
+        // The primary EPTP is the hooked page with Execute-Only permissions.
+        let primary_eptp = unsafe { vmx.shared_data.as_mut().primary_eptp };
+        vmwrite(vmcs::control::EPTP_FULL, primary_eptp);
+        invept_single_context(primary_eptp);
+    }
 
-    exit_type
-}
-
-#[rustfmt::skip]
-fn ept_handle_page_hook_exit(_exit_qualification: u64, _guest_physical_address: u64) -> Result<(), HypervisorError> {
-
-    Ok(())
+    // Do not increment RIP, since we want it to execute the same instruction?
+    ExitType::Continue
 }
 
 /// Handles an EPT misconfiguration VM exit.

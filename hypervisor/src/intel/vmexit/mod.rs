@@ -84,10 +84,10 @@ impl VmExit {
         log::info!("Guest RFLAGS: {:#x}", guest_registers.rflags);
 
         log::info!("Vmx: {:#p}", vmx);
-        let primary_ept = unsafe { vmx.shared_data.as_mut().primary_eptp };
-        log::info!("Primary EPT: {:#x}", primary_ept);
-        let secondary_ept = unsafe { vmx.shared_data.as_mut().secondary_eptp };
-        log::info!("Secondary EPT: {:#x}", secondary_ept);
+        let primary_eptp = unsafe { vmx.shared_data.as_mut().primary_eptp };
+        log::info!("Primary EPTP: {:#x}", primary_eptp);
+        let secondary_eptp = unsafe { vmx.shared_data.as_mut().secondary_eptp };
+        log::info!("Secondary EPTP: {:#x}", secondary_eptp);
 
         let exit_reason = vmread(ro::EXIT_REASON) as u32;
 
@@ -113,7 +113,7 @@ impl VmExit {
             VmxBasicExitReason::Wrmsr => handle_msr_access(guest_registers, MsrAccessType::Write),
             VmxBasicExitReason::Invd => handle_invd(guest_registers),
             VmxBasicExitReason::Rdtsc => handle_rdtsc(guest_registers),
-            VmxBasicExitReason::EptViolation => handle_ept_violation(guest_registers),
+            VmxBasicExitReason::EptViolation => handle_ept_violation(guest_registers, vmx),
             VmxBasicExitReason::EptMisconfiguration => handle_ept_misconfiguration(),
             VmxBasicExitReason::Invept => handle_invept(),
             VmxBasicExitReason::Invvpid => handle_invvpid(),
