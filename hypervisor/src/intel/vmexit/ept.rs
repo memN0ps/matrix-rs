@@ -9,6 +9,7 @@ use {
     },
     x86::vmx::vmcs,
 };
+use crate::intel::invept::invept_all_contexts;
 
 /// Handle VM exits for EPT violations. Violations are thrown whenever an operation is performed on an EPT entry that does not provide permissions to access that page.
 /// 29.3.3.2 EPT Violations
@@ -36,7 +37,8 @@ pub fn handle_ept_violation(_guest_registers: &mut GuestRegisters, vmx: &mut Vmx
         // and we can swap the page back to the primary EPTP, (original page) with RW permissions.
         let secondary_eptp = unsafe { vmx.shared_data.as_mut().secondary_eptp };
         vmwrite(vmcs::control::EPTP_FULL, secondary_eptp);
-        invept_single_context(secondary_eptp);
+        invept_all_contexts();
+        //invept_single_context(secondary_eptp);
     }
 
     // If the page is Execute-Only, then we need to swap it back to the primary EPTP
@@ -47,7 +49,8 @@ pub fn handle_ept_violation(_guest_registers: &mut GuestRegisters, vmx: &mut Vmx
         // and we can swap the page back to the secondary EPTP, (hooked page) with X permissions.
         let primary_eptp = unsafe { vmx.shared_data.as_mut().primary_eptp };
         vmwrite(vmcs::control::EPTP_FULL, primary_eptp);
-        invept_single_context(primary_eptp);
+        invept_all_contexts();
+        //invept_single_context(primary_eptp);
     }
 
     // Do not increment RIP, since we want it to execute the same instruction again.
