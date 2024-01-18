@@ -2,14 +2,13 @@ use {
     crate::{
         error::HypervisorError,
         intel::{
-            invept::invept_single_context, support::vmread, support::vmwrite,
+            invept::invept_all_contexts, support::vmread, support::vmwrite,
             vmerror::EptViolationExitQualification, vmexit::ExitType, vmx::Vmx,
         },
         utils::{addresses::PhysicalAddress, capture::GuestRegisters},
     },
     x86::vmx::vmcs,
 };
-use crate::intel::invept::invept_all_contexts;
 
 /// Handle VM exits for EPT violations. Violations are thrown whenever an operation is performed on an EPT entry that does not provide permissions to access that page.
 /// 29.3.3.2 EPT Violations
