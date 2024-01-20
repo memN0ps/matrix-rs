@@ -74,8 +74,6 @@ impl Hook {
     ///
     /// Reference: https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/when-should-code-and-data-be-pageable-
     fn copy_page(address: u64) -> Option<Box<[u8]>> {
-        log::info!("Creating a copy of the page at address: {:#x}", address);
-
         let page_address = PAddr::from(address).align_down_to_base_page();
         if page_address.is_zero() {
             log::error!("Invalid page address: {:#x}", address);
