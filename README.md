@@ -62,7 +62,7 @@ Windows 10 - Windows 11, x64 only.
 
 ## Debugging
 
-### Enabling Debug Modes
+#### Enabling Debug Modes
 
 - Test Mode: Activate test signing with `bcdedit.exe /set testsigning on`.
 - Windows Debugging: Follow the steps in this [Microsoft guide](https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/bcdedit--bootdebug).
@@ -73,22 +73,22 @@ bcdedit.exe /bootdebug on
 bcdedit.exe /debug on
 ```
 
-### Network Debugging with Windbg
+#### Network Debugging with Windbg
 
 Setup: `bcdedit.exe /dbgsettings net hostip:w.x.y.z port:n`.
 
-### Debug Print Filter
+#### Debug Print Filter
 
 1. Open `regedit.exe`.
 2. Go to `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager`.
 3. Create `Debug Print Filter` with `DEFAULT` DWORD = `8`.
 
-### VMware Serial Port Debugging
+#### VMware Serial Port Debugging
 
 1. Add Serial Port in VMware: 'Use output file'.
 2. Configure in Windows VM: `$serialPort = New-Object System.IO.Ports.SerialPort COM2,9600,None,8,One; $serialPort.Open()`.
 
-### Service Management
+#### Service Management
 
 Use Service Controller (`sc.exe`) to create and manage the hypervisor service:
 
@@ -119,7 +119,7 @@ Big thanks to the amazing people and resources that have shaped this project. A 
  
 - **[Matthias @not-matthias](https://github.com/not-matthias/amd_hypervisor)**: For his impactful work on the [amd_hypervisor](https://github.com/not-matthias/amd_hypervisor) project, which greatly inspired and influenced this research.
 
-### Community and Technical Resources
+#### Community and Technical Resources
 
 - **[Secret Club](https://github.com/thesecretclub)**: Insights into anti-cheat systems and hypervisor detection, which also inspired this project:
   - [System emulation detection](https://secret.club/2020/04/13/how-anti-cheats-detect-system-emulation.html) by [@Daax](https://github.com/daaximus), [@iPower](https://github.com/iPower), [@ajkhoury](https://github.com/ajkhoury), [@drew](https://github.com/drew-gpf)
@@ -139,7 +139,7 @@ Big thanks to the amazing people and resources that have shaped this project. A 
   - [DarthTon's HyperBone](https://github.com/DarthTon/HyperBone) (based on the legendary [Alex Ionescu's](https://github.com/ionescu007/SimpleVisor) version) on [UnknownCheats](https://www.unknowncheats.me/forum/c-and-c-/173560-hyperbone-windows-hypervisor.html).
   - [Joanna Rutkowska: Pioneering the Blue Pill Hypervisor Concept, one of the earliest proofs of concept](https://blog.invisiblethings.org/2006/06/22/introducing-blue-pill.html)
 
-### Helpers and Collaborators
+#### Helpers and Collaborators
 
 Special thanks to:
 - [Daax Rynd](https://revers.engineering/)
