@@ -65,12 +65,6 @@ impl FunctionHook {
     /// ## Safety
     /// This function allocates memory and manipulates page table entries. Incorrect use may lead to system instability.
     pub fn new(original_address: u64, hook_address: u64, handler: *const ()) -> Option<Self> {
-        log::info!(
-            "Creating a new inline hook. Address: {:x}, handler: {:x}",
-            hook_address,
-            handler as u64
-        );
-
         // Create the different trampolines. There's a few different ones available:
         // - 1 Byte: CC shellcode
         // - 14 Bytes: JMP shellcode
@@ -223,111 +217,51 @@ impl FunctionHook {
     ///
     /// ## Parameters
     ///
-    /// - `original_address`: The address of the original function (on the real
+    /// - `original_function_address`: The address of the original function (on the real
     ///   page).
-    /// - `address`: The address of function in the copied page.
-    /// - `size`: The minimum size of the trampoline.
+    /// - `copied_function_address`: The address of function in the copied page.
+    /// - `required_size`: The minimum size of the trampoline.
     ///
     /// ## Returns
     ///
     /// The trampoline shellcode.
     fn trampoline_shellcode(
-        original_address: u64,
-        address: u64,
+        original_function_address: u64,
+        copied_function_address: u64,
         required_size: usize,
     ) -> Result<Box<[u8]>, HypervisorError> {
-        log::info!("Creating the trampoline for function: {:#x}", address);
-
-        // Read bytes from function and decode them. Read 2 times the amount needed, in
-        // case there are bigger instructions that take more space. If there's
-        // only 1 byte needed, we read 15 bytes instead so that we can find the
-        // first few valid instructions.
-        //
+        // Read the bytes from the original function.
         let bytes = unsafe {
-            core::slice::from_raw_parts(address as *mut u8, usize::max(required_size * 2, 15))
-        };
-
-        let mut decoder = Decoder::with_ip(64, bytes, address, DecoderOptions::NONE);
-
-        let mut total_bytes = 0;
-        let mut trampoline = Vec::new();
-
-        for instr in &mut decoder {
-            if instr.is_invalid() {
-                return Err(HypervisorError::InvalidBytes);
-            }
-
-            if total_bytes >= required_size {
-                break;
-            }
-
-            if instr.is_ip_rel_memory_operand() {
-                return Err(HypervisorError::RelativeInstruction);
-            }
-
-            // Create the new trampoline instruction
-            //
-            match instr.flow_control() {
-                FlowControl::Next | FlowControl::Return => {
-                    total_bytes += instr.len();
-                    trampoline.push(instr);
-                }
-                FlowControl::Call
-                | FlowControl::ConditionalBranch
-                | FlowControl::UnconditionalBranch
-                | FlowControl::IndirectCall => {
-                    return Err(HypervisorError::RelativeInstruction);
-                }
-                FlowControl::IndirectBranch
-                | FlowControl::Interrupt
-                | FlowControl::XbeginXabortXend
-                | FlowControl::Exception => {
-                    return Err(HypervisorError::UnsupportedInstruction);
-                }
-            };
-        }
-
-        if total_bytes < required_size {
-            return Err(HypervisorError::NotEnoughBytes);
-        }
-
-        if trampoline.is_empty() {
-            return Err(HypervisorError::NoInstructions);
-        }
-
-        // Allocate new memory for the trampoline and encode the instructions.
-        //
-        let mut memory = Box::new_uninit_slice(total_bytes + JMP_SHELLCODE_LEN);
-        log::info!("Allocated trampoline memory at {:p}", memory.as_ptr());
-
-        let block = InstructionBlock::new(&trampoline, memory.as_mut_ptr() as _);
-
-        let mut encoded = BlockEncoder::encode(decoder.bitness(), block, BlockEncoderOptions::NONE)
-            .map(|b| b.code_buffer)
-            .map_err(|_| HypervisorError::EncodingFailed)?;
-
-        log::info!("Encoded trampoline: {:x?}", encoded);
-
-        // Add jmp to the original function at the end. We can't use `address` for this,
-        // because the page will probably contain rip-relative instructions. And
-        // we already switch the page So the shadow page will be at the address
-        // of the original page.
-        //
-        let jmp_back_address = original_address + encoded.len() as u64;
-        let jmp_shellcode = Self::jmp_shellcode(jmp_back_address);
-        encoded.extend_from_slice(jmp_shellcode.as_slice());
-
-        // Copy the encoded bytes and return the allocated memory.
-        //
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                encoded.as_ptr(),
-                memory.as_mut_ptr() as _,
-                encoded.len(),
+            core::slice::from_raw_parts(
+                original_function_address as *mut u8,
+                usize::max(required_size * 2, 15),
             )
         };
 
-        Ok(unsafe { memory.assume_init() })
+        // Decode the instructions at the original function's address.
+        let decoder = Decoder::with_ip(64, bytes, original_function_address, DecoderOptions::NONE);
+        let instructions: Vec<_> = decoder.into_iter().collect();
+
+        // Re-encode the instructions for the new location (copied page) using BlockEncoder.
+        let block = InstructionBlock::new(&instructions, copied_function_address);
+        let result = BlockEncoder::encode(64, block, BlockEncoderOptions::NONE)
+            .map_err(|_| HypervisorError::EncodingFailed)?;
+
+        let mut trampoline = Vec::from(result.code_buffer);
+
+        // Calculate the address to jump back to after the trampoline
+        let jump_back_address = original_function_address + trampoline.len() as u64;
+
+        // Create the jump back shellcode
+        let jump_back_shellcode = Self::jmp_shellcode(jump_back_address).to_vec();
+
+        // Append the jump back shellcode to the trampoline
+        trampoline.extend_from_slice(&jump_back_shellcode);
+
+        log::info!("Trampoline: {:p}", trampoline.as_ptr());
+
+        // Convert the trampoline to a boxed slice and return.
+        Ok(trampoline.into_boxed_slice())
     }
 
     /// Provides a constant function to retrieve the address of the trampoline.
