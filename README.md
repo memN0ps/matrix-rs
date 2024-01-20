@@ -18,11 +18,20 @@ A lightweight, memory-safe, and blazingly fast, Rust-based type-2 research hyper
 
 - [x] `Cpuid`, `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`.
 
-#### PatchGuard Compatible Hooks:
+#### [PatchGuard Compatible Hooks](https://rayanfam.com/topics/hypervisor-from-scratch-part-8/#system-call-hook):
 
 - [x] Kernel Inline Hooks (**Unstable**)
+  - JMP Hooks: **Supported**
+  - Breakpoint Hooks: **Supported**
+    - Reason: Breakpoint hooks, intercepts each breakpoint using Exception Bitmap, are more efficient than JMP hooks, as they don't require modifying the original code.
 - [ ] System Call (Syscall) Hooks
-- [ ] Model-Specific Register (MSR) Hooks
+  - Model-Specific Register (MSR) `LSTAR` Hooks: **Unsupported**
+    - Reason: Complexity and Meltdown updates complicate LSTAR hooking. Post-Meltdown, `LSTAR` points to `KiSystemCall64Shadow`, requiring intricate changes and posing compatibility issues.
+  - System Service Descriptor Table (SSD) Entries Hooks: **Unsupported**
+    - Reason: Efficiency concerns. SSDT hooks require disabling EPT Read for entries, leading to significant system slowdown due to vm-exits on syscall reads.
+  - System Service Descriptor Table (SSDT) Function Entries Hooks: **Planned to Supported**
+  - Extended Feature Enable Register (EFER) Hooks: **Unsupported**
+    - Reason: Performance impact when intercepting `#UD` by using Exception Bitmap. Causes a vm-exit for each syscall, substantially slowing down the system, suitable only for experimental scenarios.
 - [ ] Interrupt Descriptor Table (IDT) Hooks
 
 ## Planned Enhancements
