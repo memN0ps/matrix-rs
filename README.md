@@ -10,14 +10,37 @@ A lightweight, memory-safe, and blazingly fast, Rust-based type-2 research hyper
 
 ## Features
 
-- **Efficient VM Exit Handling**: Handles a variety of VM exit reasons such as `Cpuid`, `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`, ensuring minimal performance overhead and responsive virtual machine operations.
-- **Extended Page Tables (EPT)**: Integrates Memory Type Range Registers (MTRR) with EPT for efficient memory mapping and management. This helps in correctly identifying and handling memory types, optimizing performance and stability in virtualized environments.
-- **EPT Hooks**: Adds EPT hooks for enhanced memory control and monitoring within guest VMs. This feature allows for finer memory management and the potential for advanced features like memory introspection or modification.
+#### Extended Page Tables (EPT)
+
+- [x] Extended Page Tables (EPT) with Memory Type Range Registers (MTRR) support.
+
+#### VM Exit Handling:
+
+- [x] `Cpuid`, `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`.
+
+#### PatchGuard Compatible Hooks:
+
+- [x] Stealth Kernel Inline Hooks (**Unstable**)
+- [ ] Stealth System Call (Syscall) Hooks
+  - Model-Specific Register (MSR) `LSTAR` Hook: **Unsupported**
+  - System Service Descriptor Table (SSD) Entries Hooks: **Unsupported**
+  - System Service Descriptor Table (SSDT) Function Entries Hook: **Planned to Supported**
+  - Extended Feature Enable Register (EFER) Hook: **Unsupported**
+- [ ] Model-Specific Register (MSR) Hooks
+- [ ] Interrupt Descriptor Table (IDT) Hooks
 
 ## Planned Enhancements
 
-- **Broader Instruction Support**: Future updates are set to include advanced handling for instructions like `Getsec`, and VMX instructions (`Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxon`, `Vmxoff`). This will expand the hypervisor's capabilities in managing more complex virtual machine operations and scenarios.
-- **Robust Isolation Mechanisms**: Developing custom implementations of Global Descriptor Table (GDT), Interrupt Descriptor Table (IDT), and Page Tables for enhanced security. Moving away from relying on the host's `ntoskrnl.exe` `CR3`, to strengthen the hypervisor's defense against sophisticated attacks. [Further insights on these structures by @Namazso](https://www.unknowncheats.me/forum/2779560-post4.html).
+- VM exit instructions like `Getsec`, and VMX instructions (`Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxon`, `Vmxoff`).
+- Custom implementations of Global Descriptor Table (GDT), Interrupt Descriptor Table (IDT), and Page Tables for enhanced security. Moving away from relying on the host's `ntoskrnl.exe` `CR3`. [Credits to @namazso](https://www.unknowncheats.me/forum/2779560-post4.html).
+
+## Supported Hardware
+
+Intel processors with VT-x and EPT support.
+
+## Supported Platforms
+
+Windows 10 - Windows 11, x64 only.
 
 ## Installation
 
