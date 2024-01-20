@@ -1,6 +1,5 @@
 use {
     crate::{
-        error::HypervisorError,
         intel::{
             invept::invept_all_contexts, support::vmread, support::vmwrite,
             vmerror::EptViolationExitQualification, vmexit::ExitType, vmx::Vmx,
