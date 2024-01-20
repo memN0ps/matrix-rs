@@ -22,10 +22,10 @@ A lightweight, memory-safe, and blazingly fast, Rust-based type-2 research hyper
 
 - [x] Stealth Kernel Inline Hooks (**Unstable**)
 - [ ] Stealth System Call (Syscall) Hooks
-  - Model-Specific Register (MSR) `LSTAR` Hook: **Unsupported**
+  - Model-Specific Register (MSR) `LSTAR` Hooks: **Unsupported**
   - System Service Descriptor Table (SSD) Entries Hooks: **Unsupported**
-  - System Service Descriptor Table (SSDT) Function Entries Hook: **Planned to Supported**
-  - Extended Feature Enable Register (EFER) Hook: **Unsupported**
+  - System Service Descriptor Table (SSDT) Function Entries Hooks: **Planned to Supported**
+  - Extended Feature Enable Register (EFER) Hooks: **Unsupported**
 - [ ] Model-Specific Register (MSR) Hooks
 - [ ] Interrupt Descriptor Table (IDT) Hooks
 
