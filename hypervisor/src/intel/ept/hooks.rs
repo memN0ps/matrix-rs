@@ -136,6 +136,15 @@ impl Hook {
         let hook_va = Self::address_in_page(page_va, function_ptr);
         let hook_pa = PhysicalAddress::from_va(hook_va);
 
+        log::info!("Original virtual address: {:#x}", function_ptr);
+        log::info!("Original physical address: {:#x}", original_pa.as_u64());
+
+        log::info!("Page virtual address: {:#x}", page_va);
+        log::info!("Page physical address: {:#x}", page_pa.as_u64());
+
+        log::info!("Hook virtual address: {:#x}", hook_va);
+        log::info!("Hook physical address: {:#x}", hook_pa.as_u64());
+
         // Create an inline hook at the new address in the copied page.
         let inline_hook = FunctionHook::new(function_ptr, hook_va, handler)?;
 
