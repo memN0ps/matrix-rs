@@ -21,9 +21,9 @@ A lightweight, memory-safe, and blazingly fast, Rust-based type-2 research hyper
 #### [PatchGuard Compatible Hooks](https://rayanfam.com/topics/hypervisor-from-scratch-part-8/#system-call-hook):
 
 - [x] Kernel Inline Hooks (**Unstable**)
-  - JMP Hooks: **Supported**
+  - JMP Hooks: **Unsupported**
   - Breakpoint Hooks: **Supported**
-    - Reason: Breakpoint hooks, intercepts each breakpoint using Exception Bitmap, are more efficient than JMP hooks, as they don't require modifying the original code.
+    - Reason: Breakpoint hooks, intercept each breakpoint using Exception Bitmap, are more efficient than JMP hooks, as they don't require modifying the original code.
 - [ ] System Call (Syscall) Hooks
   - Model-Specific Register (MSR) `LSTAR` Hooks: **Unsupported**
     - Reason: Complexity and Meltdown updates complicate LSTAR hooking. Post-Meltdown, `LSTAR` points to `KiSystemCall64Shadow`, requiring intricate changes and posing compatibility issues.

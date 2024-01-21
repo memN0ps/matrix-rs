@@ -136,6 +136,8 @@ impl Hook {
         let hook_va = Self::address_in_page(page_va, function_ptr);
         let hook_pa = PhysicalAddress::from_va(hook_va);
 
+        log::info!("Handler address: {:#x}", handler as u64);
+
         log::info!("Original virtual address: {:#x}", function_ptr);
         log::info!("Original physical address: {:#x}", original_pa.as_u64());
 
@@ -183,7 +185,8 @@ impl Hook {
             return None;
         }
 
-        log::info!("Address of function {}: {:p}", function_name, address);
+        log::info!("Found function: {}", function_name);
+        log::info!("Address of ntoskrnl export: {:p}", address);
 
         // Utilize the previously defined function for hooking by address.
         Self::hook_function_ptr(address as u64, handler)
