@@ -137,6 +137,8 @@ static mut HYPERVISOR: Option<Hypervisor> = None;
 ///
 /// * `Some(())` if the system was successfully virtualized.
 /// * `None` if there was an error during virtualization.
+///
+/// Credits: Jess / jessiep_
 fn virtualize() -> Result<(), HypervisorError> {
     // Initialize the hook and hook manager
     //

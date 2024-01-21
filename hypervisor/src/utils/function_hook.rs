@@ -7,7 +7,7 @@ use {
     crate::{error::HypervisorError, utils::nt::RtlCopyMemory},
     alloc::{boxed::Box, vec, vec::Vec},
     iced_x86::{
-        BlockEncoder, BlockEncoderOptions, Decoder, DecoderOptions, InstructionBlock, FlowControl,
+        BlockEncoder, BlockEncoderOptions, Decoder, DecoderOptions, FlowControl, InstructionBlock,
     },
     wdk_sys::{
         ntddk::{IoAllocateMdl, IoFreeMdl, MmProbeAndLockPages, MmUnlockPages},

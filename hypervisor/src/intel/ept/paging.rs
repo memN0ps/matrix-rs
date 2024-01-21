@@ -426,6 +426,28 @@ impl Ept {
         Ok(())
     }
 
+    /// Remaps the given guest physical address and changes it to the given host physical address.
+    ///
+    /// # Arguments
+    ///
+    /// * `guest_pa`: The guest physical address to remap.
+    /// * `host_pa`: The host physical address to remap to.
+    /// * `access_type`: The type of access allowed for this page (read, write, execute).
+    /// * `mtrr`: The Memory Type Range Registers (MTRR) to use for this page.
+    /// Credits: Jess / jessiep_
+    pub fn remap_page(
+        &mut self,
+        guest_pa: u64,
+        host_pa: u64,
+        access_type: AccessType,
+    ) -> Result<(), HypervisorError> {
+        let mut mtrr = Mtrr::new();
+
+        self.map_pt(guest_pa, host_pa, access_type, &mut mtrr)?;
+
+        Ok(())
+    }
+
     /// Unmaps a 2MB page by clearing the corresponding page directory entry.
     ///
     /// This function clears the entry, effectively removing any mapping for the 2MB page.
