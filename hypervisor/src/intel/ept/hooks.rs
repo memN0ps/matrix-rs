@@ -281,29 +281,44 @@ impl HookManager {
                 inline_hook.enable();
             }
 
+            let original_page = hook.original_pa.align_down_to_large_page().as_u64();
+            let hooked_copy_page = hook.hook_pa.align_down_to_large_page().as_u64();
+
+            log::info!(
+                "Splitting 2MB page to 4KB pages for Primary EPT: {:#x}",
+                original_page
+            );
+            primary_ept.split_2mb_to_4kb(original_page, AccessType::READ_WRITE_EXECUTE)?;
+
+            log::info!(
+                "Splitting 2MB page to 4KB pages for Secondary EPT: {:#x}",
+                hooked_copy_page
+            );
+            secondary_ept.split_2mb_to_4kb(original_page, AccessType::READ_WRITE_EXECUTE)?;
+
             // Align addresses to their base page sizes for accurate permission modification.
-            let page = hook.original_pa.align_down_to_base_page().as_u64();
-            let hook_page = hook.hook_pa.align_down_to_base_page().as_u64();
+            let original_page = hook.original_pa.align_down_to_base_page().as_u64();
+            let hooked_copy_page = hook.hook_pa.align_down_to_base_page().as_u64();
 
             log::info!(
                 "Changing permissions for page to Read-Write (RW) only: {:#x}",
-                page
+                original_page
             );
 
             // Modify the page permission in the primary EPT to ReadWrite.
-            primary_ept.change_page_flags(page, AccessType::READ_WRITE)?;
+            primary_ept.change_page_flags(original_page, AccessType::READ_WRITE)?;
 
             log::info!(
                 "Changing permissions for hook page to Execute (X) only: {:#x}",
-                hook_page
+                hooked_copy_page
             );
 
             // Modify the page permission in the secondary EPT to Execute for the hook page.
-            secondary_ept.change_page_flags(page, AccessType::EXECUTE)?;
+            secondary_ept.change_page_flags(original_page, AccessType::EXECUTE)?;
 
-            log::info!("Mapping Guest Physical Address to Host Physical Address of the hooked page: {:#x} {:#x}", page, hook_page);
+            log::info!("Mapping Guest Physical Address to Host Physical Address of the hooked page: {:#x} {:#x}", original_page, hooked_copy_page);
 
-            secondary_ept.remap_page(page, hook_page, AccessType::EXECUTE)?;
+            secondary_ept.remap_page(original_page, hooked_copy_page, AccessType::EXECUTE)?;
         }
 
         Ok(())
