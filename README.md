@@ -6,7 +6,7 @@
 ![Forks](https://img.shields.io/github/forks/memN0ps/hypervisor-rs)
 ![Stars](https://img.shields.io/github/stars/memN0ps/hypervisor-rs)
 
-A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hypervisor with Extended Page Table (EPT) hooks for Intel VT-x, focused on studying the core concepts of virtualization.
+A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hypervisor with hooks for Intel VT-x, focused on studying the core concepts of virtualization.
 
 ## Features
 
