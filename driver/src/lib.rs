@@ -120,9 +120,6 @@ pub extern "C" fn driver_unload(_driver: *mut DRIVER_OBJECT) {
     }
 }
 
-/// The main hook manager object.
-static mut HOOK_MANAGER: Option<HookManager> = None;
-
 /// The main hypervisor object.
 ///
 /// This static mutable option holds the global instance of the hypervisor used by this driver.
@@ -163,14 +160,11 @@ fn virtualize() -> Result<(), HypervisorError> {
     log::info!("Enabling hooks");
     hook_manager.enable_hooks(&mut primary_ept, &mut secondary_ept)?;
 
-    // Save as global to avoid dropping
-    unsafe { HOOK_MANAGER = Some(hook_manager) };
-
     log::info!("Building hypervisor");
-
     let mut hv = match Hypervisor::builder()
         .primary_ept(primary_ept)
         .secondary_ept(secondary_ept)
+        .hook_manager(hook_manager)
         .build()
     {
         Ok(hv) => hv,

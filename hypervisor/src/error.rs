@@ -130,4 +130,7 @@ pub enum HypervisorError {
 
     #[error("Page already split")]
     PageAlreadySplit,
+
+    #[error("Hook manager not provided")]
+    HookManagerNotProvided,
 }

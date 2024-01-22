@@ -4,7 +4,6 @@
 //! is vital for VMX operations on the CPU. It also offers utility functions for
 //! adjusting VMCS entries and displaying VMCS state for debugging purposes.
 
-use crate::intel::shared_data::SharedData;
 use {
     // Internal crate usages
     crate::{
@@ -16,7 +15,9 @@ use {
             invvpid::{invvpid_single_context, VPID_TAG},
             paging::PageTables,
             segmentation::SegmentDescriptor,
+            shared_data::SharedData,
             support::{vmclear, vmptrld, vmread, vmwrite},
+            vmerror::ExceptionInterrupt,
         },
         utils::capture::GuestRegisters,
         utils::{
@@ -283,6 +284,7 @@ impl Vmcs {
         };
 
         vmwrite(vmcs::control::MSR_BITMAPS_ADDR_FULL, PhysicalAddress::pa_from_va(shared_data.msr_bitmap.as_ref() as *const _ as _));
+        vmwrite(vmcs::control::EXCEPTION_BITMAP, 1u64 >> ExceptionInterrupt::Breakpoint as u64);
 
         vmwrite(vmcs::control::EPTP_FULL, shared_data.primary_eptp);
         vmwrite(vmcs::control::VPID, VPID_TAG);

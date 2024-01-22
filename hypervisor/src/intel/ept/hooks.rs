@@ -241,8 +241,10 @@ impl HookManager {
     /// # Arguments
     ///
     /// * `hooks` - A vector of `Hook` instances to be managed.
-    pub fn new(hooks: Vec<Hook>) -> Self {
-        Self { hooks }
+    pub fn new(hooks: Vec<Hook>) -> Box<Self> {
+        let hooks = Self { hooks };
+        let instance = Box::new(hooks);
+        instance
     }
 
     /// Enables all the hooks managed by the `HookManager`.
@@ -305,5 +307,24 @@ impl HookManager {
         }
 
         Ok(())
+    }
+
+    /// Tries to find a hook for the specified hook virtual address.
+    ///
+    /// # Arguments
+    ///
+    /// * `address` - The hook virtual address to search for.
+    ///
+    /// # Returns
+    ///
+    /// * `Option<&Hook>` - A reference to the hook if found, or `None` if not found.
+    pub fn find_hook_by_address(&self, address: u64) -> Option<&Hook> {
+        for hook in self.hooks.iter() {
+            if hook.original_va == address {
+                return Some(hook);
+            }
+        }
+
+        None
     }
 }

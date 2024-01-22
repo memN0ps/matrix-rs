@@ -3,7 +3,11 @@
 use {
     crate::{
         error::HypervisorError,
-        intel::{ept::paging::Ept, shared_data::SharedData, vcpu::Vcpu},
+        intel::{
+            ept::{hooks::HookManager, paging::Ept},
+            shared_data::SharedData,
+            vcpu::Vcpu,
+        },
         utils::{
             alloc::PhysicalAllocator,
             processor::{processor_count, ProcessorExecutor},
@@ -20,6 +24,9 @@ pub struct HypervisorBuilder {
     #[cfg(feature = "secondary-ept")]
     /// The secondary extended page table.
     secondary_ept: Option<Box<Ept, PhysicalAllocator>>,
+
+    /// The hook manager.
+    hook_manager: Option<Box<HookManager>>,
 }
 
 impl HypervisorBuilder {
@@ -41,12 +48,16 @@ impl HypervisorBuilder {
 
         log::info!("Found {} processors", processors.len());
 
+        let hook_manager = self
+            .hook_manager
+            .ok_or(HypervisorError::HookManagerNotProvided)?;
+
         let primary_ept = self
             .primary_ept
             .ok_or(HypervisorError::PrimaryEPTNotProvided)?;
 
         #[cfg(not(feature = "secondary-ept"))]
-        let mut shared_data = SharedData::new(primary_ept)?;
+        let mut shared_data = SharedData::new(primary_ept, hook_manager)?;
 
         #[cfg(feature = "secondary-ept")]
         let shared_data = {
@@ -54,7 +65,7 @@ impl HypervisorBuilder {
                 .secondary_ept
                 .ok_or(HypervisorError::SecondaryEPTNotProvided)?;
 
-            SharedData::new(primary_ept, secondary_ept)?
+            SharedData::new(primary_ept, secondary_ept, hook_manager)?
         };
 
         Ok(Hypervisor {
@@ -71,6 +82,11 @@ impl HypervisorBuilder {
     #[cfg(feature = "secondary-ept")]
     pub fn secondary_ept(mut self, ept: Box<Ept, PhysicalAllocator>) -> Self {
         self.secondary_ept = Some(ept);
+        self
+    }
+
+    pub fn hook_manager(mut self, hook_manager: Box<HookManager>) -> Self {
+        self.hook_manager = Some(hook_manager);
         self
     }
 }

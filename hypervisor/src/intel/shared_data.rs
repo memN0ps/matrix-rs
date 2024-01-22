@@ -5,7 +5,10 @@
 use {
     crate::{
         error::HypervisorError,
-        intel::{ept::paging::Ept, msr_bitmap::MsrBitmap},
+        intel::{
+            ept::{hooks::HookManager, paging::Ept},
+            msr_bitmap::MsrBitmap,
+        },
         utils::alloc::PhysicalAllocator,
     },
     alloc::boxed::Box,
@@ -33,6 +36,9 @@ pub struct SharedData {
     /// The pointer to the secondary EPT.
     #[cfg(feature = "secondary-ept")]
     pub secondary_eptp: u64,
+
+    /// The hook manager.
+    pub hook_manager: Box<HookManager>,
 }
 
 impl SharedData {
@@ -51,6 +57,7 @@ impl SharedData {
     pub fn new(
         primary_ept: Box<Ept, PhysicalAllocator>,
         secondary_ept: Box<Ept, PhysicalAllocator>,
+        hook_manager: Box<HookManager>,
     ) -> Result<Box<Self>, HypervisorError> {
         log::info!("Initializing shared data");
 
@@ -66,6 +73,7 @@ impl SharedData {
             primary_eptp,
             secondary_ept,
             secondary_eptp,
+            hook_manager,
         }))
     }
 
@@ -82,6 +90,7 @@ impl SharedData {
     #[cfg(not(feature = "secondary-ept"))]
     pub fn new(
         primary_ept: Box<Ept, PhysicalAllocator>,
+        hook_manager: Box<HookManager>,
     ) -> Result<Option<Box<Self>>, HypervisorError> {
         log::info!("Initializing shared data");
 
@@ -94,6 +103,7 @@ impl SharedData {
             msr_bitmap: { bitmap },
             primary_ept,
             primary_eptp,
+            hook_manager,
         })))
     }
 }

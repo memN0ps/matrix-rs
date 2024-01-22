@@ -12,6 +12,7 @@ use {
             vmexit::{
                 cpuid::handle_cpuid,
                 ept::{handle_ept_misconfiguration, handle_ept_violation},
+                exception::handle_exception,
                 invd::handle_invd,
                 invept::handle_invept,
                 invvpid::handle_invvpid,
@@ -28,6 +29,7 @@ use {
 
 pub mod cpuid;
 pub mod ept;
+pub mod exception;
 pub mod invd;
 pub mod invept;
 pub mod invvpid;
@@ -108,6 +110,7 @@ impl VmExit {
         //
         // 26.1.3 Instructions That Cause VM Exits Conditionally: Certain instructions cause VM exits in VMX non-root operation depending on the setting of the VM-execution controls.
         let exit_type = match basic_exit_reason {
+            VmxBasicExitReason::ExceptionOrNmi => handle_exception(guest_registers, vmx),
             VmxBasicExitReason::Cpuid => handle_cpuid(guest_registers),
             VmxBasicExitReason::Rdmsr => handle_msr_access(guest_registers, MsrAccessType::Read),
             VmxBasicExitReason::Wrmsr => handle_msr_access(guest_registers, MsrAccessType::Write),
