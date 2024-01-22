@@ -79,6 +79,6 @@ fn handle_breakpoint_exception(guest_registers: &mut GuestRegisters, _vmx: &mut 
     } else {
         EventInjection::vmentry_inject_bp();
 
-        ExitType::IncrementRIP
+        ExitType::Continue
     };
 }
