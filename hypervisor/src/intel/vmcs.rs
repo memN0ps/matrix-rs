@@ -284,7 +284,7 @@ impl Vmcs {
         };
 
         vmwrite(vmcs::control::MSR_BITMAPS_ADDR_FULL, PhysicalAddress::pa_from_va(shared_data.msr_bitmap.as_ref() as *const _ as _));
-        vmwrite(vmcs::control::EXCEPTION_BITMAP, 1u64 >> ExceptionInterrupt::Breakpoint as u64);
+        vmwrite(vmcs::control::EXCEPTION_BITMAP, 1u64 << (ExceptionInterrupt::Breakpoint as u32));
 
         vmwrite(vmcs::control::EPTP_FULL, shared_data.primary_eptp);
         vmwrite(vmcs::control::VPID, VPID_TAG);
