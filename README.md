@@ -6,38 +6,19 @@
 ![Forks](https://img.shields.io/github/forks/memN0ps/hypervisor-rs)
 ![Stars](https://img.shields.io/github/stars/memN0ps/hypervisor-rs)
 
-A lightweight, memory-safe, and blazingly fast, Rust-based type-2 research hypervisor with Extended Page Table (EPT) hooks for Intel VT-x, focused on studying the core concepts of virtualization.
+A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hypervisor with Extended Page Table (EPT) hooks for Intel VT-x, focused on studying the core concepts of virtualization.
 
 ## Features
 
-#### Extended Page Tables (EPT)
-
-- [x] Extended Page Tables (EPT) with Memory Type Range Registers (MTRR) support.
-
-#### VM Exit Handling:
-
-- [x] `Cpuid`, `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`.
-
-#### [PatchGuard Compatible Hooks](https://rayanfam.com/topics/hypervisor-from-scratch-part-8/#system-call-hook):
-
-- [x] Kernel Inline Hooks (**Unstable**)
-  - JMP Hooks: **Unsupported**
-  - Breakpoint Hooks: **Supported**
-    - Reason: Breakpoint hooks, intercept each breakpoint using Exception Bitmap, are more efficient than JMP hooks, as they don't require modifying the original code.
-- [ ] System Call (Syscall) Hooks
-  - Model-Specific Register (MSR) `LSTAR` Hooks: **Unsupported**
-    - Reason: Complexity and Meltdown updates complicate LSTAR hooking. Post-Meltdown, `LSTAR` points to `KiSystemCall64Shadow`, requiring intricate changes and posing compatibility issues.
-  - System Service Descriptor Table (SSD) Entries Hooks: **Unsupported**
-    - Reason: Efficiency concerns. SSDT hooks require disabling EPT Read for entries, leading to significant system slowdown due to vm-exits on syscall reads.
-  - System Service Descriptor Table (SSDT) Function Entries Hooks: **Planned to Supported**
-  - Extended Feature Enable Register (EFER) Hooks: **Unsupported**
-    - Reason: Performance impact when intercepting `#UD` by using Exception Bitmap. Causes a vm-exit for each syscall, substantially slowing down the system, suitable only for experimental scenarios.
-- [ ] Interrupt Descriptor Table (IDT) Hooks
+- [x] **Extended Page Tables (EPT)**: Support for Memory Type Range Registers (MTRR).
+- [x] **VM Exit Handling**: Handling of `Cpuid`, `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`.
+- [x] **Kernel Inline Hooks (WIP)**: PatchGuard-compatible breakpoint (`int3`) hooks.
+- [ ] **System Call (Syscall) Hooks (TODO)**: PatchGuard-compatible hooks for System Service Descriptor Table (SSDT) function entries.
 
 ## Planned Enhancements
 
-- VM exit instructions like `Getsec`, and VMX instructions (`Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxon`, `Vmxoff`).
-- Custom implementations of Global Descriptor Table (GDT), Interrupt Descriptor Table (IDT), and Page Tables for enhanced security. Moving away from relying on the host's `ntoskrnl.exe` `CR3`. [Credits to @namazso](https://www.unknowncheats.me/forum/2779560-post4.html).
+- [ ] **VM Exit Handling**: Addition of VM exit instructions such as `Getsec`, and implementation of VMX instructions like `Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxon`, `Vmxoff`.
+- [ ] **Isolation and Security**: Development of custom implementations for Global Descriptor Table (GDT), Interrupt Descriptor Table (IDT), and Page Tables to enhance security. Aiming to reduce dependency on the host's `ntoskrnl.exe` `CR3`. [Credits to @namazso](https://www.unknowncheats.me/forum/2779560-post4.html).
 
 ## Supported Hardware
 
