@@ -1,9 +1,9 @@
-use crate::intel::ept::hooks::HookType;
 use {
     crate::{
         intel::{
+            ept::hooks::HookType,
             events::EventInjection,
-            support::vmread,
+            support::{vmread, vmwrite},
             vmerror::{
                 EptViolationExitQualification, ExceptionInterrupt, VmExitInterruptionInformation,
             },
@@ -14,7 +14,6 @@ use {
     },
     x86::vmx::vmcs,
 };
-use crate::intel::support::vmwrite;
 
 #[rustfmt::skip]
 pub fn handle_exception(_guest_registers: &mut GuestRegisters, vmx: &mut Vmx) -> ExitType {
