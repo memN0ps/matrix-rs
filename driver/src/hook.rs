@@ -20,6 +20,9 @@ extern "C" {
 /// It's initialized to a null mutable pointer and will be set during runtime to the actual function.
 pub static ORIGINAL: AtomicPtr<u64> = AtomicPtr::new(ptr::null_mut());
 
+/// The type of the `MmIsAddressValid` function.
+type MmIsAddressValidType = extern "C" fn(u64) -> bool;
+
 /// A safe wrapper around the `MmIsAddressValid` function.
 ///
 /// ## Parameters
@@ -31,7 +34,7 @@ pub static ORIGINAL: AtomicPtr<u64> = AtomicPtr::new(ptr::null_mut());
 /// ## Safety
 /// This function assumes that the original `MmIsAddressValid` function is correctly set and points to a valid function.
 /// The caller must ensure this is the case to avoid undefined behavior.
-pub fn mm_is_address_valid(ptr: u64) -> bool {
+pub extern "C" fn mm_is_address_valid(ptr: u64) -> bool {
     // Log the address from which `MmIsAddressValid` was called.
     log::info!("MmIsAddressValid called from {:#x}", unsafe {
         return_address().read_volatile() // Reads the return address in a volatile manner to prevent optimizations.
@@ -40,7 +43,7 @@ pub fn mm_is_address_valid(ptr: u64) -> bool {
     // Load the original function pointer from the global atomic pointer.
     let fn_ptr = ORIGINAL.load(Ordering::Relaxed); // Using relaxed ordering for atomic loading.
                                                    // Transmute the function pointer to the expected function type.
-    let fn_ptr = unsafe { mem::transmute::<_, fn(u64) -> bool>(fn_ptr) };
+    let fn_ptr = unsafe { mem::transmute::<_, MmIsAddressValidType>(fn_ptr) };
 
     // Call the original `MmIsAddressValid` function with the provided pointer.
     fn_ptr(ptr)
