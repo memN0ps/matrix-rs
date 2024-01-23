@@ -12,7 +12,7 @@ A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hyperv
 
 - [x] **Extended Page Tables (EPT)**: Support for Memory Type Range Registers (MTRR).
 - [x] **VM Exit Handling**: Handling of `ExceptionOrNmi (#GP, #PF, #BP)`, `Cpuid`, `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`.
-- [x] **Kernel Inline Hooks (WIP)**: PatchGuard-compatible breakpoint (`int3`) hooks.
+- [x] **Kernel Inline Hooks**: PatchGuard-compatible breakpoint (`int3`) hooks.
 - [ ] **System Call (Syscall) Hooks (TODO)**: PatchGuard-compatible hooks for System Service Descriptor Table (SSDT) function entries.
 
 ## Planned Enhancements

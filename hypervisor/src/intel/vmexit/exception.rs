@@ -14,6 +14,7 @@ use {
     },
     x86::vmx::vmcs,
 };
+use crate::intel::support::vmwrite;
 
 #[rustfmt::skip]
 pub fn handle_exception(_guest_registers: &mut GuestRegisters, vmx: &mut Vmx) -> ExitType {
@@ -66,14 +67,19 @@ fn handle_breakpoint_exception(guest_registers: &mut GuestRegisters, _vmx: &mut 
         hook_manager
             .find_hook_by_address(guest_registers.rip)
             .map(|hook| {
+                log::info!("Found hook for RIP: {:#x}", guest_registers.rip);
                 if let HookType::Function { inline_hook } = &hook.hook_type {
+                    log::info!("Getting handler address");
                     Some(inline_hook.handler_address())
                 } else {
                     None
                 }
             })
     {
+        // Call our hook handle function (it will automatically call trampoline).
+        log::info!("Transferring execution to handler: {:#x}", handler);
         guest_registers.rip = handler;
+        vmwrite(vmcs::guest::RIP, guest_registers.rip);
 
         ExitType::Continue
     } else {
