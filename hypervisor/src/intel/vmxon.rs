@@ -38,10 +38,10 @@ impl Vmxon {
     /// # Returns
     /// A result indicating success or an error.
     pub fn setup(vmxon_region: &mut Box<Vmxon, PhysicalAllocator>) -> Result<(), HypervisorError> {
-        log::info!("Setting up VMXON region");
+        log::debug!("Setting up VMXON region");
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
-        log::info!("Enabling Virtual Machine Extensions (VMX)");
+        log::trace!("Enabling Virtual Machine Extensions (VMX)");
         Self::enable_vmx_operation()?;
 
         let vmxon_region_physical_address =
@@ -51,8 +51,8 @@ impl Vmxon {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
-        log::info!("VMXON Region Virtual Address: {:p}", vmxon_region);
-        log::info!(
+        log::trace!("VMXON Region Virtual Address: {:p}", vmxon_region);
+        log::trace!(
             "VMXON Region Physical Addresss: 0x{:x}",
             vmxon_region_physical_address
         );
@@ -62,7 +62,8 @@ impl Vmxon {
 
         // Enable VMX operation.
         vmxon(vmxon_region_physical_address);
-        log::info!("VMXON setup successful!");
+
+        log::debug!("VMXON setup successfully!");
 
         Ok(())
     }
@@ -75,11 +76,11 @@ impl Vmxon {
         unsafe { Cr4::write_raw(cr4) };
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.7 ENABLING AND ENTERING VMX OPERATION */
-        log::info!("Setting Lock Bit set via IA32_FEATURE_CONTROL");
+        log::trace!("Setting Lock Bit set via IA32_FEATURE_CONTROL");
         Self::set_lock_bit()?;
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 24.8 RESTRICTIONS ON VMX OPERATION */
-        log::info!("Adjusting Control Registers");
+        log::trace!("Adjusting Control Registers");
         Self::adjust_control_registers();
 
         Ok(())

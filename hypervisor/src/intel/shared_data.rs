@@ -59,7 +59,7 @@ impl SharedData {
         secondary_ept: Box<Ept, PhysicalAllocator>,
         hook_manager: Box<HookManager>,
     ) -> Result<Box<Self>, HypervisorError> {
-        log::info!("Initializing shared data");
+        log::trace!("Initializing shared data");
 
         let primary_eptp = primary_ept.create_eptp_with_wb_and_4lvl_walk()?;
         let secondary_eptp = secondary_ept.create_eptp_with_wb_and_4lvl_walk()?;
@@ -92,7 +92,7 @@ impl SharedData {
         primary_ept: Box<Ept, PhysicalAllocator>,
         hook_manager: Box<HookManager>,
     ) -> Result<Option<Box<Self>>, HypervisorError> {
-        log::info!("Initializing shared data");
+        log::trace!("Initializing shared data");
 
         let primary_eptp = primary_ept.create_eptp_with_wb_and_4lvl_walk()?;
 

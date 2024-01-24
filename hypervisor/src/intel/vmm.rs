@@ -36,7 +36,7 @@ impl HypervisorBuilder {
     ///
     /// A `Result` which is `Ok` if hypervisor initialization was successful, or `Err` if there was an error.
     pub fn build(self) -> Result<Hypervisor, HypervisorError> {
-        log::info!("Initializing hypervisor");
+        log::debug!("Building hypervisor");
 
         Hypervisor::check_supported_cpu()?;
 
@@ -111,8 +111,8 @@ impl Hypervisor {
     /// # Returns
     ///
     /// A `Result` which is `Ok` if the virtualization was successful, or `Err` if there was an error.
-    pub fn virtualize_system(&mut self) -> Result<(), HypervisorError> {
-        log::info!("Virtualizing processors");
+    pub fn virtualize_core(&mut self) -> Result<(), HypervisorError> {
+        log::trace!("Virtualizing processors");
 
         for processor in self.processors.iter_mut() {
             let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
@@ -133,7 +133,7 @@ impl Hypervisor {
     ///
     /// A `Result` which is `Ok` if the devirtualization was successful, or `Err` if there was an error.
     pub fn devirtualize_system(&mut self) -> Result<(), HypervisorError> {
-        log::info!("Devirtualizing processors");
+        log::trace!("Devirtualizing processors");
 
         for processor in self.processors.iter_mut() {
             let Some(executor) = ProcessorExecutor::switch_to_processor(processor.id()) else {
@@ -220,8 +220,8 @@ impl Drop for Hypervisor {
     /// this method attempts to devirtualize the system and logs the result.
     fn drop(&mut self) {
         match self.devirtualize_system() {
-            Ok(_) => log::info!("Devirtualized successfully!"),
-            Err(err) => log::info!("Failed to devirtualize {}", err),
+            Ok(_) => log::trace!("Devirtualized successfully!"),
+            Err(err) => log::trace!("Failed to devirtualize {}", err),
         }
     }
 }

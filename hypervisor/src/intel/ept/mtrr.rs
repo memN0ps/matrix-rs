@@ -52,7 +52,7 @@ impl Mtrr {
                 };
 
                 descriptors.push(descriptor);
-                log::info!(
+                log::trace!(
                     "MTRR Range: Base=0x{:x} End=0x{:x} Type={:?}",
                     descriptor.base_address,
                     descriptor.end_address,
@@ -61,7 +61,7 @@ impl Mtrr {
             }
         }
 
-        log::info!("Total MTRR Ranges Committed: {}", descriptors.len());
+        log::trace!("Total MTRR Ranges Committed: {}", descriptors.len());
         Self { descriptors }
     }
 

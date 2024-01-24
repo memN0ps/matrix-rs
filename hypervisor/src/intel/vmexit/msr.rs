@@ -38,6 +38,8 @@ pub fn handle_msr_access(
     guest_registers: &mut GuestRegisters,
     access_type: MsrAccessType,
 ) -> ExitType {
+    log::debug!("Handling MSR VM exit...");
+
     /// Constants related to MSR addresses and ranges.
     const MSR_MASK_LOW: u64 = u32::MAX as u64;
     const MSR_RANGE_LOW_END: u64 = 0x00001FFF;
@@ -53,7 +55,7 @@ pub fn handle_msr_access(
     // If the MSR address falls within a synthetic or reserved range, inject a general protection fault.
     /*
         if (msr_id >= HYPERV_MSR_START) && (msr_id <= HYPERV_MSR_END) {
-            log::info!("Synthetic MSR access attempted: {:#x}", msr_id);
+            log::trace!("Synthetic MSR access attempted: {:#x}", msr_id);
             EventInjection::vmentry_inject_gp(0);
             return ExitType::Continue;
         }
@@ -65,7 +67,7 @@ pub fn handle_msr_access(
         || ((msr_id >= MSR_RANGE_HIGH_START) && (msr_id <= MSR_RANGE_HIGH_END))
         || (msr_id >= HYPERV_MSR_START) && (msr_id <= HYPERV_MSR_END)
     {
-        log::info!("Valid MSR access attempted: {:#x}", msr_id);
+        log::trace!("Valid MSR access attempted: {:#x}", msr_id);
         match access_type {
             MsrAccessType::Read => {
                 let msr_value = unsafe { x86::msr::rdmsr(msr_id as _) };
@@ -79,10 +81,12 @@ pub fn handle_msr_access(
         }
     } else {
         // If the MSR is neither a known valid MSR nor a synthetic MSR, inject a general protection fault.
-        log::info!("Invalid MSR access attempted: {:#x}", msr_id);
+        log::trace!("Invalid MSR access attempted: {:#x}", msr_id);
         EventInjection::vmentry_inject_gp(0);
         return ExitType::Continue;
     }
+
+    log::debug!("MSR VMEXIT handled successfully.");
 
     ExitType::IncrementRIP
 }

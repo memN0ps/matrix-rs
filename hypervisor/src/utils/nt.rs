@@ -98,7 +98,7 @@ pub fn update_ntoskrnl_cr3() {
         NTOSKRNL_CR3 = x86::controlregs::cr3();
     }
 
-    log::info!("NTOSKRNL_CR3: {:#x}", unsafe { NTOSKRNL_CR3 });
+    log::trace!("NTOSKRNL_CR3: {:#x}", unsafe { NTOSKRNL_CR3 });
 
     // Detach from the system process's stack safely.
     // `KeUnstackDetachProcess` is unsafe as it restores the previous thread execution context.

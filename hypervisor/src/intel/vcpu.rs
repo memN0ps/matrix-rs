@@ -43,7 +43,7 @@ impl Vcpu {
     ///
     /// A `Result` containing the initialized VCPU instance or a `HypervisorError`.
     pub fn new(index: u32) -> Result<Self, HypervisorError> {
-        log::info!("Creating processor {}", index);
+        log::trace!("Creating processor {}", index);
 
         Ok(Self {
             index,
@@ -63,7 +63,7 @@ impl Vcpu {
         log::info!("Virtualizing processor {}", self.index);
 
         // Capture the current processor's context. The Guest will resume from this point since we capture and write this context to the guest state for each vcpu.
-        log::info!("Capturing context");
+        log::trace!("Capturing context");
         let mut context: MaybeUninit<CONTEXT> = MaybeUninit::uninit();
 
         unsafe { RtlCaptureContext(context.as_mut_ptr() as _) };
@@ -73,7 +73,7 @@ impl Vcpu {
         // Determine if we're operating as the Host (root) or Guest (non-root). Only proceed with system virtualization if operating as the Host.
         if !is_virtualized() {
             // If we are here as Guest (non-root) then that will lead to undefined behavior (UB).
-            log::info!("Preparing for virtualization");
+            log::trace!("Preparing for virtualization");
             set_virtualized();
 
             self.vmx
@@ -86,7 +86,7 @@ impl Vcpu {
 
             log::info!("Virtualization complete for processor {}", self.index);
 
-            vmx.run();
+            vmx.run(self.index);
 
             // We should never reach this point as the VM should have been launched.
         }
@@ -111,13 +111,13 @@ impl Vcpu {
     pub fn devirtualize_cpu(&self) -> Result<(), HypervisorError> {
         // Determine if the processor is already devirtualized.
         if !is_virtualized() {
-            log::info!("Processor {} is already devirtualized", self.index);
+            log::trace!("Processor {} is already devirtualized", self.index);
             return Ok(());
         }
 
         // Attempt to devirtualize the processor using the VMXOFF instruction.
         support::vmxoff()?;
-        log::info!("Processor {} has been devirtualized", self.index);
+        log::trace!("Processor {} has been devirtualized", self.index);
 
         Ok(())
     }
@@ -137,7 +137,7 @@ impl Vcpu {
     /// instructions. It ensures that any cached translations are consistent with the current state of the virtual
     /// processor and EPT configurations.
     pub fn invalidate_contexts() {
-        log::info!("Invalidating processor contexts");
+        log::debug!("Invalidating processor contexts");
 
         // Invalidate all contexts (broad operation, typically used in specific scenarios)
         //
@@ -158,6 +158,6 @@ impl Vcpu {
         // Reference: 29.4.3.3 Guidelines for Use of the INVVPID Instruction
         invvpid_all_contexts();
 
-        log::info!("Processor contexts invalidation successful!");
+        log::debug!("Processor contexts invalidation successfully!");
     }
 }

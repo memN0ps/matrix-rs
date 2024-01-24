@@ -78,7 +78,7 @@ impl Vmx {
     /// Returns a `Result` with a boxed `Vmx` instance or an `HypervisorError`.
     #[rustfmt::skip]
     pub fn new(shared_data: &mut SharedData, context: &CONTEXT) -> Result<Box<Self>, HypervisorError> {
-        log::info!("Setting up VMX");
+        log::debug!("Setting up VMX");
 
         // Allocate memory for the hypervisor's needs
         let vmxon_region = unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
@@ -96,7 +96,7 @@ impl Vmx {
 
         host_paging.build_identity();
 
-        log::info!("Creating Vmx instance");
+        log::trace!("Creating Vmx instance");
 
         let instance = Self {
             vmxon_region,
@@ -115,10 +115,10 @@ impl Vmx {
 
         instance.setup_virtualization(shared_data, context)?;
 
-        log::info!("Dumping VMCS: {:#x?}", instance.vmcs_region);
-        CONTEXT::dump_context(&context);
+        log::debug!("Dumping VMCS: {:#x?}", instance.vmcs_region);
+        log::debug!("Dumping CONTEXT: {:#x?}", &context);
 
-        log::info!("VMX setup successful!");
+        log::debug!("VMX setup successfully!");
 
         Ok(instance)
     }
@@ -138,7 +138,7 @@ impl Vmx {
         shared_data: &mut SharedData,
         context: &CONTEXT,
     ) -> Result<(), HypervisorError> {
-        log::info!("Virtualization setup");
+        log::debug!("Setting up virtualization");
 
         Vmxon::setup(&mut self.vmxon_region)?;
         Vcpu::invalidate_contexts();
@@ -147,18 +147,14 @@ impl Vmx {
         VmStack::setup(&mut self.vmstack)?;
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4 GUEST-STATE AREA */
-        log::info!("Setting up Guest Registers State");
         Vmcs::setup_guest_registers_state(
             &context,
             &self.guest_descriptor_table,
             &mut self.guest_registers,
         );
-        log::info!("Guest Registers State successful!");
 
         /* Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.5 HOST-STATE AREA */
-        log::info!("Setting up Host Registers State");
         Vmcs::setup_host_registers_state(&context, &self.host_descriptor_table, &self.host_paging)?;
-        log::info!("Host Registers State successful!");
 
         /*
          * VMX controls:
@@ -167,11 +163,10 @@ impl Vmx {
          * - 25.7 VM-EXIT CONTROL FIELDS
          * - 25.8 VM-ENTRY CONTROL FIELDS
          */
-        log::info!("Setting up VMCS Control Fields");
         Vmcs::setup_vmcs_control_fields(shared_data)?;
-        log::info!("VMCS Control Fields successful!");
 
-        log::info!("Virtualization setup successful!");
+        log::debug!("Virtualization setup successfully!");
+
         Ok(())
     }
 
@@ -180,14 +175,15 @@ impl Vmx {
     /// This method will continuously execute the VM until a VM-exit event occurs. Upon VM-exit,
     /// it updates the VM state, interprets the VM-exit reason, and handles it appropriately.
     /// The loop continues until an unhandled or error-causing VM-exit is encountered.
-    pub fn run(&mut self) {
-        log::info!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
+    pub fn run(&mut self, cpu_index: u32) {
+        log::trace!("Executing VMLAUNCH to run the guest until a VM-exit event occurs");
 
         let stack_contents_ptr = self.vmstack.stack_contents.as_mut_ptr();
         let vmcs_host_rsp = unsafe { stack_contents_ptr.offset(STACK_CONTENTS_SIZE as isize) };
 
-        log::info!("Vmx: {:#p}", self.vmstack.vmx);
+        log::trace!("Vmx: {:#p}", self.vmstack.vmx);
 
+        log::info!("Launching VM for processor {}", cpu_index);
         unsafe { launch_vm(&mut self.guest_registers, vmcs_host_rsp as *mut u64) };
     }
 

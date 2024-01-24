@@ -76,31 +76,24 @@ impl VmExit {
         guest_registers: &mut GuestRegisters,
         vmx: &mut Vmx,
     ) -> Result<(), HypervisorError> {
+        log::debug!("Handling VMEXIT...");
+
         // Upon VM-exit, transfer the guest register values from VMCS to `self.registers` to ensure it reflects the latest and complete state.
         guest_registers.rip = vmread(guest::RIP);
         guest_registers.rsp = vmread(guest::RSP);
         guest_registers.rflags = vmread(guest::RFLAGS);
 
-        log::info!("Guest RIP: {:#x}", guest_registers.rip);
-        log::info!("Guest RSP: {:#x}", guest_registers.rsp);
-        log::info!("Guest RFLAGS: {:#x}", guest_registers.rflags);
-
-        log::info!("Vmx: {:#p}", vmx);
-        let primary_eptp = unsafe { vmx.shared_data.as_mut().primary_eptp };
-        log::info!("Primary EPTP: {:#x}", primary_eptp);
-        let secondary_eptp = unsafe { vmx.shared_data.as_mut().secondary_eptp };
-        log::info!("Secondary EPTP: {:#x}", secondary_eptp);
-
         let exit_reason = vmread(ro::EXIT_REASON) as u32;
 
         let Some(basic_exit_reason) = VmxBasicExitReason::from_u32(exit_reason) else {
-            log::info!("Unknown exit reason: {:#x}", exit_reason);
+            log::error!("Unknown exit reason: {:#x}", exit_reason);
             return Err(HypervisorError::UnknownVMExitReason);
         };
-        log::info!("Basic Exit Reason: {}", basic_exit_reason);
 
-        log::info!(
-            "Guest registers before handling vmexit: {:#x?}",
+        log::debug!("Basic Exit Reason: {}", basic_exit_reason);
+
+        log::debug!(
+            "Guest Registers before handling vmexit: {:#x?}",
             guest_registers
         );
 
@@ -128,12 +121,11 @@ impl VmExit {
             self.advance_guest_rip(guest_registers);
         }
 
-        log::info!(
+        log::debug!(
             "Guest registers after handling vmexit: {:#x?}",
             guest_registers
         );
-
-        log::info!("VMEXIT handled successfully.");
+        log::debug!("VMEXIT handled successfully.");
 
         return Ok(());
     }
@@ -145,10 +137,10 @@ impl VmExit {
     /// caused the VM exit, the hypervisor needs to advance the guest's RIP to the next instruction.
     #[rustfmt::skip]
     fn advance_guest_rip(&self, guest_registers: &mut GuestRegisters) {
-        log::info!("Advancing guest RIP...");
+        log::trace!("Advancing guest RIP...");
         let len = vmread(ro::VMEXIT_INSTRUCTION_LEN);
         guest_registers.rip += len;
         vmwrite(guest::RIP, guest_registers.rip);
-        log::info!("Guest RIP advanced to: {:#x}", vmread(guest::RIP));
+        log::trace!("Guest RIP advanced to: {:#x}", vmread(guest::RIP));
     }
 }

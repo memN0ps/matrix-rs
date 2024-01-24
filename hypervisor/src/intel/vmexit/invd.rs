@@ -13,10 +13,14 @@ use crate::{intel::vmexit::ExitType, utils::capture::GuestRegisters, utils::inst
 ///
 /// * `ExitType::IncrementRIP` - To move past the `INVD` instruction in the VM.
 pub fn handle_invd(_guest_registers: &mut GuestRegisters) -> ExitType {
-    log::info!("INVD instruction executed by guest VM");
+    log::debug!("Handling INVD VM exit...");
+
     // Perform WBINVD to write back and invalidate the hypervisor's caches.
     // This ensures that any modified data is written to memory before cache lines are invalidated.
     wbinvd();
     // Advances the guest's instruction pointer to the next instruction to be executed.
+
+    log::debug!("INVD VMEXIT handled successfully!");
+
     ExitType::IncrementRIP
 }

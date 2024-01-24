@@ -66,7 +66,7 @@ impl Vmcs {
     /// # Returns
     /// A result indicating success or an error.
     pub fn setup(vmcs_region: &mut Box<Vmcs, PhysicalAllocator>) -> Result<(), HypervisorError> {
-        log::info!("Setting up VMCS region");
+        log::debug!("Setting up VMCS region");
 
         let vmcs_region_physical_address =
             PhysicalAddress::pa_from_va(vmcs_region.as_ref() as *const _ as _);
@@ -75,8 +75,8 @@ impl Vmcs {
             return Err(HypervisorError::VirtualToPhysicalAddressFailed);
         }
 
-        log::info!("VMCS Region Virtual Address: {:p}", vmcs_region);
-        log::info!(
+        log::trace!("VMCS Region Virtual Address: {:p}", vmcs_region);
+        log::trace!(
             "VMCS Region Physical Addresss: 0x{:x}",
             vmcs_region_physical_address
         );
@@ -86,13 +86,13 @@ impl Vmcs {
 
         // Clear the VMCS region.
         vmclear(vmcs_region_physical_address);
-        log::info!("VMCLEAR successful!");
+        log::trace!("VMCLEAR successful!");
 
         // Load current VMCS pointer.
         vmptrld(vmcs_region_physical_address);
-        log::info!("VMPTRLD successful!");
+        log::trace!("VMPTRLD successful!");
 
-        log::info!("VMCS setup successful!");
+        log::trace!("VMCS setup successfully!");
 
         Ok(())
     }
@@ -108,6 +108,8 @@ impl Vmcs {
     /// * `guest_registers` - Guest registers for the guest.
     #[rustfmt::skip]
     pub fn setup_guest_registers_state(context: &CONTEXT, guest_descriptor_table: &Box<DescriptorTables, KernelAlloc>, guest_registers: &mut GuestRegisters) {
+        log::debug!("Setting up Guest Registers State");
+
         unsafe { vmwrite(vmcs::guest::CR0, controlregs::cr0().bits() as u64) };
         unsafe { vmwrite(vmcs::guest::CR3, controlregs::cr3()) };
         vmwrite(vmcs::guest::CR4, Cr4::read_raw());
@@ -204,6 +206,8 @@ impl Vmcs {
         guest_registers.r13 = context.R13;
         guest_registers.r14 = context.R14;
         guest_registers.r15 = context.R15;
+
+        log::debug!("Guest Registers State setup successfully!");
     }
 
     /// Initialize the host state for the currently loaded VMCS.
@@ -216,6 +220,8 @@ impl Vmcs {
     /// * `host_descriptor_table` - Descriptor tables for the host.
     #[rustfmt::skip]
     pub fn setup_host_registers_state(context: &CONTEXT, host_descriptor_table: &Box<DescriptorTables, KernelAlloc>, host_paging: &Box<PageTables, PhysicalAllocator>) -> Result<(), HypervisorError> {
+        log::debug!("Setting up Host Registers State");
+
         unsafe { vmwrite(vmcs::host::CR0, controlregs::cr0().bits() as u64) };
 
         // We can use custom page tables later, this is half implemented.
@@ -248,6 +254,8 @@ impl Vmcs {
             vmwrite(vmcs::host::IA32_SYSENTER_EIP, msr::rdmsr(msr::IA32_SYSENTER_EIP));
         }
 
+        log::debug!("Host Registers State setup successfully!");
+
         Ok(())
     }
 
@@ -263,6 +271,8 @@ impl Vmcs {
     /// * `shared_data` - Shared data between processors.
     #[rustfmt::skip]
     pub fn setup_vmcs_control_fields(shared_data: &mut SharedData) -> Result<(), HypervisorError> {
+        log::debug!("Setting up VMCS Control Fields");
+
         const PRIMARY_CTL: u64 = (vmcs::control::PrimaryControls::SECONDARY_CONTROLS.bits() | vmcs::control::PrimaryControls::USE_MSR_BITMAPS.bits()) as u64;
         const SECONDARY_CTL: u64 = (vmcs::control::SecondaryControls::ENABLE_RDTSCP.bits()
             | vmcs::control::SecondaryControls::ENABLE_XSAVES_XRSTORS.bits()
@@ -291,6 +301,8 @@ impl Vmcs {
 
         invept_single_context(shared_data.primary_eptp);
         invvpid_single_context(VPID_TAG);
+
+        log::debug!("VMCS Control Fields setup successfully!");
 
         Ok(())
     }

@@ -77,7 +77,7 @@ impl Ept {
     ///
     /// A `Result<(), HypervisorError>` indicating if the operation was successful.
     pub fn identity_2mb(&mut self, access_type: AccessType) -> Result<(), HypervisorError> {
-        log::info!("Creating identity map for 2MB pages");
+        log::trace!("Creating identity map for 2MB pages");
 
         let mut mtrr = Mtrr::new();
 
@@ -100,7 +100,7 @@ impl Ept {
     ///
     /// A `Result<(), HypervisorError>` indicating if the operation was successful.
     pub fn identity_4kb(&mut self, access_type: AccessType) -> Result<(), HypervisorError> {
-        log::info!("Creating identity map for 4KB pages");
+        log::trace!("Creating identity map for 4KB pages");
 
         let mut mtrr = Mtrr::new();
 

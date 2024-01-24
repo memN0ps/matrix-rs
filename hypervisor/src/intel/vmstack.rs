@@ -51,8 +51,8 @@ impl VmStack {
     ///
     /// A `Result` indicating the success or failure of the setup process.
     pub fn setup(vmstack: &mut Box<VmStack, KernelAlloc>) -> Result<(), HypervisorError> {
-        log::info!("Setting up VMCS_HOST_RSP region");
-        log::info!("VMCS_HOST_RSP Virtual Address: {:p}", vmstack);
+        log::debug!("Setting up VMCS_HOST_RSP region");
+        log::trace!("VMCS_HOST_RSP Virtual Address: {:p}", vmstack);
 
         // Initialize the VM stack contents and reserved space.
         vmstack.stack_contents = [0u8; STACK_CONTENTS_SIZE];
@@ -63,7 +63,7 @@ impl VmStack {
         vmstack.padding_2 = u64::MAX;
         vmstack.padding_1 = u64::MAX;
 
-        log::info!("VMCS_HOST_RSP setup successful!");
+        log::debug!("VMCS_HOST_RSP setup successfully!");
 
         Ok(())
     }

@@ -65,6 +65,8 @@ impl FunctionHook {
     /// ## Safety
     /// This function allocates memory and manipulates page table entries. Incorrect use may lead to system instability.
     pub fn new(original_address: u64, hook_address: u64, handler: *const ()) -> Option<Self> {
+        log::debug!("Setting up hooks");
+
         // Create the different trampolines. There's a few different ones available:
         // - 1 Byte: CC shellcode
         // - 14 Bytes: JMP shellcode
@@ -140,12 +142,13 @@ impl FunctionHook {
     /// ## Safety
     /// This function modifies the instruction at the hook address. Ensure that this doesn't corrupt the program flow or overlap with critical instructions.
     pub fn enable(&self) {
+        log::debug!("Enabling hook");
         let jmp_to_handler = match self.hook_type {
             HookType::Jmp => Self::jmp_shellcode(self.handler).to_vec(),
             HookType::Breakpoint => vec![0xCC_u8], // 0xCC is the opcode for INT3, a common breakpoint instruction.
         };
 
-        log::info!(
+        log::trace!(
             "Writing the shellcode {:x?} to {:p}",
             jmp_to_handler,
             self.trampoline_address(),
@@ -160,6 +163,8 @@ impl FunctionHook {
                 jmp_to_handler.len(),
             );
         }
+
+        log::debug!("Hook enabled!");
 
         // Invalidate all processor caches to ensure the new instructions are used. (Will use invept instead of this later)
         //unsafe { KeInvalidateAllCaches() };
@@ -191,7 +196,7 @@ impl FunctionHook {
     /// registers to store the jmp address**. And because of that, we don't
     /// have to fear overwriting some register values.
     fn jmp_shellcode(target_address: u64) -> [u8; 14] {
-        log::info!(
+        log::debug!(
             "Creating the jmp shellcode for address: {:#x}",
             target_address
         );
@@ -204,7 +209,7 @@ impl FunctionHook {
 
         unsafe { (shellcode.as_mut_ptr().add(6) as *mut u64).write_volatile(target_address) };
 
-        log::info!("Jmp shellcode: {:x?}", shellcode);
+        log::trace!("Jmp shellcode: {:x?}", shellcode);
 
         shellcode
     }
@@ -229,7 +234,7 @@ impl FunctionHook {
         address: u64,
         required_size: usize,
     ) -> Result<Box<[u8]>, HypervisorError> {
-        log::info!("Creating the trampoline for function: {:#x}", address);
+        log::debug!("Creating a trampoline");
 
         // Read bytes from function and decode them. Read 2 times the amount needed, in
         // case there are bigger instructions that take more space. If there's
@@ -291,7 +296,7 @@ impl FunctionHook {
         // Allocate new memory for the trampoline and encode the instructions.
         //
         let mut memory = Box::new_uninit_slice(total_bytes + JMP_SHELLCODE_LEN);
-        log::info!("Allocated trampoline memory at {:p}", memory.as_ptr());
+        log::debug!("Allocated trampoline memory at {:p}", memory.as_ptr());
 
         let block = InstructionBlock::new(&trampoline, memory.as_mut_ptr() as _);
 
@@ -299,7 +304,7 @@ impl FunctionHook {
             .map(|b| b.code_buffer)
             .map_err(|_| HypervisorError::EncodingFailed)?;
 
-        log::info!("Encoded trampoline: {:x?}", encoded);
+        log::trace!("Encoded trampoline: {:x?}", encoded);
 
         // Add jmp to the original function at the end. We can't use `address` for this,
         // because the page will probably contain rip-relative instructions. And
@@ -319,6 +324,8 @@ impl FunctionHook {
                 encoded.len(),
             )
         };
+
+        log::debug!("Trampoline setup successfully!");
 
         Ok(unsafe { memory.assume_init() })
     }

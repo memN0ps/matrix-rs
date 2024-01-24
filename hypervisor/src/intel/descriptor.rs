@@ -37,7 +37,7 @@ impl DescriptorTables {
     pub fn initialize_for_guest(
         descriptor_tables: &mut Box<DescriptorTables, KernelAlloc>,
     ) -> Result<(), HypervisorError> {
-        log::info!("Capturing current Global Descriptor Table (GDT) and Interrupt Descriptor Table (IDT) for guest");
+        log::trace!("Capturing current Global Descriptor Table (GDT) and Interrupt Descriptor Table (IDT) for guest");
 
         // Capture the current GDT and IDT.
         descriptor_tables.gdtr = sgdt();
@@ -46,7 +46,7 @@ impl DescriptorTables {
         // Note: We don't need to create new tables for the guest;
         // we just capture the current ones.
 
-        log::info!("Captured GDT and IDT for guest successfully!");
+        log::trace!("Captured GDT and IDT for guest successfully!");
 
         Ok(())
     }
@@ -55,18 +55,18 @@ impl DescriptorTables {
     pub fn initialize_for_host(
         descriptor_tables: &mut Box<DescriptorTables, KernelAlloc>,
     ) -> Result<(), HypervisorError> {
-        log::info!("Initializing descriptor tables for host");
+        log::trace!("Initializing descriptor tables for host");
 
         descriptor_tables.copy_current_gdt();
         descriptor_tables.copy_current_idt();
 
-        log::info!("Initialized descriptor tables for host");
+        log::trace!("Initialized descriptor tables for host");
         Ok(())
     }
 
     /// Copies the current GDT.
     fn copy_current_gdt(&mut self) {
-        log::info!("Copying current GDT");
+        log::trace!("Copying current GDT");
 
         // Get the current GDTR
         let current_gdtr = sgdt();
@@ -83,12 +83,12 @@ impl DescriptorTables {
         // Store the new GDT in the DescriptorTables structure
         self.global_descriptor_table = new_gdt;
         self.gdtr = new_gdtr;
-        log::info!("Copied current GDT");
+        log::trace!("Copied current GDT");
     }
 
     /// Copies the current IDT.
     fn copy_current_idt(&mut self) {
-        log::info!("Copying current IDT");
+        log::trace!("Copying current IDT");
 
         // Get the current IDTR
         let current_idtr = sidt();
@@ -105,7 +105,7 @@ impl DescriptorTables {
         // Store the new IDT in the DescriptorTables structure
         self.interrupt_descriptor_table = new_idt;
         self.idtr = new_idtr; // Use the same IDTR as it points to the correct base and limit
-        log::info!("Copied current IDT");
+        log::trace!("Copied current IDT");
     }
 
     /// Gets the table as a slice from the pointer.

@@ -44,7 +44,7 @@ impl MsrBitmap {
     /// # Returns
     /// * A `Result` indicating the success or failure of the setup process.
     pub fn new() -> Box<MsrBitmap, PhysicalAllocator> {
-        log::info!("Setting up MSR Bitmap");
+        log::trace!("Setting up MSR Bitmap");
 
         let instance = Self {
             read_low_msrs: [0; 0x400],
@@ -54,11 +54,11 @@ impl MsrBitmap {
         };
         let mut instance = Box::<Self, PhysicalAllocator>::new_in(instance, PhysicalAllocator);
 
-        log::info!("Initializing MSR Bitmap");
+        log::trace!("Initializing MSR Bitmap");
 
         Self::initialize_bitmap(instance.as_mut() as *mut _ as _);
 
-        log::info!("MSR Bitmap setup successful!");
+        log::trace!("MSR Bitmap setup successfully!");
 
         instance
     }

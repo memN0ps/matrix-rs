@@ -10,8 +10,12 @@ use crate::intel::{invvpid::invvpid_all_contexts, vmexit::ExitType};
 ///
 /// * `ExitType::IncrementRIP` - Advances past the `INVVPID` instruction in the VM.
 pub fn handle_invvpid() -> ExitType {
+    log::debug!("Handling INVVPID VM exit...");
+
     // Invalidate all VPID contexts to ensure consistency of TLB entries with the current VM state.
     invvpid_all_contexts();
+
+    log::debug!("INVVPID VMEXIT handled successfully!");
 
     // Indicate to increment the VM's instruction pointer post handling.
     ExitType::IncrementRIP

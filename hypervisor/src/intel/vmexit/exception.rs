@@ -17,7 +17,7 @@ use {
 
 #[rustfmt::skip]
 pub fn handle_exception(_guest_registers: &mut GuestRegisters, vmx: &mut Vmx) -> ExitType {
-    log::trace!("Exception Occurred");
+    log::debug!("Handling ExceptionOrNmi VM exit...");
 
     let interruption_info_value = vmread(vmcs::ro::VMEXIT_INTERRUPTION_INFO);
     let interruption_error_code_value = vmread(vmcs::ro::VMEXIT_INTERRUPTION_ERR_CODE);
@@ -28,7 +28,7 @@ pub fn handle_exception(_guest_registers: &mut GuestRegisters, vmx: &mut Vmx) ->
                 ExceptionInterrupt::PageFault => {
                     let exit_qualification_value = vmread(vmcs::ro::EXIT_QUALIFICATION);
                     let ept_violation_qualification = EptViolationExitQualification::from_exit_qualification(exit_qualification_value);
-                    log::info!("Exit Qualification for EPT Violations: {}", ept_violation_qualification);
+                    log::trace!("Exit Qualification for EPT Violations: {}", ept_violation_qualification);
                     EventInjection::vmentry_inject_pf(interruption_error_code_value as u32);
                 },
                 ExceptionInterrupt::GeneralProtectionFault => {
@@ -48,11 +48,13 @@ pub fn handle_exception(_guest_registers: &mut GuestRegisters, vmx: &mut Vmx) ->
         panic!("Invalid VM Exit Interruption Information");
     }
 
+    log::debug!("Exception Handled successfully!");
+
     ExitType::Continue
 }
 
 fn handle_breakpoint_exception(guest_registers: &mut GuestRegisters, _vmx: &mut Vmx) {
-    log::trace!("Breakpoint Exception");
+    log::debug!("Breakpoint Exception");
 
     let hook_manager = unsafe { _vmx.shared_data.as_mut().hook_manager.as_mut() };
 
@@ -66,9 +68,9 @@ fn handle_breakpoint_exception(guest_registers: &mut GuestRegisters, _vmx: &mut 
         hook_manager
             .find_hook_by_address(guest_registers.rip)
             .map(|hook| {
-                log::info!("Found hook for RIP: {:#x}", guest_registers.rip);
+                log::trace!("Found hook for RIP: {:#x}", guest_registers.rip);
                 if let HookType::Function { inline_hook } = &hook.hook_type {
-                    log::info!("Getting handler address");
+                    log::trace!("Getting handler address");
                     Some(inline_hook.handler_address())
                 } else {
                     None
@@ -76,14 +78,17 @@ fn handle_breakpoint_exception(guest_registers: &mut GuestRegisters, _vmx: &mut 
             })
     {
         // Call our hook handle function (it will automatically call trampoline).
-        log::info!("Transferring execution to handler: {:#x}", handler);
+        log::trace!("Transferring execution to handler: {:#x}", handler);
         guest_registers.rip = handler;
         vmwrite(vmcs::guest::RIP, guest_registers.rip);
+
+        log::debug!("Breakpoint (int3) hook handled successfully!");
 
         ExitType::Continue
     } else {
         EventInjection::vmentry_inject_bp();
 
+        log::debug!("Breakpoint exception handled successfully!");
         ExitType::Continue
     };
 }

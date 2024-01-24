@@ -29,12 +29,16 @@ User can add the following later:
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual, Table C-1. Basic Exit Reasons 10.
 pub fn handle_rdtsc(guest_registers: &mut GuestRegisters) -> ExitType {
+    log::debug!("Handling RDTSC VM exit...");
+
     // Read the time stamp counter.
     let rdtsc_value: u64 = unsafe { rdtsc() };
 
     // Update the guest's RAX and RDX registers.
     guest_registers.rax = rdtsc_value & 0xFFFFFFFF; // Low 32 bits
     guest_registers.rdx = rdtsc_value >> 32; // High 32 bits
+
+    log::debug!("RDTSC VMEXIT handled successfully!");
 
     ExitType::IncrementRIP
 }

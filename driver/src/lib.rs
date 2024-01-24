@@ -75,19 +75,20 @@ pub unsafe extern "system" fn driver_entry(
     // This logger writes to the host OS via VMware Workstation.
 
     // Initialize the COM2 port logger with level filter set to Info.
+
     com_logger::builder()
         .base(0x2f8)
-        .filter(LevelFilter::Trace)
+        .filter(LevelFilter::Debug)
         .setup();
 
-    log::info!("Driver Entry called");
+    log::debug!("Driver Entry called");
 
     // Remove if manually mapping the kernel driver
     driver.DriverUnload = Some(driver_unload);
 
     with_expanded_stack(|| {
-        match virtualize() {
-            Ok(_) => log::info!("Virtualization successful!"),
+        match virtualize_system() {
+            Ok(_) => log::info!("Virtualized system successfully!"),
             Err(err) => {
                 log::error!("Virtualization failed: {:?}", err);
                 return STATUS_UNSUCCESSFUL;
@@ -96,7 +97,7 @@ pub unsafe extern "system" fn driver_entry(
 
         // Test the hooks
         //
-        log::info!("Calling MmIsAddressValid to test EPT hook...");
+        log::debug!("Calling MmIsAddressValid to test EPT hook...");
         unsafe { MmIsAddressValid(0 as _) };
 
         STATUS_SUCCESS
@@ -114,7 +115,7 @@ pub unsafe extern "system" fn driver_entry(
 ///
 /// Note: Remove if manually mapping the kernel driver
 pub extern "C" fn driver_unload(_driver: *mut DRIVER_OBJECT) {
-    log::info!("Driver unloaded successfully!");
+    log::trace!("Driver unloaded successfully!");
     if let Some(mut hypervisor) = unsafe { HYPERVISOR.take() } {
         drop(hypervisor);
     }
@@ -136,7 +137,7 @@ static mut HYPERVISOR: Option<Hypervisor> = None;
 /// * `None` if there was an error during virtualization.
 ///
 /// Credits: Jess / jessiep_
-fn virtualize() -> Result<(), HypervisorError> {
+fn virtualize_system() -> Result<(), HypervisorError> {
     // Initialize the hook and hook manager
     //
     let hook = Hook::hook_function("MmIsAddressValid", hook::mm_is_address_valid as *const ())
@@ -151,16 +152,15 @@ fn virtualize() -> Result<(), HypervisorError> {
     let mut secondary_ept: Box<Ept, PhysicalAllocator> =
         unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
 
-    log::info!("Creating Primary EPT");
+    log::debug!("Creating Primary EPT");
     primary_ept.identity_2mb(AccessType::READ_WRITE_EXECUTE)?;
 
-    log::info!("Creating Secondary EPT");
+    log::debug!("Creating Secondary EPT");
     secondary_ept.identity_2mb(AccessType::READ_WRITE_EXECUTE)?;
 
-    log::info!("Enabling hooks");
+    log::debug!("Enabling hooks");
     hook_manager.enable_hooks(&mut primary_ept, &mut secondary_ept)?;
 
-    log::info!("Building hypervisor");
     let mut hv = match Hypervisor::builder()
         .primary_ept(primary_ept)
         .secondary_ept(secondary_ept)
@@ -174,8 +174,8 @@ fn virtualize() -> Result<(), HypervisorError> {
     // Update NTOSKRNL_CR3 to ensure correct CR3 in case of execution within a user-mode process via DPC.
     update_ntoskrnl_cr3();
 
-    match hv.virtualize_system() {
-        Ok(_) => log::info!("Successfully virtualized system!"),
+    match hv.virtualize_core() {
+        Ok(_) => log::info!("Virtualized cores successfully!"),
         Err(err) => return Err(err),
     };
 

@@ -22,6 +22,8 @@ use {
 ///
 /// * `ExitType::IncrementRIP` - To move past the `XSETBV` instruction in the VM.
 pub fn handle_xsetbv(guest_registers: &mut GuestRegisters) -> ExitType {
+    log::debug!("Handling XSETBV VM VM exit...");
+
     // Extract the XCR (extended control register) number from the guest's RCX register.
     let xcr: u32 = guest_registers.rcx as u32;
 
@@ -31,13 +33,15 @@ pub fn handle_xsetbv(guest_registers: &mut GuestRegisters) -> ExitType {
     // Attempt to create an Xcr0 structure from the given bits.
     let value = Xcr0::from_bits_truncate(value);
 
-    log::info!("XSETBV executed with xcr: {:#x}, value: {:#x}", xcr, value);
+    log::trace!("XSETBV executed with xcr: {:#x}, value: {:#x}", xcr, value);
 
     // Enable the OS XSAVE feature in CR4 before setting the extended control register value.
     cr4_write(cr4() | Cr4::CR4_ENABLE_OS_XSAVE);
 
     // Write the value to the specified XCR (extended control register).
     xsetbv(value);
+
+    log::debug!("XSETBV VM exit handled successfully!");
 
     // Advance the guest's instruction pointer to the next instruction to be executed.
     return ExitType::IncrementRIP;

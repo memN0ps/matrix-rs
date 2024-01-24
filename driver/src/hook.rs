@@ -36,9 +36,11 @@ type MmIsAddressValidType = extern "C" fn(u64) -> bool;
 /// The caller must ensure this is the case to avoid undefined behavior.
 pub extern "C" fn mm_is_address_valid(ptr: u64) -> bool {
     // Log the address from which `MmIsAddressValid` was called.
-    log::info!("MmIsAddressValid called from {:#x}", unsafe {
+    log::trace!("MmIsAddressValid called from {:#x}", unsafe {
         return_address().read_volatile() // Reads the return address in a volatile manner to prevent optimizations.
     });
+
+    log::debug!("First Parameter Value: {:x}", ptr);
 
     // Load the original function pointer from the global atomic pointer.
     let fn_ptr = ORIGINAL.load(Ordering::Relaxed); // Using relaxed ordering for atomic loading.

@@ -10,8 +10,12 @@ use crate::intel::{invept::invept_all_contexts, vmexit::ExitType};
 /// # Returns
 /// * `ExitType::IncrementRIP` - To move past the `INVEPT` instruction in the VM.
 pub fn handle_invept() -> ExitType {
+    log::debug!("Handling INVEPT VM exit...");
+
     // Invalidate all EPT contexts to sync guest VM memory accesses with the host.
     invept_all_contexts();
+
+    log::debug!("INVEPT VM exit handled successfully!");
 
     // Return instruction to increment the VM's instruction pointer.
     ExitType::IncrementRIP

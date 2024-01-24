@@ -125,7 +125,6 @@ impl Hook {
     /// * `Option<Self>` - An instance of `Hook` if successful, or `None` if an error occurred.
     pub fn hook_function_ptr(function_ptr: u64, handler: *const ()) -> Option<Self> {
         let original_pa = PhysicalAddress::from_va(function_ptr);
-        log::info!("Obtained physical address: {:#x}", original_pa.as_u64());
 
         // Copy the page where the function resides to prevent modifying the original page.
         let page = Self::copy_page(function_ptr)?;
@@ -136,16 +135,16 @@ impl Hook {
         let hook_va = Self::address_in_page(page_va, function_ptr);
         let hook_pa = PhysicalAddress::from_va(hook_va);
 
-        log::info!("Handler address: {:#x}", handler as u64);
+        log::debug!("Handler address: {:#x}", handler as u64);
 
-        log::info!("Original virtual address: {:#x}", function_ptr);
-        log::info!("Original physical address: {:#x}", original_pa.as_u64());
+        log::debug!("Original virtual address: {:#x}", function_ptr);
+        log::debug!("Original physical address: {:#x}", original_pa.as_u64());
 
-        log::info!("Page virtual address: {:#x}", page_va);
-        log::info!("Page physical address: {:#x}", page_pa.as_u64());
+        log::debug!("Page virtual address: {:#x}", page_va);
+        log::debug!("Page physical address: {:#x}", page_pa.as_u64());
 
-        log::info!("Hook virtual address: {:#x}", hook_va);
-        log::info!("Hook physical address: {:#x}", hook_pa.as_u64());
+        log::debug!("Hook virtual address: {:#x}", hook_va);
+        log::debug!("Hook physical address: {:#x}", hook_pa.as_u64());
 
         // Create an inline hook at the new address in the copied page.
         let inline_hook = FunctionHook::new(function_ptr, hook_va, handler)?;
@@ -185,8 +184,7 @@ impl Hook {
             return None;
         }
 
-        log::info!("Found function: {}", function_name);
-        log::info!("Address of ntoskrnl export: {:p}", address);
+        log::debug!("Function to be hooked: {} {:p}", function_name, address);
 
         // Utilize the previously defined function for hooking by address.
         Self::hook_function_ptr(address as u64, handler)
@@ -284,13 +282,13 @@ impl HookManager {
             let original_page = hook.original_pa.align_down_to_large_page().as_u64();
             let hooked_copy_page = hook.hook_pa.align_down_to_large_page().as_u64();
 
-            log::info!(
+            log::debug!(
                 "Splitting 2MB page to 4KB pages for Primary EPT: {:#x}",
                 original_page
             );
             primary_ept.split_2mb_to_4kb(original_page, AccessType::READ_WRITE_EXECUTE)?;
 
-            log::info!(
+            log::debug!(
                 "Splitting 2MB page to 4KB pages for Secondary EPT: {:#x}",
                 hooked_copy_page
             );
@@ -300,7 +298,7 @@ impl HookManager {
             let original_page = hook.original_pa.align_down_to_base_page().as_u64();
             let hooked_copy_page = hook.hook_pa.align_down_to_base_page().as_u64();
 
-            log::info!(
+            log::debug!(
                 "Changing permissions for page to Read-Write (RW) only: {:#x}",
                 original_page
             );
@@ -308,15 +306,15 @@ impl HookManager {
             // Modify the page permission in the primary EPT to ReadWrite.
             primary_ept.change_page_flags(original_page, AccessType::READ_WRITE)?;
 
-            log::info!(
+            log::debug!(
                 "Changing permissions for hook page to Execute (X) only: {:#x}",
                 hooked_copy_page
             );
 
-            // Modify the page permission in the secondary EPT to Execute for the hook page.
+            // Modify the page permission in the secondary EPT to Execute for the original page.
             secondary_ept.change_page_flags(original_page, AccessType::EXECUTE)?;
 
-            log::info!("Mapping Guest Physical Address to Host Physical Address of the hooked page: {:#x} {:#x}", original_page, hooked_copy_page);
+            log::debug!("Mapping Guest Physical Address to Host Physical Address of the hooked page: {:#x} {:#x}", original_page, hooked_copy_page);
 
             secondary_ept.remap_page(original_page, hooked_copy_page, AccessType::EXECUTE)?;
         }
