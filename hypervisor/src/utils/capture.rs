@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 
-use static_assertions::const_assert_eq;
+use {core::fmt, static_assertions::const_assert_eq};
 
 #[repr(C)]
 #[repr(align(16))]
@@ -112,69 +112,80 @@ pub struct CONTEXT {
     pub LastExceptionFromRip: u64,
 }
 
-impl CONTEXT {
-    /// Outputs the processor's context for debugging purposes.
-    pub fn dump_context(context: &CONTEXT) {
-        log::info!("Dumping _CONTEXT: ");
-        /*
-        log::info!("P1Home: {:#x}", context.P1Home);
-        log::info!("P2Home: {:#x}", context.P2Home);
-        log::info!("P3Home: {:#x}", context.P3Home);
-        log::info!("P4Home: {:#x}", context.P4Home);
-        log::info!("P5Home: {:#x}", context.P5Home);
-        log::info!("P6Home: {:#x}", context.P6Home);
-        log::info!("ContextFlags: {:#x}", context.ContextFlags);
-        log::info!("MxCsr: {:#x}", context.MxCsr);
-        */
+impl fmt::Debug for CONTEXT {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("CONTEXT {\n")?;
 
-        log::info!("SegCs: {:#x}", context.SegCs);
-        log::info!("SegDs: {:#x}", context.SegDs);
-        log::info!("SegEs: {:#x}", context.SegEs);
-        log::info!("SegFs: {:#x}", context.SegFs);
-        log::info!("SegGs: {:#x}", context.SegGs);
-        log::info!("SegSs: {:#x}", context.SegSs);
-        log::info!("EFlags: {:#x}", context.EFlags);
-        log::info!("Dr0: {:#x}", context.Dr0);
-        log::info!("Dr1: {:#x}", context.Dr1);
-        log::info!("Dr2: {:#x}", context.Dr2);
-        log::info!("Dr3: {:#x}", context.Dr3);
-        log::info!("Dr6: {:#x}", context.Dr6);
-        log::info!("Dr7: {:#x}", context.Dr7);
-        log::info!("Rax: {:#x}", context.Rax);
-        log::info!("Rcx: {:#x}", context.Rcx);
-        log::info!("Rdx: {:#x}", context.Rdx);
-        log::info!("Rbx: {:#x}", context.Rbx);
-        log::info!("Rsp: {:#x}", context.Rsp);
-        log::info!("Rbp: {:#x}", context.Rbp);
-        log::info!("Rsi: {:#x}", context.Rsi);
-        log::info!("Rdi: {:#x}", context.Rdi);
-        log::info!("R8: {:#x}", context.R8);
-        log::info!("R9: {:#x}", context.R9);
-        log::info!("R10: {:#x}", context.R10);
-        log::info!("R11: {:#x}", context.R11);
-        log::info!("R12: {:#x}", context.R12);
-        log::info!("R13: {:#x}", context.R13);
-        log::info!("R14: {:#x}", context.R14);
-        log::info!("R15: {:#x}", context.R15);
-        log::info!("Rip: {:#x}", context.Rip);
+        // General-purpose registers and other fields in 4 columns
+        write!(
+            f,
+            "  P1Home: {:#018x}, P2Home: {:#018x}, P3Home: {:#018x}, P4Home: {:#018x}\n",
+            self.P1Home, self.P2Home, self.P3Home, self.P4Home
+        )?;
+        write!(
+            f,
+            "  P5Home: {:#018x}, P6Home: {:#018x}, ContextFlags: {:?}, MxCsr: {:#010x}\n",
+            self.P5Home, self.P6Home, self.ContextFlags, self.MxCsr
+        )?;
+        write!(
+            f,
+            "  SegCs: {:#06x}, SegDs: {:#06x}, SegEs: {:#06x}, SegFs: {:#06x}\n",
+            self.SegCs, self.SegDs, self.SegEs, self.SegFs
+        )?;
+        write!(
+            f,
+            "  SegGs: {:#06x}, SegSs: {:#06x}, EFlags: {:#010x}, Dr0: {:#018x}\n",
+            self.SegGs, self.SegSs, self.EFlags, self.Dr0
+        )?;
+        write!(
+            f,
+            "  Dr1: {:#018x}, Dr2: {:#018x}, Dr3: {:#018x}, Dr6: {:#018x}\n",
+            self.Dr1, self.Dr2, self.Dr3, self.Dr6
+        )?;
+        write!(
+            f,
+            "  Dr7: {:#018x}, Rax: {:#018x}, Rcx: {:#018x}, Rdx: {:#018x}\n",
+            self.Dr7, self.Rax, self.Rcx, self.Rdx
+        )?;
+        write!(
+            f,
+            "  Rbx: {:#018x}, Rsp: {:#018x}, Rbp: {:#018x}, Rsi: {:#018x}\n",
+            self.Rbx, self.Rsp, self.Rbp, self.Rsi
+        )?;
+        write!(
+            f,
+            "  Rdi: {:#018x}, R8: {:#018x}, R9: {:#018x}, R10: {:#018x}\n",
+            self.Rdi, self.R8, self.R9, self.R10
+        )?;
+        write!(
+            f,
+            "  R11: {:#018x}, R12: {:#018x}, R13: {:#018x}, R14: {:#018x}\n",
+            self.R11, self.R12, self.R13, self.R14
+        )?;
+        write!(
+            f,
+            "  R15: {:#018x}, Rip: {:#018x}, VectorControl: {:#018x}, DebugControl: {:#018x}\n",
+            self.R15, self.Rip, self.VectorControl, self.DebugControl
+        )?;
+        write!(f, "  LastBranchToRip: {:#018x}, LastBranchFromRip: {:#018x}, LastExceptionToRip: {:#018x}, LastExceptionFromRip: {:#018x}\n", self.LastBranchToRip, self.LastBranchFromRip, self.LastExceptionToRip, self.LastExceptionFromRip)?;
 
-        /*
-        // Note: I'm skipping the __bindgen_anon_1 field as it might be a complex type.
-        // If needed, you can add print statements for its subfields.
-        for (i, vec_reg) in context.VectorRegister.iter().enumerate() {
-            log::info!(
-                "VectorRegister[{}]: Low: {:#x}, High: {:#x}",
-                i, vec_reg.Low, vec_reg.High
-            );
+        // Vector registers in 4 columns
+        write!(f, "  Vector Registers:\n")?;
+        for i in 0..26 {
+            write!(
+                f,
+                "    VectorRegister[{}]: {:?}, ",
+                i, self.VectorRegister[i]
+            )?;
+            if i % 4 == 3 {
+                write!(f, "\n")?;
+            }
+        }
+        if 26 % 4 != 0 {
+            write!(f, "\n")?;
         }
 
-        log::info!("VectorControl: {:#x}", context.VectorControl);
-        log::info!("DebugControl: {:#x}", context.DebugControl);
-        log::info!("LastBranchToRip: {:#x}", context.LastBranchToRip);
-        log::info!("LastBranchFromRip: {:#x}", context.LastBranchFromRip);
-        log::info!("LastExceptionToRip: {:#x}", context.LastExceptionToRip);
-        log::info!("LastExceptionFromRip: {:#x}", context.LastExceptionFromRip);
-        */
+        f.write_str("}")
     }
 }
 
@@ -187,7 +198,7 @@ impl CONTEXT {
 ///
 /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.4.1 Guest Register State
 #[repr(C, align(16))]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Clone, Copy, Default)]
 pub struct GuestRegisters {
     pub rax: u64,
     pub rbx: u64,
@@ -232,8 +243,71 @@ const_assert_eq!(
 
 #[repr(C)]
 #[repr(align(16))]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Clone, Copy, Default)]
 pub struct M128A {
     pub Low: u64,
     pub High: i64,
+}
+
+impl fmt::Debug for GuestRegisters {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("GuestRegisters {\n")?;
+
+        // General-purpose registers in 4 columns
+        write!(
+            f,
+            "  rax: {:#018x}, rbx: {:#018x}, rcx: {:#018x}, rdx: {:#018x}\n",
+            self.rax, self.rbx, self.rcx, self.rdx
+        )?;
+        write!(
+            f,
+            "  rsi: {:#018x}, rdi: {:#018x}, rbp: {:#018x}, r8: {:#018x}\n",
+            self.rsi, self.rdi, self.rbp, self.r8
+        )?;
+        write!(
+            f,
+            "  r9: {:#018x}, r10: {:#018x}, r11: {:#018x}, r12: {:#018x}\n",
+            self.r9, self.r10, self.r11, self.r12
+        )?;
+        write!(
+            f,
+            "  r13: {:#018x}, r14: {:#018x}, r15: {:#018x}, rip: {:#018x}\n",
+            self.r13, self.r14, self.r15, self.rip
+        )?;
+        write!(
+            f,
+            "  rsp: {:#018x}, rflags: {:#018x}\n",
+            self.rsp, self.rflags
+        )?;
+
+        // XMM registers in 4 columns
+        write!(
+            f,
+            "  xmm0: {:?}, xmm1: {:?}, xmm2: {:?}, xmm3: {:?}\n",
+            self.xmm0, self.xmm1, self.xmm2, self.xmm3
+        )?;
+        write!(
+            f,
+            "  xmm4: {:?}, xmm5: {:?}, xmm6: {:?}, xmm7: {:?}\n",
+            self.xmm4, self.xmm5, self.xmm6, self.xmm7
+        )?;
+        write!(
+            f,
+            "  xmm8: {:?}, xmm9: {:?}, xmm10: {:?}, xmm11: {:?}\n",
+            self.xmm8, self.xmm9, self.xmm10, self.xmm11
+        )?;
+        write!(
+            f,
+            "  xmm12: {:?}, xmm13: {:?}, xmm14: {:?}, xmm15: {:?}\n",
+            self.xmm12, self.xmm13, self.xmm14, self.xmm15
+        )?;
+
+        f.write_str("}")
+    }
+}
+
+impl fmt::Debug for M128A {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({:#018x}, {:#018x})", self.Low, self.High)
+    }
 }
