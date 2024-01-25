@@ -12,7 +12,7 @@ use {
             vmexit::{
                 cpuid::handle_cpuid,
                 ept::{handle_ept_misconfiguration, handle_ept_violation},
-                exception::handle_exception,
+                exception::{handle_exception, handle_undefined_opcode_exception},
                 invd::handle_invd,
                 invept::handle_invept,
                 invvpid::handle_invvpid,
@@ -105,6 +105,18 @@ impl VmExit {
         let exit_type = match basic_exit_reason {
             VmxBasicExitReason::ExceptionOrNmi => handle_exception(guest_registers, vmx),
             VmxBasicExitReason::Cpuid => handle_cpuid(guest_registers),
+
+            // Grouping multiple exit reasons that are handled by the same function
+            VmxBasicExitReason::Getsec
+            | VmxBasicExitReason::Vmcall
+            | VmxBasicExitReason::Vmclear
+            | VmxBasicExitReason::Vmlaunch
+            | VmxBasicExitReason::Vmptrld
+            | VmxBasicExitReason::Vmptrst
+            | VmxBasicExitReason::Vmresume
+            | VmxBasicExitReason::Vmxon
+            | VmxBasicExitReason::Vmxoff => handle_undefined_opcode_exception(),
+
             VmxBasicExitReason::Rdmsr => handle_msr_access(guest_registers, MsrAccessType::Read),
             VmxBasicExitReason::Wrmsr => handle_msr_access(guest_registers, MsrAccessType::Write),
             VmxBasicExitReason::Invd => handle_invd(guest_registers),

@@ -1,3 +1,7 @@
+//! Module handling VM exits due to exceptions or non-maskable interrupts (NMIs).
+//! It includes handling for various types of exceptions such as page faults,
+//! general protection faults, breakpoints, and invalid opcodes.
+
 use {
     crate::{
         intel::{
@@ -15,8 +19,22 @@ use {
     x86::vmx::vmcs,
 };
 
+/// Handles exceptions and NMIs that occur during VM execution.
+///
+/// This function is called when the VM exits due to an exception or NMI.
+/// It determines the type of exception, handles it accordingly, and prepares
+/// the VM for resumption.
+///
+/// # Arguments
+///
+/// * `guest_registers` - A mutable reference to the guest's register state.
+/// * `vmx` - A mutable reference to the Vmx structure representing the current VM.
+///
+/// # Returns
+///
+/// * `ExitType::Continue` - Indicating that VM execution should continue after handling the exception
 #[rustfmt::skip]
-pub fn handle_exception(_guest_registers: &mut GuestRegisters, vmx: &mut Vmx) -> ExitType {
+pub fn handle_exception(guest_registers: &mut GuestRegisters, vmx: &mut Vmx) -> ExitType {
     log::debug!("Handling ExceptionOrNmi VM exit...");
 
     let interruption_info_value = vmread(vmcs::ro::VMEXIT_INTERRUPTION_INFO);
@@ -35,7 +53,10 @@ pub fn handle_exception(_guest_registers: &mut GuestRegisters, vmx: &mut Vmx) ->
                     EventInjection::vmentry_inject_gp(interruption_error_code_value as u32);
                 },
                 ExceptionInterrupt::Breakpoint => {
-                    handle_breakpoint_exception(_guest_registers, vmx);
+                    handle_breakpoint_exception(guest_registers, vmx);
+                },
+                ExceptionInterrupt::InvalidOpcode => {
+                    EventInjection::vmentry_inject_ud();
                 },
                 _ => {
                     panic!("Unhandled exception: {:?}", exception_interrupt);
@@ -53,10 +74,20 @@ pub fn handle_exception(_guest_registers: &mut GuestRegisters, vmx: &mut Vmx) ->
     ExitType::Continue
 }
 
-fn handle_breakpoint_exception(guest_registers: &mut GuestRegisters, _vmx: &mut Vmx) {
+/// Handles breakpoint (`#BP`) exceptions specifically.
+///
+/// When a breakpoint exception occurs, this function checks for a registered hook
+/// at the current instruction pointer (RIP). If a hook is found, it transfers control
+/// to the hook's handler. Otherwise, it injects a breakpoint exception into the VM.
+///
+/// # Arguments
+///
+/// * `guest_registers` - A mutable reference to the guest's current register state.
+/// * `vmx` - A mutable reference to the Vmx structure.
+fn handle_breakpoint_exception(guest_registers: &mut GuestRegisters, vmx: &mut Vmx) {
     log::debug!("Breakpoint Exception");
 
-    let hook_manager = unsafe { _vmx.shared_data.as_mut().hook_manager.as_mut() };
+    let hook_manager = unsafe { vmx.shared_data.as_mut().hook_manager.as_mut() };
 
     log::trace!("Finding hook for RIP: {:#x}", guest_registers.rip);
 
@@ -83,12 +114,26 @@ fn handle_breakpoint_exception(guest_registers: &mut GuestRegisters, _vmx: &mut 
         vmwrite(vmcs::guest::RIP, guest_registers.rip);
 
         log::debug!("Breakpoint (int3) hook handled successfully!");
-
-        ExitType::Continue
     } else {
         EventInjection::vmentry_inject_bp();
-
         log::debug!("Breakpoint exception handled successfully!");
-        ExitType::Continue
     };
+}
+
+/// Handles undefined opcode (`#UD`) exceptions.
+///
+/// This function is invoked when the VM attempts to execute an invalid or undefined
+/// opcode. It injects an undefined opcode exception into the VM.
+///
+/// # Returns
+///
+/// * `ExitType::Continue` - Indicating that VM execution should continue.
+pub fn handle_undefined_opcode_exception() -> ExitType {
+    log::debug!("Undefined Opcode Exception");
+
+    EventInjection::vmentry_inject_ud();
+
+    log::debug!("Undefined Opcode Exception handled successfully!");
+
+    ExitType::Continue
 }

@@ -85,6 +85,17 @@ impl EventInjection {
         event.0
     }
 
+    /// Inject Undefined Opcode (#UD) to the guest (Event Injection).
+    fn undefined_opcode() -> u32 {
+        let mut event = EventInjection(0);
+
+        event.set_vector(ExceptionInterrupt::InvalidOpcode as u32);
+        event.set_type(InterruptionType::HardwareException as u32);
+        event.set_valid(VALID);
+
+        event.0
+    }
+
     /// Injects a general protection fault into the guest.
     ///
     /// This function is used to signal to the guest that a protection violation
@@ -96,10 +107,12 @@ impl EventInjection {
     ///
     /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.8.3 VM-Entry Controls for Event Injection
     /// and Table 25-17. Format of the VM-Entry Interruption-Information Field.
-    #[rustfmt::skip]
     pub fn vmentry_inject_gp(error_code: u32) {
         vmwrite(vmcs::control::VMENTRY_EXCEPTION_ERR_CODE, error_code);
-        vmwrite(vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD, EventInjection::general_protection());
+        vmwrite(
+            vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD,
+            EventInjection::general_protection(),
+        );
     }
 
     /// Injects a page fault into the guest.
@@ -113,10 +126,12 @@ impl EventInjection {
     ///
     /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.8.3 VM-Entry Controls for Event Injection
     /// and Table 25-17. Format of the VM-Entry Interruption-Information Field.
-    #[rustfmt::skip]
     pub fn vmentry_inject_pf(error_code: u32) {
         vmwrite(vmcs::control::VMENTRY_EXCEPTION_ERR_CODE, error_code);
-        vmwrite(vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD, EventInjection::page_fault());
+        vmwrite(
+            vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD,
+            EventInjection::page_fault(),
+        );
     }
 
     /// Injects a breakpoint exception into the guest.
@@ -126,8 +141,24 @@ impl EventInjection {
     ///
     /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.8.3 VM-Entry Controls for Event Injection
     /// and Table 25-17. Format of the VM-Entry Interruption-Information Field.
-    #[rustfmt::skip]
     pub fn vmentry_inject_bp() {
-        vmwrite(vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD, EventInjection::breakpoint());
+        vmwrite(
+            vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD,
+            EventInjection::breakpoint(),
+        );
+    }
+
+    /// Injects an undefined opcode exception into the guest.
+    ///
+    /// This function is used to signal to the guest that an invalid or undefined opcode
+    /// has been encountered, typically indicating an error in the guest's execution.
+    ///
+    /// Reference: Intel® 64 and IA-32 Architectures Software Developer's Manual: 25.8.3 VM-Entry Controls for Event Injection
+    /// and Table 25-17. Format of the VM-Entry Interruption-Information Field.
+    pub fn vmentry_inject_ud() {
+        vmwrite(
+            vmcs::control::VMENTRY_INTERRUPTION_INFO_FIELD,
+            EventInjection::undefined_opcode(),
+        );
     }
 }

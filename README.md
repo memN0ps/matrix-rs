@@ -11,13 +11,12 @@ A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hyperv
 ## Features
 
 - :white_check_mark: **Extended Page Tables (EPT)**: Support for Memory Type Range Registers (MTRR).
-- :white_check_mark: **VM Exit Handling**: Handling of `ExceptionOrNmi (#GP, #PF, #BP)`, `Cpuid`, `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`.
+- :white_check_mark: **VM Exit Handling**: Handling of `ExceptionOrNmi (#GP, #PF, #BP, #UD)`, `Cpuid`, `Getsec`, `Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxon`, `Vmxoff` `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`.
 - :white_check_mark: **Kernel Inline Hooks**: PatchGuard-compatible breakpoint (`int3`) hooks.
 - :x: **System Call (Syscall) Hooks (TODO)**: PatchGuard-compatible hooks for System Service Descriptor Table (SSDT) function entries.
 
 ## Planned Enhancements
 
-- :x: **VM Exit Handling**: Addition of VM exit instructions such as `Getsec`, and implementation of VMX instructions like `Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxon`, `Vmxoff`.
 - :x: **Isolation and Security**: Development of custom implementations for Global Descriptor Table (GDT), Interrupt Descriptor Table (IDT), and Page Tables to enhance security. Aiming to reduce dependency on the host's `ntoskrnl.exe` `CR3`. [Credits to @namazso](https://www.unknowncheats.me/forum/2779560-post4.html).
 
 ## Supported Hardware
