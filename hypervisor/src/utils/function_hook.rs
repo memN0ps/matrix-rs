@@ -67,35 +67,6 @@ impl FunctionHook {
     pub fn new(original_address: u64, hook_address: u64, handler: *const ()) -> Option<Self> {
         log::debug!("Setting up hooks");
 
-        // Create the different trampolines. There's a few different ones available:
-        // - 1 Byte: CC shellcode
-        // - 14 Bytes: JMP shellcode
-        //
-        #[cfg(feature = "shellcode-hook")]
-        let (hook_type, trampoline) =
-            match Self::trampoline_shellcode(original_address, hook_address, JMP_SHELLCODE_LEN) {
-                Ok(trampoline) => (HookType::Jmp, trampoline),
-                Err(error) => {
-                    log::warn!("Failed to create jmp trampoline: {:?}", error);
-
-                    // If jmp trampoline didn't work, let's try this one:
-                    //
-                    let trampoline = Self::trampoline_shellcode(
-                        original_address,
-                        hook_address,
-                        BP_SHELLCODE_LEN,
-                    )
-                    .map_err(|e| {
-                        log::warn!("Failed to create bp trampoline: {:?}", e);
-                        e
-                    })
-                    .ok()?;
-
-                    (HookType::Breakpoint, trampoline)
-                }
-            };
-
-        #[cfg(not(feature = "shellcode-hook"))]
         let (hook_type, trampoline) = {
             let trampoline =
                 Self::trampoline_shellcode(original_address, hook_address, BP_SHELLCODE_LEN)
