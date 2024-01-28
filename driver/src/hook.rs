@@ -44,8 +44,8 @@ type MmIsAddressValidType = extern "C" fn(VirtualAddress: PVOID) -> bool;
 /// The caller must ensure this is the case to avoid undefined behavior.
 pub extern "C" fn mm_is_address_valid(virtual_address: u64) -> bool {
     // Log the address from which `MmIsAddressValid` was called.
-    log::trace!("MmIsAddressValid called from {:#x}", unsafe {
-        return_address().read_volatile() // Reads the return address in a volatile manner to prevent optimizations.
+    log::debug!("MmIsAddressValid called from {:#x}", unsafe {
+        return_address().read_volatile() // Reads the return address in a svolatile manner to prevent optimizations.
     });
 
     log::debug!("First Parameter Value: {:x}", virtual_address);
