@@ -1,3 +1,4 @@
+use alloc::ffi::NulError;
 use thiserror_no_std::Error;
 
 #[derive(Error, Debug)]
@@ -133,4 +134,25 @@ pub enum HypervisorError {
 
     #[error("Hook manager not provided")]
     HookManagerNotProvided,
+
+    #[error("NtQuerySystemInformation failed")]
+    NtQuerySystemInformationFailed,
+
+    #[error("ExAllocatePoolFailed failed")]
+    ExAllocatePoolFailed,
+
+    #[error("Pattern not found")]
+    PatternNotFound,
+
+    #[error("SSDT not found")]
+    SsdtNotFound,
+
+    #[error("Failed create a C String")]
+    FailedToCreateCString(#[from] NulError),
+
+    #[error("Failed to get kernel base")]
+    GetKernelBaseFailed,
+
+    #[error("Failed to parse hexadecimal string")]
+    HexParseError,
 }

@@ -37,7 +37,7 @@ use {
             },
             vmm::Hypervisor,
         },
-        utils::{alloc::PhysicalAllocator, nt::update_ntoskrnl_cr3},
+        utils::{alloc::PhysicalAllocator, nt::update_ntoskrnl_cr3, ssdt::ssdt_hook::SsdtHook},
     },
     log::LevelFilter,
     log::{self},
@@ -138,17 +138,39 @@ static mut HYPERVISOR: Option<Hypervisor> = None;
 ///
 /// Credits: Jess / jessiep_
 fn virtualize_system() -> Result<(), HypervisorError> {
-    // Initialize the hook and hook manager
+    // Example 1: Normal EPT Hook MmIsAddressValid
     //
-    let hook = Hook::hook_function("MmIsAddressValid", hook::mm_is_address_valid as *const ())
-        .ok_or(HypervisorError::HookError)?;
-    if let HookType::Function { ref inline_hook } = hook.hook_type {
-        hook::ORIGINAL.store(inline_hook.trampoline_address(), Ordering::Relaxed);
+    //
+
+    let mm_is_address_valid =
+        Hook::hook_function("MmIsAddressValid", hook::mm_is_address_valid as *const ())
+            .ok_or(HypervisorError::HookError)?;
+
+    if let HookType::Function { ref inline_hook } = mm_is_address_valid.hook_type {
+        hook::MM_IS_ADDRESS_VALID_ORIGINAL
+            .store(inline_hook.trampoline_address(), Ordering::Relaxed);
     }
-    let hook_manager = HookManager::new(vec![hook]);
+
+    // Example 2: Syscall EPT Hook NtCreateFile via SSDT Function Entry
+    //
+    //
+    let ssdt_nt_create_file_addy = SsdtHook::find_ssdt_function_address(0x0055, false)?;
+
+    let nt_create_file_syscall_hook = Hook::hook_function_ptr(
+        ssdt_nt_create_file_addy.function_address as _,
+        hook::nt_create_file as *const (),
+    )
+    .ok_or(HypervisorError::HookError)?;
+
+    if let HookType::Function { ref inline_hook } = nt_create_file_syscall_hook.hook_type {
+        hook::NT_CREATE_FILE_ORIGINAL.store(inline_hook.trampoline_address(), Ordering::Relaxed);
+    }
+
+    let hook_manager = HookManager::new(vec![mm_is_address_valid, nt_create_file_syscall_hook]);
 
     let mut primary_ept: Box<Ept, PhysicalAllocator> =
         unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
+
     let mut secondary_ept: Box<Ept, PhysicalAllocator> =
         unsafe { Box::try_new_zeroed_in(PhysicalAllocator)?.assume_init() };
 
