@@ -13,7 +13,7 @@ A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hyperv
 - :white_check_mark: **Extended Page Tables (EPT)**: Support for Memory Type Range Registers (MTRR).
 - :white_check_mark: **VM Exit Handling**: Handling of `ExceptionOrNmi (#GP, #PF, #BP, #UD)`, `Cpuid`, `Getsec`, `Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxon`, `Vmxoff` `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`.
 - :white_check_mark: **Kernel Inline Hooks**: PatchGuard-compatible breakpoint (`int3`) hooks.
-- :white_check_mark: **System Call (Syscall) Hooks (Testing)**: PatchGuard-compatible hooks for System Service Descriptor Table (SSDT) function entries.
+- :white_check_mark: **System Call (Syscall) Hooks**: PatchGuard-compatible hooks for System Service Descriptor Table (SSDT) function entries.
 
 ## Planned Enhancements
 
