@@ -147,7 +147,7 @@ impl SegmentDescriptor {
 
             // Extract segment limit from the descriptor.
             let segment_limit_low = entry_value.get_bits(0..16);
-            let segment_limit_high = entry_value.get_bits(48..52) << 12;
+            let segment_limit_high = entry_value.get_bits(48..52) << 16;
             let mut segment_limit = segment_limit_low | segment_limit_high;
 
             // For non-user segments (like TSS), the base address can span two GDT entries.
