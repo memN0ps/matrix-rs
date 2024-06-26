@@ -81,6 +81,39 @@ sc.exe query matrix
 sc.exe start matrix
 ```
 
+## Usage
+
+1. **Setup for VMware Workstation**
+  - Build the Project: Follow the build instructions provided in the previous sections to compile the project.
+
+2. **Set Up VMware Workstation**
+  - Configure the VMware serial port for debugging.
+
+![VMware Serial Port Settings](./images/vmware_serial.png)
+**Figure 1: VMware Serial Port Settings**
+
+- Ensure that `"Virtualize Intel VT-x/EPT or AMD-V/RVI"` is enabled and `"Virtualize IOMMU (IO memory management unit)"` is enabled.
+
+![VMware Processors Settings](./images/vmware_processors.png)
+**Figure 2: VMware Processors Settings**
+
+3. **Copy the Driver**
+  - Copy the `matrix.sys` driver to the `C:\Windows\System32\drivers` directory.
+
+4. **VMware Serial Port Debugging**
+  - Execute the PowerShell script in the Serial Port Debugging section to open the serial port.
+
+5. **Load the Hypervisor**
+  - Use the `load.ps1` PowerShell script shown in the Service Management section to create and start the hypervisor service.
+
+![Load Hypervisor](./images/hypervisor_load.png)
+**Figure 3: Load Hypervisor**
+
+### PoC
+
+![Hypervisor PoC](./images/hypervisor_poc.png)
+**Figure 4: Logs and Windbg PoC**
+
 ## Acknowledgments, References, and Motivation
 
 Big thanks to the amazing people and resources that have shaped this project. A special shout-out to everyone listed below. While I didn't use all these resources in my work, they've been goldmines of information, super helpful for anyone diving into hypervisor development, including me.
