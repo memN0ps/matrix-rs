@@ -116,8 +116,11 @@ sc.exe start matrix
 
 ### PoC
 
-![Hypervisor PoC](./images/hypervisor_poc.png)
-**Figure 4: Logs and Windbg PoC**
+![Hypervisor PoC Setup](./images/hypervisor_poc_setup.png)
+**Figure 4: Logs and Windbg PoC Setup**
+
+![Hypervisor PoC Execute](./images/hypervisor_poc_execute.png)
+**Figure 5: Logs and Windbg PoC Execute**
 
 ## Acknowledgments, References, and Motivation
 
