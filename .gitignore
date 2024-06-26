@@ -20,5 +20,8 @@ Cargo.lock
 # Certificate file for the driver
 *.cer
 
-# Ignore all text files
-*.txt
+# Include all PowerShell scripts
+*.ps1
+
+# Include all Shell scripts
+*.sh
