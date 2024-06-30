@@ -15,10 +15,7 @@ A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hyperv
 - :white_check_mark: **VM Exit Handling**: Handling of `ExceptionOrNmi (#GP, #PF, #BP, #UD)`, `Cpuid`, `Getsec`, `Vmcall`, `Vmclear`, `Vmlaunch`, `Vmptrld`, `Vmptrst`, `Vmresume`, `Vmxon`, `Vmxoff` `Rdmsr`, `Wrmsr`, `Invd`, `Rdtsc`, `EptViolation`, `EptMisconfiguration`, `Invept`, `Invvpid`, `Xsetbv`.
 - :white_check_mark: **Hidden Kernel Inline Hooks**: PatchGuard-compatible breakpoint (`int3`) hooks.
 - :white_check_mark: **Hidden System Call (Syscall) Hooks**: PatchGuard-compatible hooks for System Service Descriptor Table (SSDT) function entries.
-
-## Planned Enhancements
-
-- :x: **Isolation and Security**: Development of custom implementations for Global Descriptor Table (GDT), Interrupt Descriptor Table (IDT), and Page Tables to enhance security. Aiming to reduce dependency on the host's `ntoskrnl.exe` `CR3`. [Credits to @namazso](https://www.unknowncheats.me/forum/2779560-post4.html).
+- :white_check_mark: **Isolation and Security**: Custom implementations of the Global Descriptor Table (GDT), Interrupt Descriptor Table (IDT), and Page Tables to improve the security and isolation of the hypervisor. [Credits to @namazso](https://www.unknowncheats.me/forum/2779560-post4.html) for raising awareness.
 
 ## Supported Hardware
 
