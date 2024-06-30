@@ -11,6 +11,7 @@ use {
     crate::{error::HypervisorError, utils::addresses::PhysicalAddress},
     bitfield::bitfield,
     core::ptr::addr_of,
+    static_assertions::const_assert_eq,
     x86::current::paging::{BASE_PAGE_SHIFT, LARGE_PAGE_SIZE},
 };
 
@@ -39,6 +40,36 @@ pub struct PageTables {
 }
 
 impl PageTables {
+    /// Initialize the hypervisor's page tables.
+    ///
+    /// This method sets up the hypervisor's page tables by copying entries from the system's PML4 table
+    /// and reserving specific entries for the hypervisor's use.
+    ///
+    /// # Parameters
+    /// - `system_cr3`: The CR3 value (physical address of the system's PML4 table).
+    pub fn init_hypervisor_paging(&mut self, system_cr3: u64) {
+        // Map the system PML4 into the hypervisor's virtual address space
+        let system_pml4_va = PhysicalAddress::va_from_pa(system_cr3);
+
+        // Copy system PML4 entries to hypervisor PML4
+        unsafe {
+            self.pml4.0.entries[256..].copy_from_slice(
+                core::slice::from_raw_parts((system_pml4_va as *const Entry).add(256), 256)
+            );
+        }
+
+        // Reserve the lower 255 entries for hypervisor use
+        for entry in &mut self.pml4.0.entries[..255] {
+            *entry = Entry(0);
+        }
+
+        // Set the self-referencing entry
+        //let pml4_phys_addr = PhysicalAddress::pa_from_va(addr_of!(self.pml4) as u64) >> BASE_PAGE_SHIFT;
+        //self.pml4.0.entries[256].set_present(true); // meaning it is valid and can be used for address translation.
+        //self.pml4.0.entries[256].set_writable(true); // allowing writes to this address
+        //self.pml4.0.entries[256].set_pfn(pml4_phys_addr); // self-referencing entry
+    }
+
     /// Builds a basic identity map for the page tables.
     ///
     /// This setup ensures that each virtual address directly maps to the same physical address,
@@ -147,6 +178,8 @@ struct Pt(Table);
 struct Table {
     entries: [Entry; 512],
 }
+
+const_assert_eq!(size_of::<Entry>(), size_of::<u64>());
 
 bitfield! {
     /// Represents a Page Table Entry in standard paging.
