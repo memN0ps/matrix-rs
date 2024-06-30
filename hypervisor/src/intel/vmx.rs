@@ -17,6 +17,7 @@ use {
         },
         utils::capture::GuestRegisters,
         utils::{
+            nt::NTOSKRNL_CR3,
             alloc::{KernelAlloc, PhysicalAllocator},
             capture::CONTEXT,
         },
@@ -94,6 +95,8 @@ impl Vmx {
         DescriptorTables::initialize_for_guest(&mut guest_descriptor_table)?;
         DescriptorTables::initialize_for_host(&mut host_descriptor_table)?;
 
+        // Setup HostPaging for custom host Cr3
+        host_paging.init_hypervisor_paging(unsafe { NTOSKRNL_CR3 });
         host_paging.build_identity();
 
         log::trace!("Creating Vmx instance");
