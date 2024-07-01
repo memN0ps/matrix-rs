@@ -65,7 +65,7 @@ impl PhysicalAddress {
     }
 }
 
-impl const Deref for PhysicalAddress {
+impl Deref for PhysicalAddress {
     type Target = PAddr;
 
     /// Dereferences the `PhysicalAddress` to retrieve the underlying `PAddr`.
@@ -74,7 +74,7 @@ impl const Deref for PhysicalAddress {
     }
 }
 
-impl const DerefMut for PhysicalAddress {
+impl DerefMut for PhysicalAddress {
     /// Provides mutable access to the underlying `PAddr`.
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
