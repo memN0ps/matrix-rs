@@ -11,10 +11,10 @@ secondary-ept = [] # If this feature is enabled, two nested page tables will be 
 shellcode-hook = [] # Enables unstable inline hooks (currently not recommended)
 
 [dependencies]
-wdk = "0.1.0"
-wdk-alloc = "0.1.0"
-wdk-panic = "0.1.0"
-wdk-sys = "0.1.0"
+wdk = "0.2.0"
+wdk-alloc = "0.2.0"
+wdk-panic = "0.2.0"
+wdk-sys = "0.2.0"
 x86 = "0.52.0" # https://crates.io/crates/x86
 x86_64 = "0.14.11" # https://crates.io/crates/x86_64
 thiserror-no-std = "2.0.2" # https://crates.io/crates/thiserror-no-std
@@ -32,4 +32,4 @@ iced-x86 = { version = "1.20.0", default-features = false, features = ["no_std",
 bstr = { version = "1.9.0", default-features = false}
 
 [build-dependencies]
-wdk-build = "0.1.0"
+wdk-build = "0.2.0"
