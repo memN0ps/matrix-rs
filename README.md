@@ -33,6 +33,11 @@ A lightweight, memory-safe, and blazingly fast Rust-based type-2 research hyperv
 3. Install LLVM: `winget install LLVM.LLVM`.
 4. Install Tools: `cargo install cargo-make cargo-expand cargo-edit cargo-workspaces`.
 5. Install WDK/SDK/EWDK: Steps [here](https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk).
+6. Set the `WDKContentRoot` environment variable to point to your WDK installation path, If it hasn't been set automatically during the WDK installation:
+
+```powershell
+[System.Environment]::SetEnvironmentVariable("WDKContentRoot", "C:\Program Files (x86)\Windows Kits\10", [System.EnvironmentVariableTarget]::User)
+```
 
 ## Building the Project
 
