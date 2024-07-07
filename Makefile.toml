@@ -22,7 +22,7 @@ copy /Y %CARGO_MAKE_CRATE_FS_NAME%.dll package\%CARGO_MAKE_CRATE_FS_NAME%.sys
 dependencies = ["build"]
 script = '''
 copy /Y "%CARGO_MAKE_WORKING_DIRECTORY%\%CARGO_MAKE_CRATE_FS_NAME%.inx" "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf"
-"C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\stampinf.exe" -f "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf" -d * -a amd64 -c %CARGO_MAKE_CRATE_FS_NAME%.cat -v * -k 1.33 -n
+"C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\stampinf.exe" -f "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf" -d * -a amd64 -c %CARGO_MAKE_CRATE_FS_NAME%.cat -v * -k 1.33 -n
 '''
 
 [tasks.copypdb]
@@ -36,14 +36,14 @@ copy /Y %CARGO_MAKE_CRATE_FS_NAME%.pdb "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_F
 # Generate a catalog file for the driver package using inf2cat.exe.
 dependencies = ["stampinf"]
 script = '''
-"C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x86\inf2cat.exe" /driver:"%OUTPUT_DIR%\package" /os:10_X64,Server10_X64,10_NI_X64,10_VB_X64 /uselocaltime /verbose
+"C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\inf2cat.exe" /driver:"%OUTPUT_DIR%\package" /os:10_X64,Server10_X64,10_NI_X64,10_VB_X64 /uselocaltime /verbose
 '''
 
 [tasks.infverif]
 # Validate the INF file using infverif.exe.
 dependencies = ["stampinf"]
 script = '''
-"C:\Program Files (x86)\Windows Kits\10\Tools\10.0.22621.0\x64\infverif.exe" /v /w "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf" /msft
+"C:\Program Files (x86)\Windows Kits\10\Tools\10.0.26100.0\x64\infverif.exe" /v /w "%OUTPUT_DIR%\package\%CARGO_MAKE_CRATE_FS_NAME%.inf" /msft
 '''
 
 [tasks.sign]
