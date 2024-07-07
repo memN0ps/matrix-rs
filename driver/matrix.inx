@@ -1,6 +1,8 @@
 ;===================================================================
-; Matrix Hypervisor KMDF Driver
-; Copyright (c) memN0ps
+; Copyright (c)2023, Microsoft Corporation
+;
+;Module Name:
+;    MATRIX.INF
 ;===================================================================
 
 [Version]
@@ -8,9 +10,7 @@ Signature   = "$WINDOWS NT$"
 Class       = System
 ClassGuid   = {4D36E97D-E325-11CE-BFC1-08002BE10318}
 Provider    = %ProviderString%
-DriverVer   = 11/22/2023,1.0.0.0
 PnpLockDown = 1
-CatalogFile = matrix.cat
 
 [DestinationDirs]
 DefaultDestDir = 13
@@ -19,12 +19,9 @@ DefaultDestDir = 13
 1 = %DiskId1%,,,""
 
 [SourceDisksFiles]
-matrix.sys = 1,,
+matrix.sys  = 1,,
 
 ; ================= Class section =====================
-
-[ClassInstall32]
-Addreg=SystemClassReg
 
 [SystemClassReg]
 HKR,,,0,%ClassName%
@@ -33,23 +30,23 @@ HKR,,Icon,,-5
 ; ================= Install section =================
 
 [Manufacturer]
-%StdMfg%=Standard,NT$ARCH$
+%StdMfg%=Standard,NT$ARCH$.10.0...16299
 
-[Standard.NT$ARCH$]
-%DeviceDesc%=MatrixDevice, root\MEMN0PS_HYPERVISOR
+[Standard.NT$ARCH$.10.0...16299]
+%MATRIX.DeviceDesc%=MATRIX_Device, root\MATRIX
 
-[MatrixDevice.NT$ARCH$]
+[MATRIX_Device.NT$ARCH$]
 CopyFiles=Drivers_Dir
 
 [Drivers_Dir]
-matrix.sys,,,_x
+matrix.sys
 
 ; ================= Service installation =================
-[MatrixDevice.NT$ARCH$.Services]
-AddService = MatrixService, %SPSVCINST_ASSOCSERVICE%, Matrix_Service_Install
+[MATRIX_Device.NT$ARCH$.Services]
+AddService = MATRIX, %SPSVCINST_ASSOCSERVICE%, MATRIX_Service_Inst
 
-[Matrix_Service_Install]
-DisplayName    = %ServiceDesc%
+[MATRIX_Service_Inst]
+DisplayName    = %MATRIX.SVCDESC%
 ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
 StartType      = 3               ; SERVICE_DEMAND_START
 ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
@@ -58,9 +55,9 @@ ServiceBinary  = %13%\matrix.sys
 ; ================= Strings =================
 [Strings]
 SPSVCINST_ASSOCSERVICE = 0x00000002
-ProviderString         = "memN0ps"
+ProviderString         = "matrix"
 StdMfg                 = "(Standard system devices)"
 DiskId1                = "Matrix Hypervisor Installation Disk #1"
-DeviceDesc             = "Matrix Type-2 Hypervisor"
-ServiceDesc            = "Matrix Hypervisor Service"
+MATRIX.DeviceDesc        = "Matrix Type-2 Hypervisor"
+MATRIX.SVCDESC           = "Matrix Hypervisor Service"
 ClassName              = "System"
